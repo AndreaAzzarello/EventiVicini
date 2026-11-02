@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 sys.path.insert(0, str(Path(__file__).parent))
-from cleanup import DAY, expired_events, expired_submissions, run  # noqa: E402
+from cleanup import DAY, expired_events, expired_reports, expired_submissions, run  # noqa: E402
 from fake_firestore import FakeFirestore  # noqa: E402
 
 NOW = datetime(2026, 12, 1, 6, 0, tzinfo=timezone.utc)
@@ -56,3 +56,20 @@ def test_tetto_di_cancellazioni_e_lotti():
     stats = run(db, NOW, max_deletes=900)
     assert (stats["due"], stats["deleted"], db.writes, db.commits) == (1000, 900, 900, 3)
     assert len(db.data) == 100
+
+
+def rep(status, decided_days_ago):
+    return {"status": status, "decidedAt": NOW - timedelta(days=decided_days_ago)}
+
+
+def test_segnalazioni_chiuse_da_piu_di_180_giorni_le_aperte_mai():
+    docs = {"r181": rep("removed", 181), "d181": rep("dismissed", 181), "r179": rep("removed", 179),
+            "aperta": {"status": "open"}}
+    assert expired_reports(docs, NOW_MS) == ["r181", "d181"]
+
+
+def test_run_elimina_le_segnalazioni_vecchie_e_non_le_aperte():
+    db = FakeFirestore({"reports/old": rep("dismissed", 200), "reports/new": rep("dismissed", 10),
+                        "reports/open": {"status": "open"}})
+    assert run(db, NOW)["deleted"] == 1
+    assert set(db.data) == {"reports/new", "reports/open"}

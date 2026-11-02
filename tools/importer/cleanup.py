@@ -5,6 +5,7 @@ Regole:
   eventi con removedAt da più di 30 giorni                       → eliminati
   eventi manual e user finiti da più di 30 giorni                → eliminati
   proposte rifiutate da più di 90 giorni, approvate da più di 30 → eliminate
+  segnalazioni decise (rimosse o respinte) da più di 180 giorni   → eliminate; le aperte restano
 
 Uso:  python cleanup.py --dry-run        # conta senza eliminare
       python cleanup.py                  # elimina, al massimo --max-deletes documenti per giro
@@ -26,6 +27,7 @@ log = logging.getLogger("importer")
 DAY = 86_400_000
 SCRAPER_AFTER, OTHER_AFTER, REMOVED_AFTER = 7 * DAY, 30 * DAY, 30 * DAY
 APPROVED_AFTER, REJECTED_AFTER = 30 * DAY, 90 * DAY
+REPORT_AFTER = 180 * DAY  # segnalazioni DSA chiuse: tracciabilità delle decisioni, poi via (anche l'email di chi ha segnalato)
 MAX_DELETES = 15_000  # quota Spark 20.000 cancellazioni al giorno, con margine
 
 
@@ -50,6 +52,12 @@ def expired_submissions(docs: dict[str, dict], now_ms: int) -> list[str]:
             if d.get("status") in after and (r := ms(d.get("reviewedAt"))) is not None and r < now_ms - after[d["status"]]]
 
 
+def expired_reports(docs: dict[str, dict], now_ms: int) -> list[str]:
+    return [i for i, d in docs.items()
+            if d.get("status") in ("removed", "dismissed") and (r := ms(d.get("decidedAt"))) is not None
+            and r < now_ms - REPORT_AFTER]
+
+
 def run(db, now: datetime, dry_run: bool = False, max_deletes: int = MAX_DELETES) -> dict:
     """Legge solo i candidati (query a campo singolo con proiezione) ed elimina a lotti, fino a max_deletes."""
     from google.cloud.firestore_v1.base_query import FieldFilter
@@ -67,8 +75,14 @@ def run(db, now: datetime, dry_run: bool = False, max_deletes: int = MAX_DELETES
     for d in subs.where(filter=FieldFilter("reviewedAt", "<", cutoff)).select(["status", "reviewedAt"]).stream():
         reads += 1
         sub_docs[d.id] = d.to_dict() or {}
+    reports = db.collection("reports")
+    report_docs: dict[str, dict] = {}
+    for d in reports.where(filter=FieldFilter("decidedAt", "<", now - timedelta(milliseconds=REPORT_AFTER))).select(["status", "decidedAt"]).stream():
+        reads += 1
+        report_docs[d.id] = d.to_dict() or {}
     targets = [events.document(i) for i in expired_events(docs, now_ms)]
     targets += [subs.document(i) for i in expired_submissions(sub_docs, now_ms)]
+    targets += [reports.document(i) for i in expired_reports(report_docs, now_ms)]
     due = len(targets)
     if due > max_deletes:
         log.warning("Da eliminare %d documenti, oltre il tetto di %d: il resto al prossimo giro", due, max_deletes)

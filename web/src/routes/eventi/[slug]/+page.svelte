@@ -3,6 +3,7 @@
 	import CategoryArt from '$lib/components/CategoryArt.svelte';
 	import FavoriteButton from '$lib/components/FavoriteButton.svelte';
 	import PinMap from '$lib/components/PinMap.svelte';
+	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { siteUrl } from '$lib/config';
 	import { formatWhen, sentence } from '$lib/dates';
@@ -189,6 +190,8 @@
 		Verifica sempre date e orari sul sito ufficiale prima di partire.
 		{#if vendor && !offSale}I biglietti li vende {vendor}: il pulsante apre il suo sito, dove valgono le sue condizioni.{/if}
 	</p>
+
+	<p class="report-row"><ReportDialog eventId={e.id} title={e.title} contact={data.contact} /></p>
 </article>
 
 <style>

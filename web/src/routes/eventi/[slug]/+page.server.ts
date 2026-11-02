@@ -2,6 +2,7 @@ import { HTML_CACHE } from '$lib/server/cache';
 import { error, redirect } from '@sveltejs/kit';
 import { eventPath, idFromSlug } from '$lib/event';
 import { getEvent } from '$lib/server/firestore';
+import { legalInfo } from '$lib/server/legal';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, setHeaders }) => {
@@ -11,5 +12,5 @@ export const load: PageServerLoad = async ({ params, setHeaders }) => {
 	const canonical = eventPath(event);
 	if (`/eventi/${params.slug}` !== canonical) redirect(301, canonical);
 	setHeaders({ 'cache-control': HTML_CACHE });
-	return { event };
+	return { event, contact: legalInfo().email };
 };

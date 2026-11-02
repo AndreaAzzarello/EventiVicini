@@ -24,7 +24,8 @@ export const KEYS = {
 	session: 'ev:session', // "c'era un login": carica Firebase solo per chi ne ha bisogno
 	emailForSignIn: 'ev:emailForSignIn',
 	geocodeCache: 'ev:geocode',
-	loginHintShown: 'ev:loginHint'
+	loginHintShown: 'ev:loginHint',
+	reported: 'ev:reported' // id degli eventi già segnalati da questo dispositivo
 } as const;
 
 /** Unisce i preferiti locali a quelli dell'account: restituisce cosa caricare e l'insieme finale. */

@@ -1,6 +1,7 @@
 // Operazioni dell'admin. Le regole Firestore le ricontrollano tutte (email admin verificata).
 import { LONG_RUNNING_DAYS, fromData, type Event, type EventInput } from './event';
 import { session } from './session.svelte';
+import { reportFromSnap, type Report } from './reports';
 import { fromSnap, type Submission } from './submissions';
 
 const PAGE = 100;
@@ -107,4 +108,27 @@ export async function listStats(months: string[]): Promise<RegionMonth[]> {
 		const x = d.data();
 		return { region: x.region, name: x.name ?? x.region, month: x.month, events: x.events ?? 0, comuni: x.comuni ?? 0, cities: x.cities ?? [] };
 	});
+}
+
+/** Segnalazioni aperte, le più vecchie prima. Solo `status == open`: non serve un indice composto. */
+export async function openReports(): Promise<Report[]> {
+	const { fs, db } = await session.start();
+	const snap = await fs.getDocs(fs.query(fs.collection(db, 'reports'), fs.where('status', '==', 'open'), fs.limit(100)));
+	return snap.docs.map((d) => reportFromSnap(d.id, d.data())).sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/**
+ * Decide una segnalazione, sempre con una motivazione (DSA, art. 17). Con `removeEvent` toglie anche l'evento, nello stesso batch.
+ * L'evento sparisce dalle liste quando l'importer ricostruisce i bundle (come per ogni cancellazione dall'admin).
+ */
+export async function decideReport(r: Report, removeEvent: boolean, decision: string) {
+	const { fs, db } = await session.start();
+	const b = fs.writeBatch(db);
+	b.update(fs.doc(db, 'reports', r.id), {
+		status: removeEvent ? 'removed' : 'dismissed',
+		decision: decision.trim().slice(0, 500),
+		decidedAt: fs.serverTimestamp()
+	});
+	if (removeEvent) b.delete(fs.doc(db, 'events', r.eventId));
+	await b.commit();
 }
