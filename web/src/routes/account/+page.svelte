@@ -12,12 +12,14 @@
 		sendEmailLink
 	} from '$lib/auth';
 	import FavoritesList from '$lib/components/FavoritesList.svelte';
+	import Download from '@lucide/svelte/icons/download';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Trash from '@lucide/svelte/icons/trash';
 	import ErrorMessage from '$lib/components/ErrorMessage.svelte';
 	import LoginPanel from '$lib/components/LoginPanel.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { formatWhen } from '$lib/dates';
+	import { downloadMyData } from '$lib/exportData';
 	import { eventPath } from '$lib/event';
 	import { session } from '$lib/session.svelte';
 	import { STATUS_LABEL, mySubmissions, withdraw, type Submission } from '$lib/submissions';
@@ -32,6 +34,20 @@
 	let deleting = $state(false);
 	let deleteError = $state('');
 	let reauthSent = $state(false);
+	let exporting = $state(false);
+
+	async function exportData() {
+		exporting = true;
+		try {
+			await downloadMyData();
+			toast('File scaricato.');
+		} catch (e) {
+			console.error(e);
+			toast('Non sono riuscito a preparare il file. Riprova tra poco.');
+		} finally {
+			exporting = false;
+		}
+	}
 
 	onMount(async () => {
 		await session.start();
@@ -194,6 +210,16 @@
 					{/each}
 				</ul>
 			{/if}
+		</section>
+
+		<section class="block" aria-labelledby="exp-h">
+			<h2 id="exp-h">Scarica i tuoi dati</h2>
+			<p class="muted">
+				Un file JSON con profilo, preferiti, proposte e ciò che è salvato su questo dispositivo. Si prepara nel tuo browser.
+			</p>
+			<button class="btn" onclick={exportData} disabled={exporting}>
+				<Download size={20} aria-hidden="true" /> {exporting ? 'Preparo il file…' : 'Scarica i miei dati'}
+			</button>
 		</section>
 
 		<section class="block danger" aria-labelledby="del-h">
