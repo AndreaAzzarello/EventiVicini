@@ -11,6 +11,10 @@ test('senza posizione si sceglie il luogo dalla ricerca, non si parte da Modena'
 	await page.goto('/');
 	const first = page.getByRole('region', { name: 'Dove cerchi eventi?' });
 	await expect(first).toBeVisible();
+	for (const t of ['Eventi pubblici vicino a te', 'senza pubblicità né tracciamento', 'preferiti e aggiungi gli eventi al calendario'])
+		await expect(first.getByText(t)).toBeVisible();
+	await expect(page.getByRole('dialog')).toHaveCount(0); // niente popup
+	expect(await noOverflow(page)).toBe(true);
 	const box = await first.boundingBox();
 	expect(box!.x).toBeGreaterThanOrEqual(0);
 	expect(box!.x + box!.width).toBeLessThanOrEqual(360);

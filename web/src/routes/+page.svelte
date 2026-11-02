@@ -1,8 +1,11 @@
 <script lang="ts">
 	import List from '@lucide/svelte/icons/list';
+	import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
+	import Landmark from '@lucide/svelte/icons/landmark';
 	import LocateFixed from '@lucide/svelte/icons/locate-fixed';
 	import Map from '@lucide/svelte/icons/map';
 	import MapPin from '@lucide/svelte/icons/map-pin';
+	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import { onMount, untrack } from 'svelte';
 	import { goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
@@ -241,6 +244,11 @@
 				<LocateFixed size={20} aria-hidden="true" /> Usa la mia posizione
 			</button>
 			<p class="hint" role="status">{locateMsg}</p>
+			<ul class="welcome">
+				<li><Landmark size={20} aria-hidden="true" /> Eventi pubblici vicino a te, dai Comuni e da fonti aperte</li>
+				<li><ShieldCheck size={20} aria-hidden="true" /> Gratis, senza pubblicità né tracciamento</li>
+				<li><CalendarPlus size={20} aria-hidden="true" /> Salva i preferiti e aggiungi gli eventi al calendario</li>
+			</ul>
 		</section>
 		{#if data.popular && (data.popular.regions.length || data.popular.cities.length)}
 			<nav class="popular" aria-labelledby="pop-title">
@@ -378,6 +386,25 @@
 	.first-visit h2,
 	.first-visit p {
 		margin: 0;
+	}
+	.welcome {
+		list-style: none;
+		margin: var(--space-2) 0 0;
+		padding: var(--space-3) 0 0;
+		border-top: 1px dashed var(--border);
+		width: 100%;
+		display: grid;
+		gap: var(--space-2);
+	}
+	.welcome li {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-2);
+		color: var(--muted);
+	}
+	.welcome :global(svg) {
+		flex: none;
+		color: var(--accent);
 	}
 	.first-search {
 		width: 100%;
