@@ -333,14 +333,14 @@
 							</div>
 						{:else}
 							<h2>
-								{filter.when === 'today' ? 'Oggi qui è tranquillo' : filter.when === 'weekend' ? 'Questo weekend qui è tranquillo' : 'Qui è tutto tranquillo'}
+								{({ today: 'Oggi qui è tranquillo', tomorrow: 'Domani qui è tranquillo', weekend: 'Questo weekend qui è tranquillo', week: 'Nei prossimi giorni qui è tranquillo', range: 'In quelle date qui è tranquillo', any: 'Qui è tutto tranquillo' })[filter.when]}
 							</h2>
 							<p class="muted">
 								Prova ad allargare la distanza{filter.when === 'weekend' ? '' : ', guarda il weekend'} o togli qualche filtro.
 							</p>
 							<div class="actions">
 								{#if filter.when !== 'weekend'}
-									<button class="btn" onclick={() => setFilter({ ...filter, when: 'weekend' })}>Guarda il weekend</button>
+									<button class="btn" onclick={() => setFilter({ ...filter, when: 'weekend', from: '', to: '' })}>Guarda il weekend</button>
 								{/if}
 								{#if filter.radiusKm < 100}
 									<button class="btn btn-primary" onclick={() => setFilter({ ...filter, radiusKm: filter.radiusKm < 50 ? 50 : 100 })}>

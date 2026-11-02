@@ -82,6 +82,17 @@ const ROUTES: { label: string; run: Run; maxReads: number; maxRequests: number; 
 		maxReads: 2, maxRequests: 1, maxWorst: 2
 	},
 	{
+		// Il filtro per data è tutto nel browser: stessa spesa di /?luogo=modena
+		label: '/?luogo=modena&dal=2026-11-14&al=2026-11-16 (filtro data)',
+		run: async () => (await import('../../routes/+page.server')).load(ev('/?luogo=modena&dal=2026-11-14&al=2026-11-16') as never),
+		maxReads: 12, maxRequests: 3, maxWorst: 12
+	},
+	{
+		label: '/citta/modena?quando=domani (filtro data)',
+		run: async () => (await import('../../routes/citta/[slug]/+page.server')).load({ ...ev('/citta/modena?quando=domani'), params: { slug: 'modena' } } as never),
+		maxReads: 3, maxRequests: 3, maxWorst: 3
+	},
+	{
 		label: '/citta/modena',
 		run: async () => (await import('../../routes/citta/[slug]/+page.server')).load({ ...ev('/citta/modena'), params: { slug: 'modena' } } as never),
 		maxReads: 3, maxRequests: 3, maxWorst: 3

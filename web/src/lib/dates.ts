@@ -41,13 +41,43 @@ export function romeTime(year: number, month: number, day: number, hour = 0, min
 	return ms;
 }
 
-export type DateWindow = 'any' | 'today' | 'weekend';
+export type DateWindow = 'any' | 'today' | 'tomorrow' | 'weekend' | 'week' | 'range';
 
-/** Intervallo [da, a) della finestra scelta, in ora italiana. */
-export function windowRange(w: DateWindow, now: number): [number, number] | null {
+/** Giorni in avanti scelti dal selettore. Oltre non ci sono eventi: è l'orizzonte dell'importer (tools/importer/run.py --horizon-days). */
+export const MAX_DAYS = 60;
+
+const z2 = (n: number) => String(n).padStart(2, '0');
+/** "2026-11-14" in ora italiana: il valore di <input type="date">. */
+export function dayInput(ms: number): string {
+	const p = romeParts(ms);
+	return `${p.year}-${z2(p.month)}-${z2(p.day)}`;
+}
+/** "AAAA-MM-GG" -> [anno, mese, giorno], o null se non è una data del calendario. */
+export function parseDay(v: string): [number, number, number] | null {
+	const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+	if (!m) return null;
+	const [y, mo, d] = [+m[1], +m[2], +m[3]];
+	const t = new Date(Date.UTC(y, mo - 1, d));
+	return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d ? [y, mo, d] : null;
+}
+
+/** Intervallo [da, a) della finestra scelta, in ora italiana. Per 'range', from/to sono "AAAA-MM-GG" (to vuoto = un solo giorno). */
+export function windowRange(w: DateWindow, now: number, from = '', to = ''): [number, number] | null {
 	if (w === 'any') return null;
 	const p = romeParts(now);
-	if (w === 'today') return [romeTime(p.year, p.month, p.day), romeTime(p.year, p.month, p.day + 1)];
+	const today = romeTime(p.year, p.month, p.day);
+	if (w === 'today') return [today, romeTime(p.year, p.month, p.day + 1)];
+	if (w === 'tomorrow') return [romeTime(p.year, p.month, p.day + 1), romeTime(p.year, p.month, p.day + 2)];
+	if (w === 'week') return [today, romeTime(p.year, p.month, p.day + 7)];
+	if (w === 'range') {
+		const a = parseDay(from);
+		if (!a) return null;
+		const b = (to >= from && parseDay(to)) || a; // 'al' prima di 'dal' o non valido: un giorno solo
+		// Il passato non si cerca: un periodo già finito vale come oggi.
+		const start = Math.max(romeTime(a[0], a[1], a[2]), today);
+		const end = romeTime(b[0], b[1], b[2] + 1);
+		return [start, end > start ? end : romeTime(p.year, p.month, p.day + 1)];
+	}
 	// Di domenica il weekend in corso è iniziato ieri.
 	const toSat = p.weekday === 0 ? -1 : 6 - p.weekday;
 	return [romeTime(p.year, p.month, p.day + toSat), romeTime(p.year, p.month, p.day + toSat + 2)];
