@@ -37,3 +37,31 @@ Agenda gratuita di eventi pubblici locali (partita da Modena). Dettagli completi
 - Tieni fuori dai commit `.env`, `.dev.vars` e le chiavi service account: `FIREBASE_SERVICE_ACCOUNT` è un segreto.
 - Modifica `reports/` e `sources/*.csv` solo tramite gli script (`activate.py`, `licenses.py`), non a mano.
 - Le tile OSM pubbliche non sono adatte a traffico intenso; niente analytics né cookie di profilazione.
+
+## Flusso per funzioni nuove
+- `/grill-me` prima di ogni piano: le ambiguità emergono prima del codice, non durante.
+- Specifica e ticket con `/to-spec` e `/to-tickets` su GitHub Issues. Il repo è pubblico: niente dati personali nei ticket.
+- `/handoff` quando il contesto supera circa il 60%, salvato in `ClaudeVault\prompt\eventivicini-handoff-AAAA-MM-GG.md`: la sessione dopo riparte senza rileggere tutto.
+- Decisioni e ADR in `docs/adr/` e copiate in `ClaudeVault\decisioni\`: il vault è la memoria tra i progetti.
+
+## Checklist legale (in ogni progettazione)
+- Privacy aggiornata per ogni dato nuovo, chiave locale o richiesta a terzi dal browser.
+- Niente cookie o strumenti non tecnici; se servissero, prima il banner con consenso preventivo.
+- Link a termini e privacy accanto all'invio di ogni modulo.
+- Posizione solo se serve, mai salvata esatta fuori dal dispositivo.
+- Diritti: cancellazione ed esportazione coprono anche i dati nuovi.
+- WCAG 2.1 AA (axe negli e2e) e testi chiari.
+- Seed e dati di esempio solo sull'emulatore.
+- Contenuti degli utenti: segnalazione, decisione motivata, punto di contatto (DSA).
+- Dati legali mai inventati: se mancano, chiedi.
+
+## Agent skills
+
+### Issue tracker
+GitHub Issues di `AndreaAzzarello/EventiVicini` (repo pubblico, `gh`). Vedi `docs/agents/issue-tracker.md`.
+
+### Triage labels
+Etichette predefinite (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). Vedi `docs/agents/triage-labels.md`.
+
+### Domain docs
+Single-context: `docs/GLOSSARY.md` e `docs/adr/`. Vedi `docs/agents/domain.md`.
