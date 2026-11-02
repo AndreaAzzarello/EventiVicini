@@ -2,6 +2,10 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import adapter from '@sveltejs/adapter-cloudflare';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+import { loadEnv } from 'vite';
+
+// Le porte degli emulatori entrano nella CSP solo se .env (o l'ambiente) li attiva: la build di produzione su Cloudflare non ha .env.
+const emulators = loadEnv('', process.cwd(), 'PUBLIC_').PUBLIC_USE_EMULATORS === 'true';
 
 // Gli script inline di app.html (tema, luogo salvato) non possono avere il nonce: /offline è prerenderizzata.
 // Si autorizzano per hash, calcolato qui sul testo come lo vede il browser (a capo normalizzati: stesso hash su Windows e Linux).
@@ -27,9 +31,9 @@ export default {
 				// Immagini degli eventi: da siti di Comuni, Open Data Hub, Ticketmaster e URL proposti (https), più tile OSM.
 				'img-src': ['self', 'data:', 'blob:', 'https:'],
 				'font-src': ['self'],
-				// googleapis.com: Firestore, Identity Toolkit, Secure Token. Le due porte locali sono gli emulatori (e2e e sviluppo).
-				'connect-src': ['self', 'https://*.googleapis.com', 'http://127.0.0.1:9099', 'http://127.0.0.1:8080'],
-				'frame-src': ['https://*.firebaseapp.com', 'https://accounts.google.com', 'http://127.0.0.1:9099'],
+				// googleapis.com: Firestore, Identity Toolkit, Secure Token. Le porte locali sono gli emulatori (e2e e sviluppo), solo se attivati.
+				'connect-src': ['self', 'https://*.googleapis.com', ...(emulators ? ['http://127.0.0.1:9099', 'http://127.0.0.1:8080'] : [])],
+				'frame-src': ['https://*.firebaseapp.com', 'https://accounts.google.com', ...(emulators ? ['http://127.0.0.1:9099'] : [])],
 				'worker-src': ['self'],
 				'manifest-src': ['self'],
 				'object-src': ['none'],

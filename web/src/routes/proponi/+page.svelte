@@ -41,6 +41,7 @@
 	{:else}
 		<EventForm submitLabel="Invia la proposta" onsubmit={send} />
 		<p class="hint">Puoi avere fino a 5 proposte in attesa di revisione.</p>
+		<p class="hint">Inviando accetti i <a href="/termini">Termini</a>; leggi come trattiamo i dati nella <a href="/privacy">Privacy</a>.</p>
 	{/if}
 </div>
 

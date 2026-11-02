@@ -3,6 +3,10 @@
 import { geohashForLocation } from 'geofire-common';
 
 const HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
+if (!/^(127\.0\.0\.1|localhost|\[::1\])(:|$)/.test(HOST)) {
+	console.error(`Rifiuto di scrivere su ${HOST}: il seed vale solo per l'emulatore locale.`);
+	process.exit(1);
+}
 const PROJECT = process.env.PUBLIC_FIREBASE_PROJECT_ID || 'demo-eventi';
 const BASE = `http://${HOST}/v1/projects/${PROJECT}/databases/(default)/documents`;
 const H = 3600_000;

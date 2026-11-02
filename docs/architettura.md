@@ -105,7 +105,7 @@ I nomi con prefisso `PUBLIC_` sono esposti al browser da SvelteKit. Non sono seg
 | `PUBLIC_FIREBASE_APP_ID` | `wrangler.toml`; `.env` / `.dev.vars` (`demo-app`) | `1:398100140878:web:...` | ID dell'app web Firebase. |
 | `PUBLIC_USE_EMULATORS` | `wrangler.toml` (`"false"`); `.env` e `.dev.vars` (`"true"`) | `true` attiva gli emulatori Auth (127.0.0.1:9099) e Firestore (127.0.0.1:8080) nel browser | Il valore deve essere la stringa `true` per attivarli. |
 | `FIRESTORE_EMULATOR_HOST` | `.env`; `.dev.vars` | `127.0.0.1:8080` | Solo lato server: le letture REST vanno all'emulatore e non usano la API key. Non è in `wrangler.toml`. |
-| `CONTACT_EMAIL` | `wrangler.toml` (`azzatubo@gmail.com`); `.env.example` (`privacy@example.org`) | indirizzo di contatto | Mostrato in `/privacy` e `/termini` (`web/src/lib/server/legal.ts`). Lato server. |
+| `CONTACT_EMAIL` | `wrangler.toml` (`eventivicini.info@gmail.com`); `.env.example` (`privacy@example.org`) | indirizzo di contatto | Mostrato in `/privacy` e `/termini` (`web/src/lib/server/legal.ts`). Lato server. |
 | `CONTROLLER_NAME` | `wrangler.toml` (`Andrea Azzarello`); `.env.example` (`Mario Rossi (esempio)`) | nome del titolare | Mostrato in `/privacy` e `/termini`. Lato server. |
 | `FIREBASE_SERVICE_ACCOUNT` | GitHub: Settings → Secrets → Actions; locale: variabile d'ambiente | contenuto JSON della chiave del service account | **Segreto.** Usato dall'importer. Non committarlo. |
 | `GOOGLE_APPLICATION_CREDENTIALS` | variabile d'ambiente sul PC | percorso di un file JSON fuori dal repository | Alternativa locale a `FIREBASE_SERVICE_ACCOUNT`, per l'importer. **Segreto**: il file non va in git. |

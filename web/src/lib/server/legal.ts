@@ -4,7 +4,7 @@ import { env } from '$env/dynamic/private';
 export function legalInfo() {
 	return {
 		controller: env.CONTROLLER_NAME || 'il gestore di Eventi Vicini',
-		email: env.CONTACT_EMAIL || '',
+		email: env.CONTACT_EMAIL || 'eventivicini.info@gmail.com',
 		updated: '30 ottobre 2026'
 	};
 }

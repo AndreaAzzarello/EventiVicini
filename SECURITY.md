@@ -2,7 +2,7 @@
 
 ## Come segnalare una vulnerabilità
 
-Non aprire una issue pubblica. Scrivi a **azzatubo@gmail.com** con oggetto «Sicurezza EventiVicini», oppure usa [Security → Report a vulnerability](https://github.com/AndreaAzzarello/EventiVicini/security/advisories/new) del repository.
+Non aprire una issue pubblica. Scrivi a **eventivicini.info@gmail.com** con oggetto «Sicurezza EventiVicini», oppure usa [Security → Report a vulnerability](https://github.com/AndreaAzzarello/EventiVicini/security/advisories/new) del repository.
 
 Indica: cosa hai trovato, come riprodurlo, quale impatto ha. Rispondo di norma entro 7 giorni; è un progetto personale e gratuito, quindi non ci sono SLA né ricompense.
 
