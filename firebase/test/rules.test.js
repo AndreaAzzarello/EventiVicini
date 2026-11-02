@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 
 let env;
-const ADMIN = { email: 'azzatubo@gmail.com', email_verified: true };
+const ADMIN = { email: 'eventivicini.info@gmail.com', email_verified: true };
 
 const event = (over = {}) => ({
   title: 'Concerto in piazza', shortDescription: 'Musica dal vivo', category: 'music', priceType: 'free',

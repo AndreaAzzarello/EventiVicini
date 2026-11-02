@@ -34,6 +34,7 @@ Agenda gratuita di eventi pubblici locali (partita da Modena). Dettagli completi
 
 ## Da non fare
 - Nei test usa `emulators:exec` (chiude da solo), non `emulators:start`.
+- Gli emulatori Firebase vogliono Java 21 (`C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot`), nel PATH di sistema ma dopo il Java 8 Oracle. Se `java -version` mostra 1.8, imposta `JAVA_HOME` e `Path` solo per il comando (vedi `ClaudeVault\lezioni\emulatori-firebase-richiedono-java-21.md`). Se una run interrotta lascia un emulatore vivo, chiudi solo quel PID.
 - Tieni fuori dai commit `.env`, `.dev.vars` e le chiavi service account: `FIREBASE_SERVICE_ACCOUNT` è un segreto.
 - Modifica `reports/` e `sources/*.csv` solo tramite gli script (`activate.py`, `licenses.py`), non a mano.
 - Le tile OSM pubbliche non sono adatte a traffico intenso; niente analytics né cookie di profilazione.

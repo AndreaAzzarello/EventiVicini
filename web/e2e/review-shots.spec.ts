@@ -23,7 +23,7 @@ for (const theme of ['light', 'dark']) {
 			await page.screenshot({ path: `.review/${OUT}/${name}-${size}-${theme}.png`, fullPage: true });
 		};
 		for (const [name, path] of PAGES) for (const [size, w, h] of SIZES) await shoot(name, path, w, h, size);
-		await signInByEmail(page, 'azzatubo@gmail.com', '/admin');
+		await signInByEmail(page, 'eventivicini.info@gmail.com', '/admin');
 		for (const [size, w, h] of SIZES) await shoot('admin', '/admin', w, h, size);
 		// Pagine nate con il nuovo design: non hanno un "prima".
 		for (const [name, path] of [['statistiche', '/admin/statistiche'], ['stile', '/admin/stile']]) await shoot(name, path, 390, 844, '390');

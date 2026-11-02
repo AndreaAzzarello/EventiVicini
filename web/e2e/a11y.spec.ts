@@ -63,7 +63,7 @@ test('a11y: account e proponi', async ({ page }) => {
 });
 
 test('a11y: area segnalazioni (admin)', async ({ page }) => {
-	await signInByEmail(page, 'azzatubo@gmail.com', '/admin/segnalazioni');
+	await signInByEmail(page, 'eventivicini.info@gmail.com', '/admin/segnalazioni');
 	await expect(page.getByRole('heading', { name: 'Segnalazioni', exact: true })).toBeVisible();
 	expect(await violations(page)).toEqual([]);
 });

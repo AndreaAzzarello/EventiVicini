@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/public';
 
-export const ADMIN_EMAIL = 'azzatubo@gmail.com'; // deve coincidere con isAdmin() in firestore.rules
+export const ADMIN_EMAIL = 'eventivicini.info@gmail.com'; // deve coincidere con isAdmin() in firestore.rules
 export const SITE_NAME = 'Eventi Vicini';
 
 export const siteUrl = () => (env.PUBLIC_SITE_URL || 'http://localhost:5173').replace(/\/$/, '');

@@ -62,7 +62,7 @@ for (const theme of ['light', 'dark']) {
 
 	test(`admin segnalazioni ${theme}`, async ({ page }) => {
 		await page.addInitScript((t) => localStorage.setItem('ev:theme', JSON.stringify(t)), theme);
-		await signInByEmail(page, 'azzatubo@gmail.com', '/admin/segnalazioni');
+		await signInByEmail(page, 'eventivicini.info@gmail.com', '/admin/segnalazioni');
 		for (const [size, w, h] of [['360', 360, 740], ['desktop', 1280, 800]] as const) {
 			await page.setViewportSize({ width: w, height: h });
 			await page.goto('/admin/segnalazioni');

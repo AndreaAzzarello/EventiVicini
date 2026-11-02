@@ -139,7 +139,7 @@ Lo script esegue `firebase deploy --only firestore:rules,firestore:indexes --pro
 
 ### Admin
 
-L'admin è **azzatubo@gmail.com**, con email verificata (`email_verified == true`). Il controllo vero è in `isAdmin()` nelle regole. La stessa email è in `web/src/lib/config.ts` (`ADMIN_EMAIL`) per mostrare l'interfaccia giusta. Per cambiare admin vanno modificate entrambe.
+L'admin è **eventivicini.info@gmail.com**, con email verificata (`email_verified == true`). Il controllo vero è in `isAdmin()` nelle regole. La stessa email è in `web/src/lib/config.ts` (`ADMIN_EMAIL`) per mostrare l'interfaccia giusta. Per cambiare admin vanno modificate entrambe.
 
 ### Regole Firestore
 

@@ -93,7 +93,7 @@ test('proposta di un evento', async ({ page }) => {
 });
 
 test('approvazione da parte dell’admin', async ({ page }) => {
-	await signInByEmail(page, 'azzatubo@gmail.com', '/admin/proposte');
+	await signInByEmail(page, 'eventivicini.info@gmail.com', '/admin/proposte');
 	await expect(page.getByRole('heading', { name: 'Proposte in attesa' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Concerto di prova E2E' })).toBeVisible();
 	await page.getByRole('button', { name: 'Approva' }).click();
@@ -105,7 +105,7 @@ test('approvazione da parte dell’admin', async ({ page }) => {
 });
 
 test('admin: statistiche mensili e pagina di stile', async ({ page }) => {
-	await signInByEmail(page, 'azzatubo@gmail.com', '/admin/statistiche');
+	await signInByEmail(page, 'eventivicini.info@gmail.com', '/admin/statistiche');
 	await expect(page.getByRole('heading', { name: 'Statistiche' })).toBeVisible();
 	const row = page.getByRole('row', { name: /Emilia-Romagna/ });
 	await expect(row).toContainText('412');

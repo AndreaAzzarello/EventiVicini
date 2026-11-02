@@ -76,7 +76,7 @@ test('l’admin trova la segnalazione e la chiude con una motivazione', async ({
 	await dialog.getByRole('button', { name: 'Invia la segnalazione' }).click();
 	await expect(dialog.getByRole('heading', { name: 'Segnalazione inviata' })).toBeVisible();
 
-	await signInByEmail(page, 'azzatubo@gmail.com', '/admin/segnalazioni');
+	await signInByEmail(page, 'eventivicini.info@gmail.com', '/admin/segnalazioni');
 	await expect(page.getByRole('heading', { name: 'Segnalazioni', exact: true })).toBeVisible();
 	await expect(page.getByText('Contenuto illegale')).toBeVisible();
 	await expect(page.getByText(TEXT)).toBeVisible();

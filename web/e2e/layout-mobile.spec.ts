@@ -40,7 +40,7 @@ for (const width of [360, 390]) {
 		await page.setViewportSize({ width, height: 740 });
 		await page.goto('/');
 		await brandIntact(page, width, 'anonimo');
-		await signInByEmail(page, 'azzatubo@gmail.com', '/');
+		await signInByEmail(page, 'eventivicini.info@gmail.com', '/');
 		await brandIntact(page, width, 'admin');
 		// "Admin" non sta più nell'header stretto: si apre dall'account
 		await expect(page.locator('nav[aria-label="Principale"] a[href="/admin"]')).toBeHidden();
@@ -60,7 +60,7 @@ test('accedi, proponi, account e tutte le viste admin senza scroll orizzontale a
 		await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 		expect(await overflow(page), path).toBeLessThanOrEqual(0);
 	}
-	await signInByEmail(page, 'azzatubo@gmail.com', '/proponi');
+	await signInByEmail(page, 'eventivicini.info@gmail.com', '/proponi');
 	for (const path of ['/proponi', '/account', '/admin', '/admin/proposte', '/admin/statistiche', '/admin/stile', '/admin/eventi/nuovo', '/admin/eventi/seedJazz']) {
 		await page.goto(path);
 		await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

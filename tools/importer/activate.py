@@ -37,7 +37,7 @@ from registry import USER_AGENT, read_rows, write_rows
 
 log = logging.getLogger("importer")
 TODO = {"da_verificare", "candidato"}
-HORIZON_DAYS = 45
+HORIZON_DAYS = 45  # solo per l'attivazione dei comuni (prova di una fonte); l'import vero usa run.py --horizon-days (60)
 HERE = Path(__file__).parent
 NOTE_TAG = re.compile(r"^licenza\[([a-z]+)\]( conflitto)?")
 REASON = re.compile(r"^attivazione: [^|]*\| ?")

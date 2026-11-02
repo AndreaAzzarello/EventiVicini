@@ -65,7 +65,7 @@ for (const theme of ['light', 'dark']) {
 
 	test(`admin ${theme}`, async ({ page }) => {
 		await page.addInitScript((t) => localStorage.setItem('ev:theme', JSON.stringify(t)), theme);
-		await signInByEmail(page, 'azzatubo@gmail.com', '/admin');
+		await signInByEmail(page, 'eventivicini.info@gmail.com', '/admin');
 		for (const [name, path] of [
 			['admin-eventi', '/admin'],
 			['admin-proposte', '/admin/proposte'],
