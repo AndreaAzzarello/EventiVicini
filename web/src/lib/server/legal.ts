@@ -5,6 +5,6 @@ export function legalInfo() {
 	return {
 		controller: env.CONTROLLER_NAME || 'il gestore di Eventi Vicini',
 		email: env.CONTACT_EMAIL || 'eventivicini.info@gmail.com',
-		updated: '30 ottobre 2026'
+		updated: '2 novembre 2026'
 	};
 }

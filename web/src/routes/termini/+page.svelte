@@ -35,6 +35,29 @@
 		</li>
 	</ul>
 
+	<h2>Segnalare un contenuto</h2>
+	<p>
+		Se un evento è illegale, falso o ingannevole, o contiene dati personali che non dovrebbe, usa “Segnala questo
+		evento” nella sua pagina: non serve un account. Indica il motivo e spiega cosa non va; l’email è facoltativa e serve
+		solo per risponderti. Esaminiamo ogni segnalazione a mano e non decidiamo in modo automatico. Chi segnala in modo
+		ripetuto e palesemente infondato può vedersi ignorare le segnalazioni successive.
+	</p>
+
+	<h2>Decisioni e motivazioni</h2>
+	<ul>
+		<li>Ogni decisione di rimuovere un evento, rifiutare una proposta o sospendere un account è motivata. Il motivo di una proposta rifiutata lo vede l’autore nel suo account.</li>
+		<li>Gli eventi pubblicati non restano collegati a chi li ha proposti: la motivazione di una rimozione la comunichiamo a chi ha segnalato, se ha lasciato l’email.</li>
+		<li>Se non sei d’accordo con una decisione scrivici{#if data.email} a <a href="mailto:{data.email}">{data.email}</a>{/if}: la riesaminiamo e ti rispondiamo con una nuova motivazione. Resta salva la possibilità di rivolgerti all’autorità giudiziaria.</li>
+		<li>Se veniamo a conoscenza di informazioni che fanno sospettare un reato che minaccia la vita o la sicurezza delle persone, informiamo le autorità competenti.</li>
+	</ul>
+
+	<h2>Punto di contatto</h2>
+	<p>
+		Per le autorità degli Stati membri, la Commissione europea e le persone che usano il servizio (Regolamento (UE)
+		2022/2065, “DSA”, artt. 11 e 12) il punto di contatto unico è {data.controller}{#if data.email}, <a href="mailto:{data.email}">{data.email}</a>{/if}.
+		Rispondiamo in italiano e in inglese.
+	</p>
+
 	<h2>Responsabilità</h2>
 	<p>
 		Non organizziamo gli eventi elencati e non rispondiamo del loro svolgimento. I link esterni (biglietti, fonti)

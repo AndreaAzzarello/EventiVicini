@@ -26,14 +26,16 @@
 		<li>
 			<strong>Navigazione senza account.</strong> Non raccogliamo dati personali. La tua posizione (se la condividi o
 			cerchi una città), i preferiti e il tema scelto restano <em>solo sul tuo dispositivo</em> (localStorage): non li
-			salviamo sui nostri server. Per trovare gli eventi vicini il browser invia al server coordinate arrotondate a
-				qualche chilometro, che non vengono registrate. Se cerchi un luogo per nome, il testo cercato viene inviato
-				al nostro server, che lo passa a Nominatim (vedi sotto).
+				salviamo sui nostri server. Per trovare gli eventi vicini il browser invia al server coordinate arrotondate a
+					qualche chilometro, che non vengono registrate. Per mostrarti l’elenco dei preferiti il browser invia al server
+					gli identificativi degli eventi salvati: non sono collegati a te e non li registriamo. Se cerchi un luogo per
+					nome, il testo cercato viene inviato al nostro server, che lo passa a Nominatim (vedi sotto).
 		</li>
 		<li>
 			<strong>Account (facoltativo).</strong> Se accedi con Google o con un link via email trattiamo: identificativo
-			dell’account (uid), nome, indirizzo email, città preferita se la indichi, data di creazione, i tuoi preferiti e
-			le proposte di evento che invii, con il loro stato.
+				dell’account (uid), nome, indirizzo email, città preferita se la indichi, la zona che scegli per cercare eventi
+				(nome e coordinate del comune o della zona, mai la tua posizione esatta, così la ritrovi su un altro dispositivo),
+				data di creazione, i tuoi preferiti e le proposte di evento che invii, con il loro stato.
 		</li>
 		<li>
 			<strong>Proposte di evento.</strong> I dati dell’evento (titolo, luogo, date, link) vengono pubblicati se approvati.
@@ -41,6 +43,12 @@
 				nell’evento pubblicato: resta solo nella proposta, leggibile da te e dall’amministratore. Se usi la mappa del
 				modulo “Proponi”, le coordinate del segnaposto (arrotondate a circa 11 metri) vengono inviate al nostro server
 				per ricavare il comune tramite Nominatim.
+		</li>
+		<li>
+			<strong>Segnalazioni.</strong> Chiunque, anche senza account, può segnalare un evento dalla sua pagina. Conserviamo
+			l’evento segnalato, il motivo, la spiegazione che scrivi, l’email se ti va di lasciarla (serve solo per dirti
+			l’esito) e la data. Non registriamo altro su chi segnala e la segnalazione non è collegata al tuo account.
+			Dopo la decisione conserviamo anche la motivazione.
 		</li>
 		<li>
 			<strong>Dati tecnici.</strong> I fornitori qui sotto trattano l’indirizzo IP e dati di connessione per consegnare le
@@ -52,13 +60,16 @@
 	<p>
 		Il trattamento è necessario per eseguire il servizio che richiedi (art. 6.1.b GDPR): mostrarti gli eventi,
 		conservare i tuoi preferiti, gestire le tue proposte. I dati tecnici di sicurezza si basano sul legittimo interesse
-		a mantenere il servizio sicuro e funzionante (art. 6.1.f).
+		a mantenere il servizio sicuro e funzionante (art. 6.1.f). Per le segnalazioni la base è l’obbligo di legge di
+		prevedere un meccanismo di segnalazione dei contenuti illegali (art. 6.1.c; Regolamento (UE) 2022/2065, art. 16) e il
+		legittimo interesse a tenere l’agenda corretta (art. 6.1.f).
 	</p>
 
 	<h2>Per quanto tempo</h2>
 	<ul>
 		<li>Dati dell’account e preferiti: finché non elimini l’account. Puoi farlo in ogni momento da <a href="/account">Il mio account</a> → “Elimina account e dati” (il pulsante è sempre disponibile): cancelliamo profilo, preferiti, proposte e l’account di accesso. In alternativa puoi chiederlo scrivendo{#if data.email} a <a href="mailto:{data.email}">{data.email}</a>{:else} al titolare{/if}.</li>
 			<li>Proposte già esaminate: le eliminiamo in automatico, quelle rifiutate dopo 90 giorni e quelle approvate dopo 30 giorni dalla revisione; quelle ancora in attesa restano finché non le ritiri o elimini l’account.</li>
+		<li>Segnalazioni: quelle aperte restano finché non le esaminiamo; quelle decise, con la motivazione, le eliminiamo in automatico dopo 180 giorni dalla decisione.</li>
 		<li>Gli eventi approvati restano pubblicati come contenuto dell’agenda, senza alcun riferimento visibile a chi li ha proposti.</li>
 		<li>Dati sul tuo dispositivo: finché non li cancelli dalle impostazioni del browser.</li>
 	</ul>
@@ -95,9 +106,11 @@
 
 	<h2>Cookie e archiviazione locale</h2>
 	<p>
-		Usiamo solo archiviazione tecnica (localStorage e IndexedDB): preferiti, posizione, tema, la sessione di accesso di
-			Firebase, l’indirizzo email inserito per ricevere il link di accesso (cancellato quando l’accesso è completato completato) e la
-			memoria delle ultime ricerche di luoghi, per non ripeterle. Nessun cookie
+			Usiamo solo archiviazione tecnica (localStorage, IndexedDB e la cache del browser): preferiti, posizione, tema, la
+				sessione di accesso di Firebase, l’indirizzo email inserito per ricevere il link di accesso (cancellato quando
+				l’accesso è completato), la memoria delle ultime ricerche di luoghi, per non ripeterle, l’elenco degli eventi che
+				hai già segnalato da questo dispositivo (per non duplicare la segnalazione) e fino a 40 pagine pubbliche già
+				visitate, per poterle aprire anche senza rete (restano fuori account, accesso e moduli). Nessun cookie
 		di terze parti per pubblicità o statistiche sul nostro sito (quelli dei siti a cui rimandiamo nascono solo dopo il clic), per questo non vedi banner. Se in futuro attivassimo statistiche,
 		useremmo Cloudflare Web Analytics, che non usa cookie né identifica i visitatori.
 	</p>
@@ -105,7 +118,9 @@
 	<h2>I tuoi diritti</h2>
 	<p>
 		Puoi chiedere accesso, rettifica, cancellazione, limitazione, portabilità dei dati e opporti al trattamento
-		(artt. 15–22 GDPR){#if data.email}, scrivendo a <a href="mailto:{data.email}">{data.email}</a>{/if}. Puoi anche proporre
+			(artt. 15–22 GDPR). Con un account puoi scaricare i tuoi dati in un file JSON da <a href="/account">Il mio
+			account</a> → “Scarica i miei dati”, e cancellarli con “Elimina account e dati”. Per il resto
+			scrivi{#if data.email} a <a href="mailto:{data.email}">{data.email}</a>{:else} al titolare{/if}. Puoi anche proporre
 		reclamo al <a href="https://www.garanteprivacy.it" rel="noopener">Garante per la protezione dei dati personali</a>.
 	</p>
 
