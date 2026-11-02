@@ -239,6 +239,40 @@ service cloud.firestore {
       }
     }
 
+    // ---- Segnalazioni di contenuti (DSA, art. 16) -----------------------
+    // Aperte a chiunque, anche senza account: solo creazione, solo per eventi che esistono, nessuna lettura pubblica.
+    // Il campo `text` è la spiegazione motivata richiesta dall'art. 16 (10-1.000 caratteri); `email` è facoltativa.
+    // Contro le scritture abusive, per ora, solo la validazione e i limiti del modulo: la protezione completa è App Check
+    // (docs/sicurezza-prossimi-passi.md, A2).
+    function validEmailOpt(v) {
+      return v is string && v.size() <= 254 && (v == '' || v.matches('[^@\\s]+@[^@\\s]+\\.[^@\\s]+'));
+    }
+
+    match /reports/{rid} {
+      allow read: if isAdmin();
+
+      allow create: if request.resource.data.keys().hasAll(['eventId', 'reason', 'text', 'email', 'status', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['eventId', 'reason', 'text', 'email', 'status', 'createdAt'])
+        && request.resource.data.eventId is string
+        && request.resource.data.eventId.matches('[A-Za-z0-9_]{1,64}')
+        && exists(/databases/$(database)/documents/events/$(request.resource.data.eventId))
+        && request.resource.data.reason in ['illegal', 'misleading', 'personal', 'other']
+        && str(request.resource.data.text, 10, 1000)
+        && validEmailOpt(request.resource.data.email)
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt == request.time;
+
+      // Solo l'admin decide, una volta sola, e deve motivare (art. 17: la motivazione si comunica a chi ha segnalato).
+      allow update: if isAdmin()
+        && resource.data.status == 'open'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decision', 'decidedAt'])
+        && request.resource.data.status in ['removed', 'dismissed']
+        && str(request.resource.data.decision, 3, 500)
+        && request.resource.data.decidedAt == request.time;
+
+      allow delete: if isAdmin() && resource.data.status != 'open';
+    }
+
     // Tutto il resto è chiuso.
     match /{document=**} {
       allow read, write: if false;

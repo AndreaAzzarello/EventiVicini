@@ -303,6 +303,73 @@ describe('submissions', () => {
   });
 });
 
+describe('reports (segnalazioni DSA)', () => {
+  const report = (over = {}) => ({
+    eventId: 'e1', reason: 'misleading', text: 'La data indicata non corrisponde a quella del Comune.',
+    email: '', status: 'open', createdAt: serverTimestamp(), ...over,
+  });
+  const sendAs = (fs, data, id = 'r1') => setDoc(doc(fs, 'reports', id), data);
+
+  it('chiunque segnala, anche senza account', async () => {
+    await assertSucceeds(sendAs(db(), report()));
+    await assertSucceeds(sendAs(db('alice'), report({ email: 'persona@example.org', reason: 'other' }), 'r2'));
+  });
+  it('solo per un evento che esiste', () => assertFails(sendAs(db(), report({ eventId: 'inesistente' }))));
+  it('id evento non valido', () => assertFails(sendAs(db(), report({ eventId: '../users/alice' }))));
+  it('motivo da elenco chiuso', () => assertFails(sendAs(db(), report({ reason: 'spam' }))));
+  it('spiegazione tra 10 e 1.000 caratteri', async () => {
+    await assertFails(sendAs(db(), report({ text: 'boh' })));
+    await assertFails(sendAs(db(), report({ text: 'x'.repeat(1001) })));
+    await assertSucceeds(sendAs(db(), report({ text: 'x'.repeat(1000) })));
+  });
+  it('email facoltativa ma valida', async () => {
+    await assertFails(sendAs(db(), report({ email: 'non-una-email' })));
+    await assertFails(sendAs(db(), report({ email: `${'a'.repeat(250)}@example.org` })));
+    await assertSucceeds(sendAs(db(), report({ email: 'persona@example.org' })));
+  });
+  it('niente campi extra, stato già deciso o data falsa', async () => {
+    await assertFails(sendAs(db(), report({ extra: 1 })));
+    await assertFails(sendAs(db(), report({ status: 'removed' })));
+    await assertFails(sendAs(db(), report({ createdAt: new Date(0) })));
+  });
+  it('nessuna lettura per anonimi e utenti, nemmeno la propria', async () => {
+    await assertSucceeds(sendAs(db('alice'), report()));
+    await assertFails(getDoc(doc(db('alice'), 'reports', 'r1')));
+    await assertFails(getDocs(collection(db(), 'reports')));
+  });
+  it('nessuna modifica né cancellazione da chi segnala', async () => {
+    await assertSucceeds(sendAs(db('alice'), report()));
+    await assertFails(updateDoc(doc(db('alice'), 'reports', 'r1'), { text: 'Cambio idea, tutto a posto.' }));
+    await assertFails(deleteDoc(doc(db('alice'), 'reports', 'r1')));
+  });
+
+  describe('moderazione', () => {
+    beforeEach(() => seed((fs) => setDoc(doc(fs, 'reports', 'r1'), { ...report(), createdAt: new Date() })));
+    const decide = (data, who = db('adm', ADMIN)) =>
+      updateDoc(doc(who, 'reports', 'r1'), { decidedAt: serverTimestamp(), ...data });
+    it("l'admin legge la coda", () => assertSucceeds(getDocs(collection(db('adm', ADMIN), 'reports'))));
+    it("l'admin decide con una motivazione", async () => {
+      await assertFails(decide({ status: 'removed' }));
+      await assertFails(decide({ status: 'removed', decision: 'No' }));
+      await assertFails(decide({ status: 'archiviata', decision: 'Motivo valido' }));
+      await assertSucceeds(decide({ status: 'removed', decision: 'Data errata: evento rimosso.' }));
+    });
+    it('la decisione è una sola', async () => {
+      await assertSucceeds(decide({ status: 'dismissed', decision: 'Segnalazione non fondata.' }));
+      await assertFails(decide({ status: 'removed', decision: 'Ci ripenso, rimosso.' }));
+    });
+    it("l'admin non altera il contenuto della segnalazione", () =>
+      assertFails(decide({ status: 'dismissed', decision: 'Non fondata', text: 'Testo riscritto dopo.' })));
+    it("l'admin cancella solo le segnalazioni chiuse", async () => {
+      await assertFails(deleteDoc(doc(db('adm', ADMIN), 'reports', 'r1')));
+      await assertSucceeds(decide({ status: 'dismissed', decision: 'Segnalazione non fondata.' }));
+      await assertSucceeds(deleteDoc(doc(db('adm', ADMIN), 'reports', 'r1')));
+    });
+    it('un utente qualsiasi non decide', () =>
+      assertFails(decide({ status: 'removed', decision: 'Provo io a decidere.' }, db('alice'))));
+  });
+});
+
 describe('resto del database', () => {
   it('chiuso', async () => {
     await assertFails(getDoc(doc(db('adm', ADMIN), 'config', 'x')));
