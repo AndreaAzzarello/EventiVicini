@@ -31,7 +31,7 @@ from adapters import SOURCES, Adapter, fallback_place
 from geo import PROVINCES, enrich, in_viewbox, slugify
 from fetch import CONNECT_FAILED
 from geocode import Geocoder
-from meter import SourceMeter
+from meter import BudgetExceeded, SourceMeter
 from mapping import ROME, content_hash, dedupe_key, html_to_text, is_long_running, one_line
 from registry import USER_AGENT, read_rows
 from relevance import exclusion_reason
@@ -39,11 +39,12 @@ from relevance import exclusion_reason
 HERE = Path(__file__).parent
 WORKERS = 4  # fonti scaricate in parallelo
 METER = SourceMeter()
+SOURCE_BUDGET = 600  # secondi per fonte: una fonte sana ha impiegato da 41 a 223 s (Albiano d'Ivrea, prova del 3/11); da tarare sul riepilogo "Fonti più lente"
 log = logging.getLogger("importer")
 
 
 class Got(NamedTuple):
-    """Esito del download di una fonte; kind: "" | "connect" (host che non risponde) | "parked" (saltata, attesa in corso)."""
+    """Esito del download di una fonte; kind: "" | "connect" (host che non risponde) | "parked" (saltata, attesa in corso) | "budget" (tempo esaurito)."""
     found: list[dict]
     error: str | None
     seconds: float
@@ -53,13 +54,16 @@ class Got(NamedTuple):
 
 def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: datetime,
             horizon_days: int, stats: dict[str, dict] | None = None, excluded: list[dict] | None = None,
-            retry_wait: float | None = None, unreachable_state: dict[str, dict] | None = None) -> list[dict]:
+            retry_wait: float | None = None, unreachable_state: dict[str, dict] | None = None,
+            source_budget: float | None = None) -> list[dict]:
     """stats (opzionale): per fonte {"events", "skipped", "excluded", "error"}; "error" None = la fonte ha risposto.
     excluded (opzionale): riceve le pagine scartate dal filtro anti-avvisi, {"id", "title", "reason", "source", "region"}.
     retry_wait (opzionale): a fine giro le fonti che non hanno risposto si riprovano una volta dopo tanti secondi; in stats
     compaiono "retry" ("ok" o "fallito") e "first_error".
     unreachable_state (opzionale, vedi unreachable.py): gli host che non rispondono si saltano finché non scade l'attesa
-    (stats "parked") e si aggiornano con l'esito di oggi; chi fallisce la connessione ("connect") non va al secondo giro."""
+    (stats "parked") e si aggiornano con l'esito di oggi; chi fallisce la connessione ("connect") non va al secondo giro.
+    source_budget (opzionale): secondi concessi a ciascuna fonte dei Comuni; oltre, la fonte è saltata ("budget"), con gli eventi
+    letti fin lì scartati: la copertura di ieri resta valida e non si riprova nello stesso giro."""
     events: dict[tuple, dict] = {}
     owner: dict[tuple, str] = {}  # chiave di deduplica → fonte che ha tenuto l'evento
     stats = {} if stats is None else stats
@@ -79,13 +83,15 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
             h = unreachable_state[host]
             return Got([], f"host irraggiungibile ({h['fails']} tentativi falliti, {h['reason']}): riprovo dal "
                            f"{unreachable.retry_on(unreachable_state, host):%d/%m}", 0.0, 0, "parked")
-        METER.start()
+        METER.start(None if getattr(SOURCES[name], "regional", False) else source_budget)  # le fonti regionali (API uniche) hanno i loro limiti
         kind = ""
         try:
             found, error = list(SOURCES[name].events(client, now, horizon_days)), None
         except httpx.HTTPError as e:
             found, error = [], logsafe.redact(str(e)) or type(e).__name__
             kind = "connect" if isinstance(e, CONNECT_FAILED) else ""
+        except BudgetExceeded as e:
+            found, error, kind = [], f"saltata: {e}", "budget"
         except Exception as e:  # un bug o una pagina anomala in una fonte non deve fermare le altre
             log.exception("%s: errore imprevisto", name)
             found, error = [], logsafe.redact(f"{type(e).__name__}: {e}")
@@ -104,7 +110,7 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
             found, error = got.found, got.error
             stats[name] = {"events": 0, "skipped": 0, "excluded": 0, "duplicates": 0, "error": error,
                            "seconds": round(got.seconds, 1), "requests": got.requests}
-            if got.kind:  # "parked" (saltata senza rete) o "connect" (connessione fallita): niente secondo giro
+            if got.kind:  # "parked" (saltata senza rete), "connect" (connessione fallita) o "budget" (tempo esaurito): niente secondo giro
                 stats[name][got.kind] = True
             if (host := host_of(name)) and got.kind != "parked":  # lo stato degli host si aggiorna nel thread principale
                 if error is None:
@@ -157,7 +163,7 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
                      stats[name]["skipped"], stats[name]["excluded"], stats[name]["duplicates"])
 
     process(names)
-    failed = [n for n in names if stats[n]["error"] and not stats[n].get("parked") and not stats[n].get("connect")]
+    failed = [n for n in names if stats[n]["error"] and not any(stats[n].get(k) for k in ("parked", "connect", "budget"))]
     if failed and retry_wait is not None:
         log.warning("%d fonti non raggiungibili: riprovo tra %d s", len(failed), retry_wait)
         time.sleep(retry_wait)
@@ -667,6 +673,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-geocode", type=int, default=MAX_GEOCODE,
                    help="richieste nuove a Nominatim per giro (le altre, dagli eventi più lontani, nei giorni dopo)")
     p.add_argument("--horizon-days", type=int, default=60, help="importa eventi che iniziano entro N giorni")
+    p.add_argument("--source-budget", type=float, default=SOURCE_BUDGET,
+                   help="secondi concessi a ogni fonte dei Comuni (0 = nessun tetto); oltre, la fonte è saltata")
     p.add_argument("--retry-wait", type=float, default=300,
                    help="secondi prima di riprovare, a fine giro, le fonti non raggiungibili (0 = subito, -1 = non riprovare)")
     args = p.parse_args(argv)
@@ -693,7 +701,7 @@ def main(argv: list[str] | None = None) -> int:
         state = None if args.source else unreachable.load(state_file)  # con --source (prove a mano) nessun salto né scrittura
         try:
             events = collect(client, geocoder, names, now, args.horizon_days, stats, excluded,
-                             None if args.retry_wait < 0 else args.retry_wait, state)
+                             None if args.retry_wait < 0 else args.retry_wait, state, args.source_budget or None)
             centers = {} if args.dry_run or args.source else find_centers(names, geocoder)
         finally:
             geocoder.save()

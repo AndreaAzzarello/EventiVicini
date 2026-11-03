@@ -86,9 +86,10 @@ jobs:
   import:
     needs: plan
     runs-on: ubuntu-latest
-    # Stima: ~1 s per richiesta e host, 4 fonti in parallelo; Nominatim a 0,25 richieste/s per job (4 job = 1/s in tutto).
-    # Limite GitHub per job: 6 ore (360 min); la Lombardia al massimo (1.502 comuni attivi) ne userebbe ~230; sui repository pubblici i minuti dei runner standard sono gratuiti.
-    timeout-minutes: 330
+    # Misurato nel run del 3/11/2026: la Lombardia (271 comuni, 4 fonti in parallelo, 1 richiesta/s per host) impiega ~65 min, gli altri
+    # job meno; i 150+ min di Piemonte e Veneto erano host irraggiungibili (ora 5 s di connessione e ricordati tra i run) e ogni
+    # fonte ha un tetto di 10 minuti (--source-budget). 90 minuti sono la rete di sicurezza. Nominatim: 0,25 richieste/s per job.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       max-parallel: 4

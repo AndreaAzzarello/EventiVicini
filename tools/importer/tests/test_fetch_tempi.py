@@ -321,3 +321,79 @@ def test_plone_timeout_di_lettura_60s_e_retry():
                      fetcher=Fetcher(client, min_interval=0, backoff=0, retries=2))
     assert list(a.events(client, NOW, 60)) == [] and len(calls) == 2  # il primo timeout si ritenta
     assert timeouts[-1]["read"] == 60
+
+
+# --- budget di tempo per fonte ---
+
+class Lenta(Host):
+    """Fa n richieste; il segna-tempo finto fa passare 100 s a ogni richiesta."""
+
+    def __init__(self, base="https://lenta.it", n=10):
+        super().__init__(base)
+        self.n = n
+        self.done = 0
+
+    def events(self, client, now, horizon):
+        self.calls += 1
+        for _ in range(self.n):
+            client.get(self.base + "/x")
+            self.done += 1
+        return []
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    t = [0.0]
+
+    def tick():
+        t[0] += 100.0
+        return t[0]
+    monkeypatch.setattr("meter.time.monotonic", tick)
+
+
+def run_budget(monkeypatch, src, budget, state=None, retry_wait=None):
+    monkeypatch.setattr(run, "SOURCES", {"x": src})
+    monkeypatch.setattr(run.time, "sleep", lambda s: None)
+    client = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200)))
+    stats: dict = {}
+    events = run.collect(client, SimpleNamespace(), ["x"], NOW, 60, stats, None, retry_wait, state, budget)
+    return stats["x"], events
+
+
+def test_budget_superato_la_fonte_e_saltata(monkeypatch, clock):
+    src, state = Lenta(n=10), {}
+    st, events = run_budget(monkeypatch, src, 300, state, retry_wait=0)
+    assert st["budget"] and st["error"].startswith("saltata: oltre 300 s") and events == []
+    assert src.done < 10  # fermata a metà
+    assert src.calls == 1 and "retry" not in st and state == {}  # né secondo giro né host irraggiungibile
+
+
+def test_budget_non_superato_nessun_effetto(monkeypatch, clock):
+    st, _ = run_budget(monkeypatch, Lenta(n=1), 300)
+    assert st["error"] is None and "budget" not in st
+
+
+def test_senza_budget_nessun_tetto(monkeypatch, clock):
+    src = Lenta(n=10)
+    st, _ = run_budget(monkeypatch, src, None)
+    assert st["error"] is None and src.done == 10
+
+
+def test_fonte_regionale_esente_dal_budget(monkeypatch, clock):
+    src = Lenta(n=10)
+    src.regional = True
+    st, _ = run_budget(monkeypatch, src, 300)
+    assert st["error"] is None and src.done == 10
+
+
+def test_il_budget_non_viene_scambiato_per_robots_irraggiungibile(clock):
+    from meter import BudgetExceeded
+    assert not issubclass(BudgetExceeded, httpx.HTTPError)
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.path)
+        raise BudgetExceeded("x")
+    with pytest.raises(BudgetExceeded):
+        fetcher(handler, retries=4).get("https://x.it/a")  # nessun retry
+    assert len(calls) == 1
