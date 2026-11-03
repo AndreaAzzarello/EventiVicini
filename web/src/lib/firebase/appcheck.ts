@@ -61,13 +61,19 @@ export type AppCheckToken = { token: string; expireTimeMillis: number };
 export function turnstileProvider(sitekey: string) {
 	return {
 		async getToken(): Promise<AppCheckToken> {
-			const res = await fetch('/api/appcheck', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ token: await turnstileToken(sitekey) })
-			});
-			if (!res.ok) throw new Error(`appcheck-${res.status}`);
-			return (await res.json()) as AppCheckToken;
+			try {
+				const res = await fetch('/api/appcheck', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ token: await turnstileToken(sitekey) })
+				});
+				if (!res.ok) throw new Error(`appcheck-${res.status}`);
+				return (await res.json()) as AppCheckToken;
+			} catch (e) {
+				// L'SDK inghiotte gli errori del provider: così si vedono durante il monitoraggio (solo codici, mai token).
+				console.warn('appcheck:', e instanceof Error ? e.message : 'errore');
+				throw e;
+			}
 		}
 	};
 }
