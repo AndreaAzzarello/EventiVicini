@@ -17,6 +17,7 @@ import uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import NamedTuple
 from urllib.parse import urlsplit
 
 import httpx
@@ -24,9 +25,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 import bundles
 import logsafe
+import unreachable
 import manifest
 from adapters import SOURCES, Adapter, fallback_place
 from geo import PROVINCES, enrich, in_viewbox, slugify
+from fetch import CONNECT_FAILED
 from geocode import Geocoder
 from meter import SourceMeter
 from mapping import ROME, content_hash, dedupe_key, html_to_text, is_long_running, one_line
@@ -39,33 +42,57 @@ METER = SourceMeter()
 log = logging.getLogger("importer")
 
 
+class Got(NamedTuple):
+    """Esito del download di una fonte; kind: "" | "connect" (host che non risponde) | "parked" (saltata, attesa in corso)."""
+    found: list[dict]
+    error: str | None
+    seconds: float
+    requests: int
+    kind: str = ""
+
+
 def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: datetime,
             horizon_days: int, stats: dict[str, dict] | None = None, excluded: list[dict] | None = None,
-            retry_wait: float | None = None) -> list[dict]:
+            retry_wait: float | None = None, unreachable_state: dict[str, dict] | None = None) -> list[dict]:
     """stats (opzionale): per fonte {"events", "skipped", "excluded", "error"}; "error" None = la fonte ha risposto.
     excluded (opzionale): riceve le pagine scartate dal filtro anti-avvisi, {"id", "title", "reason", "source", "region"}.
     retry_wait (opzionale): a fine giro le fonti che non hanno risposto si riprovano una volta dopo tanti secondi; in stats
-    compaiono "retry" ("ok" o "fallito") e "first_error"."""
+    compaiono "retry" ("ok" o "fallito") e "first_error".
+    unreachable_state (opzionale, vedi unreachable.py): gli host che non rispondono si saltano finché non scade l'attesa
+    (stats "parked") e si aggiornano con l'esito di oggi; chi fallisce la connessione ("connect") non va al secondo giro."""
     events: dict[tuple, dict] = {}
     owner: dict[tuple, str] = {}  # chiave di deduplica → fonte che ha tenuto l'evento
     stats = {} if stats is None else stats
 
     METER.attach(client)
+    today = now.date()
 
-    def fetch(name: str) -> tuple[list[dict], str | None, float, int]:
-        """Solo rete (un host per fonte, 1 richiesta/s ciascuno): può girare in parallelo. Ultimi due valori: secondi e richieste."""
+    def host_of(name: str) -> str | None:
+        """Host da ricordare: solo i siti dei Comuni (le fonti regionali sono API uniche, non si parcheggiano)."""
+        a = SOURCES[name]
+        return None if unreachable_state is None or getattr(a, "regional", False) else urlsplit(a.base).netloc
+
+    def fetch(name: str) -> Got:
+        """Solo rete (un host per fonte, 1 richiesta/s ciascuno): può girare in parallelo."""
+        host = host_of(name)
+        if host and not unreachable.due(unreachable_state, host, today):
+            h = unreachable_state[host]
+            return Got([], f"host irraggiungibile ({h['fails']} tentativi falliti, {h['reason']}): riprovo dal "
+                           f"{unreachable.retry_on(unreachable_state, host):%d/%m}", 0.0, 0, "parked")
         METER.start()
+        kind = ""
         try:
             found, error = list(SOURCES[name].events(client, now, horizon_days)), None
         except httpx.HTTPError as e:
             found, error = [], logsafe.redact(str(e)) or type(e).__name__
+            kind = "connect" if isinstance(e, CONNECT_FAILED) else ""
         except Exception as e:  # un bug o una pagina anomala in una fonte non deve fermare le altre
             log.exception("%s: errore imprevisto", name)
             found, error = [], logsafe.redact(f"{type(e).__name__}: {e}")
         seconds, requests = METER.stop()
         log.info("%s: %s s, %d richieste, %s", name, f"{seconds:.1f}".replace(".", ","), requests,
                  f"errore ({error[:120]})" if error else f"ok, {len(found)} eventi grezzi")  # subito: lo stdout del job si legge mentre gira
-        return found, error, seconds, requests
+        return Got(found, error, seconds, requests, kind)
 
     def process(batch: list[str]) -> None:
         with ThreadPoolExecutor(WORKERS) as pool:
@@ -73,9 +100,17 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
         # Geocoding (Nominatim, 1 richiesta/s in tutto) in sequenza, dagli eventi più vicini nel tempo: se il budget
         # di richieste del giro finisce, i più lontani restano senza geocoding e lo prendono nei giorni dopo.
         pending = []
-        for name, (found, error, seconds, requests) in zip(batch, fetched):
+        for name, got in zip(batch, fetched):
+            found, error = got.found, got.error
             stats[name] = {"events": 0, "skipped": 0, "excluded": 0, "duplicates": 0, "error": error,
-                           "seconds": round(seconds, 1), "requests": requests}
+                           "seconds": round(got.seconds, 1), "requests": got.requests}
+            if got.kind:  # "parked" (saltata senza rete) o "connect" (connessione fallita): niente secondo giro
+                stats[name][got.kind] = True
+            if (host := host_of(name)) and got.kind != "parked":  # lo stato degli host si aggiorna nel thread principale
+                if error is None:
+                    unreachable.ok(unreachable_state, host)
+                elif got.kind == "connect":
+                    unreachable.fail(unreachable_state, host, today, error)
             if error:
                 log.error("%s: fonte non raggiungibile (%s), la salto", name, error)
             pending += [(name, ev) for ev in found]
@@ -122,7 +157,7 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
                      stats[name]["skipped"], stats[name]["excluded"], stats[name]["duplicates"])
 
     process(names)
-    failed = [n for n in names if stats[n]["error"]]
+    failed = [n for n in names if stats[n]["error"] and not stats[n].get("parked") and not stats[n].get("connect")]
     if failed and retry_wait is not None:
         log.warning("%d fonti non raggiungibili: riprovo tra %d s", len(failed), retry_wait)
         time.sleep(retry_wait)
@@ -649,17 +684,21 @@ def main(argv: list[str] | None = None) -> int:
     if not names:
         log.error("Nessuna fonte attiva per questa selezione")
         return 1
-    with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=30, follow_redirects=True) as client:
+    with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=httpx.Timeout(30, connect=5), follow_redirects=True) as client:
         geocoder = Geocoder(client, HERE / "geocache.json", args.max_geocode,
                             float(os.environ.get("NOMINATIM_INTERVAL", "1")))
         stats: dict[str, dict] = {}
         excluded: list[dict] = []
+        state_file = HERE / "unreachable.json"
+        state = None if args.source else unreachable.load(state_file)  # con --source (prove a mano) nessun salto né scrittura
         try:
             events = collect(client, geocoder, names, now, args.horizon_days, stats, excluded,
-                             None if args.retry_wait < 0 else args.retry_wait)
+                             None if args.retry_wait < 0 else args.retry_wait, state)
             centers = {} if args.dry_run or args.source else find_centers(names, geocoder)
         finally:
             geocoder.save()
+            if state is not None:
+                unreachable.save(state_file, state)
     summary(stats, SOURCES)
     print(excluded_report(excluded))
     log.info("Totale dopo deduplica: %d (richieste Nominatim: %d)", len(events), geocoder.requests)

@@ -38,4 +38,5 @@ web/.shots/
 FINAL_REPORT.md
 tools/importer/.httpcache/
 tools/importer/manifests/
+tools/importer/unreachable.json
 web/.review/

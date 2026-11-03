@@ -17,6 +17,7 @@ from registry import USER_AGENT
 
 CACHE_DIR = Path(__file__).parent / ".httpcache"
 RETRY_STATUS = {429, 500, 502, 503, 504}
+CONNECT_FAILED = (httpx.ConnectError, httpx.ConnectTimeout)  # l'host non risponde: ritentare subito non serve
 
 
 class Blocked(Exception):
@@ -56,8 +57,13 @@ class Fetcher:
             try:
                 self._wait(urlsplit(origin).netloc)
                 res = self.client.get(origin + "/robots.txt")
+            except CONNECT_FAILED as e:
+                why = type(e).__name__
+                break
             except httpx.HTTPError as e:
                 res, why = None, type(e).__name__
+                if isinstance(e, httpx.TimeoutException) and attempt >= 1:
+                    break  # un timeout di lettura costa 30 s a tentativo: al massimo 1 retry (i 5xx rispondono subito e si ritentano)
             else:
                 why = f"HTTP {res.status_code}"
             if res is not None and res.status_code < 400:
@@ -106,8 +112,8 @@ class Fetcher:
             self.requests += 1
             try:
                 res = self.client.get(url, headers=headers)
-            except httpx.TransportError:
-                if attempt == self.retries:
+            except httpx.TransportError as e:
+                if attempt == self.retries or isinstance(e, CONNECT_FAILED):
                     raise
             else:
                 if res.status_code not in RETRY_STATUS or attempt == self.retries:

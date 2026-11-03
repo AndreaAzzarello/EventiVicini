@@ -113,6 +113,7 @@ jobs:
           path: |
             tools/importer/geocache.json
             tools/importer/.httpcache
+            tools/importer/unreachable.json
             tools/importer/manifests
           key: importer-${{ matrix.region }}-${{ github.run_id }}
           restore-keys: importer-${{ matrix.region }}-

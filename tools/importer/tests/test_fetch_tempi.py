@@ -89,3 +89,139 @@ def test_robots_che_vieta_blocca():
                 else httpx.Response(200))
     with pytest.raises(Blocked):
         f.get("https://x.it/privato/a")
+
+
+# --- host irraggiungibili: niente retry sulla connessione ---
+
+def test_connessione_fallita_su_robots_una_sola_richiesta():
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.path)
+        raise httpx.ConnectTimeout("5 s")
+    with pytest.raises(RobotsUnknown):
+        fetcher(handler, retries=4).get("https://x.it/pagina")
+    assert calls == ["/robots.txt"]
+
+
+def test_timeout_di_lettura_su_robots_al_massimo_un_retry():
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.path)
+        raise httpx.ReadTimeout("30 s")
+    with pytest.raises(RobotsUnknown):
+        fetcher(handler, retries=4).get("https://x.it/pagina")
+    assert calls == ["/robots.txt"] * 2
+
+
+def test_connessione_fallita_sulla_pagina_non_si_ritenta():
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.path)
+        if req.url.path == "/robots.txt":
+            return httpx.Response(404)
+        raise httpx.ConnectError("rifiutata")
+    with pytest.raises(httpx.ConnectError):
+        fetcher(handler, retries=4).get("https://x.it/pagina")
+    assert calls == ["/robots.txt", "/pagina"]
+
+
+def test_errore_5xx_sulla_pagina_si_ritenta_ancora():
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.path)
+        return httpx.Response(404 if req.url.path == "/robots.txt" else 503)
+    assert fetcher(handler, retries=2).get("https://x.it/pagina").status_code == 503
+    assert calls.count("/pagina") == 3
+
+
+# --- memoria degli host irraggiungibili ---
+
+def test_scala_di_attesa_1_3_7_giorni():
+    import unreachable
+    from datetime import date
+
+    st: dict = {}
+    d0 = date(2026, 11, 3)
+    for n, giorni in enumerate([1, 3, 7, 7], start=1):
+        unreachable.fail(st, "h.it", d0, "ConnectTimeout")
+        assert st["h.it"]["fails"] == n and unreachable.retry_on(st, "h.it") == date(2026, 11, 3 + giorni)
+        assert not unreachable.due(st, "h.it", date(2026, 11, 3 + giorni - 1)) and unreachable.due(st, "h.it", date(2026, 11, 3 + giorni))
+    unreachable.ok(st, "h.it")
+    assert unreachable.due(st, "h.it", d0) and st == {}
+
+
+def test_stato_su_file(tmp_path):
+    import unreachable
+
+    f = tmp_path / "u.json"
+    assert unreachable.load(f) == {}  # file assente
+    f.write_text("{rotto", encoding="utf-8")
+    assert unreachable.load(f) == {}
+    unreachable.save(f, {"h.it": {"fails": 1, "last": "2026-11-03", "reason": "x"}})
+    assert unreachable.load(f)["h.it"]["fails"] == 1
+
+
+class Host(Chiama):
+    def __init__(self, base, error=None):
+        super().__init__(0, error)
+        self.base, self.calls = base, 0
+
+    def events(self, client, now, horizon):
+        self.calls += 1
+        return super().events(client, now, horizon)
+
+
+def test_collect_parcheggia_l_host_che_non_si_connette(monkeypatch):
+    src = Host("https://morto.it", httpx.ConnectError("robots.txt non raggiungibile"))
+    state: dict = {}
+    sources = {"morto": src}
+    monkeypatch.setattr(run, "SOURCES", sources)
+    monkeypatch.setattr(run.time, "sleep", lambda s: None)
+    client = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200)))
+    stats: dict = {}
+    run.collect(client, SimpleNamespace(), ["morto"], NOW, 60, stats, None, 0, state)
+    assert src.calls == 1 and stats["morto"]["connect"] and "retry" not in stats["morto"]  # niente secondo giro
+    assert state["morto.it"]["fails"] == 1
+    # il giorno dopo (1 giorno di attesa) si riprova; lo stesso giorno no
+    stats = {}
+    run.collect(client, SimpleNamespace(), ["morto"], NOW, 60, stats, None, None, state)
+    assert src.calls == 1 and stats["morto"]["parked"] and "riprovo dal 04/11" in stats["morto"]["error"]
+    stats = {}
+    run.collect(client, SimpleNamespace(), ["morto"], datetime(2026, 11, 4, tzinfo=ROME), 60, stats, None, None, state)
+    assert src.calls == 2 and state["morto.it"]["fails"] == 2  # ancora morto: attesa 3 giorni
+    # torna a rispondere: sparisce dallo stato
+    src.error = None
+    stats = {}
+    run.collect(client, SimpleNamespace(), ["morto"], datetime(2026, 11, 7, tzinfo=ROME), 60, stats, None, None, state)
+    assert src.calls == 3 and state == {} and stats["morto"]["error"] is None
+
+
+def test_collect_errore_di_lettura_non_parcheggia_e_si_riprova(monkeypatch):
+    src = Host("https://lento.it", httpx.ReadTimeout("timed out"))
+    state: dict = {}
+    monkeypatch.setattr(run, "SOURCES", {"lento": src})
+    monkeypatch.setattr(run.time, "sleep", lambda s: None)
+    stats: dict = {}
+    run.collect(httpx.Client(), SimpleNamespace(), ["lento"], NOW, 60, stats, None, 0, state)
+    assert src.calls == 2 and state == {} and stats["lento"]["retry"] == "fallito"
+
+
+def test_collect_senza_stato_non_salta_nulla(monkeypatch):  # --source a mano
+    src = Host("https://morto.it", httpx.ConnectError("x"))
+    monkeypatch.setattr(run, "SOURCES", {"morto": src})
+    for _ in range(2):
+        run.collect(httpx.Client(), SimpleNamespace(), ["morto"], NOW, 60, {}, None, None, None)
+    assert src.calls == 2
+
+
+def test_fonte_regionale_non_si_parcheggia(monkeypatch):
+    src = Host("https://api.it", httpx.ConnectError("x"))
+    src.regional = True
+    state: dict = {}
+    monkeypatch.setattr(run, "SOURCES", {"reg": src})
+    run.collect(httpx.Client(), SimpleNamespace(), ["reg"], NOW, 60, {}, None, None, state)
+    assert state == {}
