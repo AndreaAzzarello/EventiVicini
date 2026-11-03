@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 // La CSP non deve bloccare nulla di ciò che il sito usa; qui si guardano le pagine che caricano script e mappe.
 // Solo pagine del Worker: gli asset statici (/offline) prendono _headers da Cloudflare, che l'anteprima locale non applica.
-const PAGES = ['/', '/accedi', '/proponi', '/privacy', '/cookie'];
+const PAGES = ['/', '/?luogo=modena', '/citta/modena', '/eventi/jazz-in-piazza-grande-seedJazz', '/accedi', '/proponi', '/privacy', '/cookie'];
 
 for (const path of PAGES) {
 	test(`${path}: intestazioni di sicurezza e nessuna violazione CSP`, async ({ page }) => {

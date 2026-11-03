@@ -48,6 +48,14 @@
 	const place = $derived(event.venueName || event.address);
 	const img = $derived(event.imageUrl ? imageSources(event.imageUrl) : null);
 	let broken = $state(false);
+
+	// Niente onerror inline (la CSP lo blocca): se l'errore è avvenuto prima dell'idratazione lo si legge da complete/naturalWidth.
+	function watchBroken(img: HTMLImageElement) {
+		if (img.complete && img.naturalWidth === 0) broken = true;
+		const fail = () => (broken = true);
+		img.addEventListener('error', fail);
+		return () => img.removeEventListener('error', fail);
+	}
 </script>
 
 <article
@@ -103,7 +111,7 @@
 						width="96"
 						height="96"
 						referrerpolicy="no-referrer"
-						onerror={() => (broken = true)}
+						{@attach watchBroken}
 					/>
 				{:else}
 					<CategoryArt category={event.category} />

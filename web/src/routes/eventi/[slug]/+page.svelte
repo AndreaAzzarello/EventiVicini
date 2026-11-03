@@ -191,7 +191,7 @@
 		{#if vendor && !offSale}I biglietti li vende {vendor}: il pulsante apre il suo sito, dove valgono le sue condizioni.{/if}
 	</p>
 
-	<p class="report-row"><ReportDialog eventId={e.id} title={e.title} contact={data.contact} /></p>
+	<div class="report-row"><ReportDialog eventId={e.id} title={e.title} contact={data.contact} /></div>
 </article>
 
 <style>
@@ -309,6 +309,9 @@
 		margin-top: var(--space-5);
 	}
 	.where h2 {
+		margin: 0 0 var(--space-3);
+	}
+	.report-row {
 		margin: 0 0 var(--space-3);
 	}
 	.source {

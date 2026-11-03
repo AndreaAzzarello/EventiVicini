@@ -77,7 +77,9 @@ const events = [
 		startTime: at(1, 8),
 		endTime: at(1, 18),
 		venueName: 'Parco Novi Sad',
-		priceType: 'free'
+		priceType: 'free',
+		// immagine volutamente irraggiungibile: e2e/broken-image.spec.ts verifica il ripiego sul motivo di categoria
+		imageUrl: 'https://example.org/immagine-rotta.jpg'
 	}),
 	ev('seedBimbi', 'formigine', {
 		title: 'Letture animate per bambini al castello',
