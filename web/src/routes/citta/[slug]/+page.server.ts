@@ -1,6 +1,7 @@
 import { HTML_CACHE } from '$lib/server/cache';
 import { error, redirect } from '@sveltejs/kit';
 import { cityPath, slugify } from '$lib/event';
+import { comuneBySlug } from '$lib/server/comuneSlug';
 import { coverage, eventsInCity, regionCoverage } from '$lib/server/firestore';
 import type { PageServerLoad } from './$types';
 
@@ -14,6 +15,8 @@ export const load: PageServerLoad = async ({ params, setHeaders }) => {
 			(c) => c.alt && [c.alt, `${c.name} ${c.alt}`, `${c.alt} ${c.name}`].some((n) => slugify(n) === params.slug)
 		);
 		if (alias) redirect(301, cityPath(alias.slug));
+		// Comune vero ma senza eventi propri: 302 (non 301) perché domani potrebbe averne; la home mostra gli eventi vicini.
+		if (await comuneBySlug(params.slug)) redirect(302, `/?luogo=${params.slug}`);
 		error(404, 'Nessun evento in programma per questa città.');
 	}
 	setHeaders({ 'cache-control': HTML_CACHE });

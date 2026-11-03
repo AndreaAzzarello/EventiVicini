@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
-import { comuneFromChunk, type SlugChunk } from '$lib/comuni';
 import { HTML_CACHE } from '$lib/server/cache';
+import { comuneBySlug } from '$lib/server/comuneSlug';
 import { filterFromParams } from '$lib/filters';
 import { DEFAULT_PLACE, type ChosenPlace } from '$lib/geo';
 import { autoRadius, nearestWithEvents, placeFromEvents, placeFromParams, popularPlaces } from '$lib/places';
@@ -11,8 +11,6 @@ import type { PageServerLoad } from './$types';
 // dall'utente (solo nel suo localStorage) riporta qui con un link al luogo.
 // Senza luogo il server non sceglie al posto dell'utente: niente eventi, ma i link alle regioni e alle città con più eventi
 // (per chi non ha JavaScript e per i motori di ricerca); il browser porta al luogo salvato o chiede dove cercare.
-// Un file per iniziale dello slug (vedi tools/importer/build_comuni.py): se ne carica uno solo, e solo se serve.
-const slugChunks = import.meta.glob<SlugChunk>('/src/lib/data/slug/*.json', { import: 'default' });
 
 export const load: PageServerLoad = async ({ url, setHeaders }) => {
 	setHeaders({ 'cache-control': HTML_CACHE });
@@ -22,8 +20,7 @@ export const load: PageServerLoad = async ({ url, setHeaders }) => {
 	const slug = url.searchParams.get('luogo') ?? '';
 	let fromUrl = wanted ? placeFromParams(url.searchParams, regions) : null;
 	// Qualsiasi comune italiano si apre anche senza eventi: lo risolve l'indice per iniziale, senza letture Firestore.
-	const chunk = slugChunks[`/src/lib/data/slug/${slug[0]}.json`];
-	if (wanted && !fromUrl && /^[a-z0-9-]{1,80}$/.test(slug) && chunk) fromUrl = comuneFromChunk(await chunk(), slug);
+	if (wanted && !fromUrl) fromUrl = await comuneBySlug(slug);
 	// Città con eventi ma (ancora) fuori dalla copertura: si ricava il luogo dagli eventi, mai il predefinito in silenzio.
 	if (wanted && !fromUrl && /^[a-z0-9-]{1,80}$/.test(slug)) fromUrl = placeFromEvents(slug, await eventsInCity(slug, 20).catch(() => []));
 	const place: ChosenPlace = fromUrl ?? { ...DEFAULT_PLACE };

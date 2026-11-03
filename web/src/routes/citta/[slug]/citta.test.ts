@@ -5,6 +5,9 @@ const calls: string[] = [];
 let override: ReturnType<typeof fromData>[] | null = null;
 const ev = (id: string, locality: string) =>
 	fromData(id, { city: 'Terre del Reno', citySlug: 'terre-del-reno', province: 'FE', locality, startTime: 1 });
+vi.mock('$lib/server/comuneSlug', () => ({
+	comuneBySlug: async (slug: string) => (slug === 'modena' ? { label: 'Modena', lat: 44.65, lng: 10.93, slug } : null)
+}));
 vi.mock('$lib/server/firestore', () => ({
 	eventsInCity: async (slug: string) => (calls.push(slug), override ?? [ev('a', "Sant'Agostino"), ev('b', 'Mirabello')]),
 	regionCoverage: async (slug: string) => (slug === 'emilia-romagna' ? { slug, name: 'Emilia-Romagna', comuni: [] } : null),
@@ -41,6 +44,13 @@ describe('/citta/[slug]', () => {
 		override = [fromData('b', { city: 'Bolzano', citySlug: 'bolzano', cityAlt: 'Bozen', startTime: 1 })];
 		const r = (await load({ params: { slug: 'bolzano' }, setHeaders() {} } as never)) as { city: string; cityAlt: string };
 		expect([r.city, r.cityAlt]).toEqual(['Bolzano', 'Bozen']);
+	});
+
+	it('un comune vero senza eventi rimanda alla home con 302, uno slug inesistente resta 404', async () => {
+		const { load } = await import('./+page.server');
+		override = [];
+		await expect(load({ params: { slug: 'modena' }, setHeaders() {} } as never)).rejects.toMatchObject({ status: 302, location: '/?luogo=modena' });
+		await expect(load({ params: { slug: 'cittainventata' }, setHeaders() {} } as never)).rejects.toMatchObject({ status: 404 });
 	});
 
 	it('gli slug di regioni e comuni con accenti e apostrofi sono stabili', async () => {
