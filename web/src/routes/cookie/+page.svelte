@@ -33,18 +33,20 @@
 	<!-- Regione scorrevole: va raggiunta da tastiera (WCAG 2.1.1). -->
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<div class="table-wrap" role="region" aria-label="Elenco degli strumenti tecnici" tabindex="0">
-		<table>
+		<!-- Ruoli espliciti: su telefono il CSS rende i blocchi, e senza ruoli alcuni screen reader perdono la tabella. -->
+		<!-- svelte-ignore a11y_no_redundant_roles -->
+		<table role="table">
 			<thead>
-				<tr><th scope="col">Nome</th><th scope="col">Dove</th><th scope="col">A cosa serve</th><th scope="col">Durata</th><th scope="col">Chi lo scrive</th></tr>
+				<tr role="row"><th scope="col" role="columnheader">Nome</th><th scope="col" role="columnheader">Dove</th><th scope="col" role="columnheader">A cosa serve</th><th scope="col" role="columnheader">Durata</th><th scope="col" role="columnheader">Chi lo scrive</th></tr>
 			</thead>
 			<tbody>
 				{#each TOOLS as t (t.kind + t.label)}
 					<tr>
-						<th scope="row"><code>{t.label}</code>{#if t.account}<br /><span class="muted small">solo con un account</span>{/if}</th>
-						<td>{where[t.kind]}</td>
-						<td>{t.purpose}</td>
-						<td>{t.duration}</td>
-						<td>{t.origin}</td>
+						<th scope="row" role="rowheader"><code>{t.label}</code>{#if t.account}<br /><span class="muted small">solo con un account</span>{/if}</th>
+						<td role="cell" data-label="Dove">{where[t.kind]}</td>
+						<td role="cell" data-label="A cosa serve">{t.purpose}</td>
+						<td role="cell" data-label="Durata">{t.duration}</td>
+						<td role="cell" data-label="Chi lo scrive">{t.origin}</td>
 					</tr>
 				{/each}
 			</tbody>
@@ -79,5 +81,35 @@
 	}
 	code {
 		overflow-wrap: anywhere;
+	}
+	/* Su telefono ogni strumento è una scheda: nessuno scorrimento orizzontale, etichette accanto ai valori. */
+	@media (max-width: 719px) {
+		thead {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip: rect(0 0 0 0);
+		}
+		table,
+		tbody,
+		tr,
+		th,
+		td {
+			display: block;
+		}
+		tr {
+			padding: var(--space-3) 0;
+			border-bottom: 1px solid var(--border);
+		}
+		th,
+		td {
+			padding: var(--space-1) 0;
+			border: none;
+		}
+		td::before {
+			content: attr(data-label) ': ';
+			font-weight: var(--fw-strong);
+		}
 	}
 </style>
