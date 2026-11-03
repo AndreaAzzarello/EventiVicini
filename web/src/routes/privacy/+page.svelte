@@ -35,7 +35,7 @@
 			<strong>Account (facoltativo).</strong> Se accedi con Google o con un link via email trattiamo: identificativo
 				dell’account (uid), nome, indirizzo email, città preferita se la indichi, la zona che scegli per cercare eventi
 				(nome e coordinate del comune o della zona, mai la tua posizione esatta, così la ritrovi su un altro dispositivo),
-				data di creazione, i tuoi preferiti e le proposte di evento che invii, con il loro stato.
+				data di creazione, i tuoi preferiti (con un contatore e la data dell’ultima modifica, che servono a limitare gli abusi: al massimo 200 preferiti e 100 modifiche al giorno) e le proposte di evento che invii, con il loro stato.
 		</li>
 		<li>
 			<strong>Proposte di evento.</strong> I dati dell’evento (titolo, luogo, date, link) vengono pubblicati se approvati.

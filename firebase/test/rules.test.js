@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import {
   collection, deleteDoc, doc, getDoc, getDocs, increment, query, serverTimestamp, setDoc,
-  updateDoc, where, writeBatch,
+  Timestamp, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 
 let env;
@@ -29,6 +29,16 @@ function submit(fs, uid, sid, data = {}, counterDelta = 1) {
   if (counterDelta !== null) {
     b.update(doc(fs, 'users', uid), { pendingCount: increment(counterDelta), lastSubmissionId: sid });
   }
+  return b.commit();
+}
+
+// Preferito aggiunto o tolto come fa il client: un solo preferito + i contatori del profilo nello stesso batch.
+function fav(fs, uid, id, { op = 'add', count, changes, addedAt = Date.now(), counters = true } = {}) {
+  const b = writeBatch(fs);
+  const ref = doc(fs, `users/${uid}/favorites/${id}`);
+  if (op === 'add') b.set(ref, { addedAt });
+  else b.delete(ref);
+  if (counters) b.update(doc(fs, 'users', uid), { favCount: count, favChanges: changes, favAt: serverTimestamp(), lastFavId: id });
   return b.commit();
 }
 
@@ -191,22 +201,105 @@ describe('users', () => {
     await assertFails(updateDoc(doc(db('bob'), 'users', 'alice'), { name: 'Bob' }));
   });
   it('preferiti solo del proprietario', async () => {
-    await assertSucceeds(setDoc(doc(db('alice'), 'users/alice/favorites/e1'), { addedAt: 1 }));
+    await assertSucceeds(fav(db('alice'), 'alice', 'e1', { count: 1, changes: 1 }));
     await assertSucceeds(getDocs(collection(db('alice'), 'users/alice/favorites')));
     await assertFails(getDocs(collection(db('bob'), 'users/alice/favorites')));
-    await assertFails(setDoc(doc(db('bob'), 'users/alice/favorites/e1'), { addedAt: 1 }));
+    await assertFails(fav(db('bob'), 'alice', 'e9', { count: 2, changes: 2 }));
     await assertFails(setDoc(doc(db('alice'), 'users/alice/favorites/e2'), { addedAt: 1, note: 'x' }));
-    await assertSucceeds(deleteDoc(doc(db('alice'), 'users/alice/favorites/e1')));
+    await assertSucceeds(fav(db('alice'), 'alice', 'e1', { op: 'remove', count: 0, changes: 2 }));
   });
   it('preferiti: id e data validi', async () => {
-    const fav = (id, addedAt) => setDoc(doc(db('alice'), `users/alice/favorites/${id}`), { addedAt });
-    await assertFails(fav('a'.repeat(65), 1));
-    await assertFails(fav('con-trattino', 1));
-    await assertFails(fav('e1', -1));
-    await assertFails(fav('e1', Date.now() + 7 * 86_400_000));
-    await assertFails(fav('e1', 1.5));
-    await assertSucceeds(fav('a'.repeat(64), Date.now()));
+    await assertFails(fav(db('alice'), 'alice', 'a'.repeat(65), { count: 1, changes: 1 }));
+    await assertFails(fav(db('alice'), 'alice', 'con-trattino', { count: 1, changes: 1 }));
+    await assertFails(fav(db('alice'), 'alice', 'e1', { count: 1, changes: 1, addedAt: -1 }));
+    await assertFails(fav(db('alice'), 'alice', 'e1', { count: 1, changes: 1, addedAt: Date.now() + 7 * 86_400_000 }));
+    await assertFails(fav(db('alice'), 'alice', 'e1', { count: 1, changes: 1, addedAt: 1.5 }));
+    await assertSucceeds(fav(db('alice'), 'alice', 'a'.repeat(64), { count: 1, changes: 1, addedAt: Date.now() }));
   });
+});
+
+describe('users: preferiti con tetto e limite giornaliero', () => {
+  const profile = (over) => seed((fs) => updateDoc(doc(fs, 'users', 'alice'), over));
+  let fsA; // una sola istanza per test: documenti e batch devono venire dalla stessa
+  beforeEach(() => { fsA = db('alice'); });
+  const A = () => fsA;
+
+  it('senza contatore nello stesso batch è rifiutato (e il contatore da solo pure)', async () => {
+    await assertFails(fav(A(), 'alice', 'e1', { count: 1, changes: 1, counters: false }));
+    await assertFails(setDoc(doc(A(), 'users/alice/favorites/e1'), { addedAt: 1 }));
+    await assertFails(updateDoc(doc(A(), 'users', 'alice'), { favCount: 1, favChanges: 1, favAt: serverTimestamp(), lastFavId: 'e1' }));
+  });
+  it('contatori a mano o incoerenti sono rifiutati', async () => {
+    await assertFails(fav(A(), 'alice', 'e1', { count: 5, changes: 1 })); // salto di conteggio
+    await assertFails(fav(A(), 'alice', 'e1', { count: 1, changes: 0 })); // modifica non contata
+    await assertFails(fav(A(), 'alice', 'e1', { count: 1, changes: 7 })); // changes arbitrario
+    await assertFails(updateDoc(doc(A(), 'users', 'alice'), { favCount: 5 }));
+  });
+  it('due preferiti nello stesso batch: rifiutato', async () => {
+    const b = writeBatch(A());
+    b.set(doc(A(), 'users/alice/favorites/e1'), { addedAt: 1 });
+    b.set(doc(A(), 'users/alice/favorites/e2'), { addedAt: 1 });
+    b.update(doc(A(), 'users', 'alice'), { favCount: 1, favChanges: 1, favAt: serverTimestamp(), lastFavId: 'e1' });
+    await assertFails(b.commit());
+  });
+  it('un preferito esistente non si aggiorna', async () => {
+    await assertSucceeds(fav(A(), 'alice', 'e1', { count: 1, changes: 1 }));
+    await assertFails(setDoc(doc(A(), 'users/alice/favorites/e1'), { addedAt: 2 }));
+    await assertFails(fav(A(), 'alice', 'e1', { count: 2, changes: 2 })); // già presente
+  });
+  it('tetto di 200: il 200º entra, il 201º no', async () => {
+    await profile({ favCount: 199, favChanges: 5, favAt: Timestamp.now() });
+    await assertSucceeds(fav(A(), 'alice', 'e200', { count: 200, changes: 6 }));
+    await assertFails(fav(A(), 'alice', 'e201', { count: 201, changes: 7 }));
+  });
+  it('limite giornaliero: la 100ª modifica passa, la 101ª no, e vale anche per le rimozioni', async () => {
+    await profile({ favCount: 3, favChanges: 99, favAt: Timestamp.now(), lastFavId: 'x' });
+    await seed((fs) => setDoc(doc(fs, 'users/alice/favorites/e1'), { addedAt: 1 }));
+    await assertSucceeds(fav(A(), 'alice', 'e2', { count: 4, changes: 100 }));
+    await assertFails(fav(A(), 'alice', 'e3', { count: 5, changes: 101 }));
+    await assertFails(fav(A(), 'alice', 'e3', { count: 5, changes: 1 })); // azzerare da soli lo stesso giorno
+    await assertFails(fav(A(), 'alice', 'e1', { op: 'remove', count: 3, changes: 101 }));
+    await assertFails(fav(A(), 'alice', 'e1', { op: 'remove', count: 3, changes: 100 })); // oltre il tetto di 100 è già pieno
+  });
+  it('rimuovere conta come modifica', async () => {
+    await profile({ favCount: 1, favChanges: 4, favAt: Timestamp.now(), lastFavId: 'e1' });
+    await seed((fs) => setDoc(doc(fs, 'users/alice/favorites/e1'), { addedAt: 1 }));
+    await assertFails(fav(A(), 'alice', 'e1', { op: 'remove', count: 0, changes: 4 }));
+    await assertSucceeds(fav(A(), 'alice', 'e1', { op: 'remove', count: 0, changes: 5 }));
+  });
+  it('il giorno dopo si azzera', async () => {
+    await profile({ favCount: 10, favChanges: 100, favAt: Timestamp.fromMillis(Date.now() - 2 * 86_400_000), lastFavId: 'x' });
+    await assertFails(fav(A(), 'alice', 'e1', { count: 11, changes: 101 }));
+    await assertFails(fav(A(), 'alice', 'e1', { count: 11, changes: 2 }));
+    await assertSucceeds(fav(A(), 'alice', 'e1', { count: 11, changes: 1 }));
+  });
+  it('preferiti nati prima dei contatori: si possono togliere senza andare sotto zero', async () => {
+    await seed((fs) => setDoc(doc(fs, 'users/alice/favorites/vecchio'), { addedAt: 1 }));
+    await assertFails(fav(A(), 'alice', 'vecchio', { op: 'remove', count: -1, changes: 1 }));
+    await assertSucceeds(fav(A(), 'alice', 'vecchio', { op: 'remove', count: 0, changes: 1 }));
+  });
+  it('togliere un preferito che non c’è è rifiutato', () =>
+    assertFails(fav(A(), 'alice', 'fantasma', { op: 'remove', count: 0, changes: 1 })));
+  it('"Elimina account e dati": niente limiti se il profilo sparisce nello stesso batch', async () => {
+    await profile({ favCount: 2, favChanges: 100, favAt: Timestamp.now(), lastFavId: 'x' });
+    await seed(async (fs) => {
+      await setDoc(doc(fs, 'users/alice/favorites/e1'), { addedAt: 1 });
+      await setDoc(doc(fs, 'users/alice/favorites/e2'), { addedAt: 1 });
+    });
+    const lone = writeBatch(A());
+    lone.delete(doc(A(), 'users/alice/favorites/e1'));
+    await assertFails(lone.commit()); // senza cancellare il profilo restano i limiti
+    const b = writeBatch(A());
+    b.delete(doc(A(), 'users/alice/favorites/e1'));
+    b.delete(doc(A(), 'users/alice/favorites/e2'));
+    b.delete(doc(A(), 'users', 'alice'));
+    await assertSucceeds(b.commit());
+  });
+  it('altri utenti non toccano i contatori', () =>
+    assertFails(updateDoc(doc(db('bob'), 'users', 'alice'), { favCount: 1, favChanges: 1, favAt: serverTimestamp(), lastFavId: 'e1' })));
+});
+
+describe('users (resto)', () => {
   it('profilo non eliminabile con proposte pending', async () => {
     await submit(db('alice'), 'alice', 's1');
     await assertFails(deleteDoc(doc(db('alice'), 'users', 'alice')));

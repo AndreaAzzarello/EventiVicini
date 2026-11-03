@@ -45,6 +45,17 @@ export async function getDocument(path: string) {
 	return res.status === 404 ? null : ((await res.json()) as { fields: Record<string, Record<string, unknown>> });
 }
 
+/** Scrive campi di un documento dall'esterno delle regole (emulatore, come amministratore): serve a preparare uno stato di partenza. */
+export async function patchDocument(path: string, fields: Record<string, Record<string, unknown>>) {
+	const mask = Object.keys(fields).map((k) => `updateMask.fieldPaths=${k}`).join('&');
+	const res = await fetch(`${FIRESTORE}/${path}?${mask}`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json', Authorization: 'Bearer owner' },
+		body: JSON.stringify({ fields })
+	});
+	if (!res.ok) throw new Error(`PATCH ${path}: ${res.status}`);
+}
+
 /** Il geocoding passa da /api/geocode: nei test risponde una fixture, Nominatim non viene mai chiamato. */
 export async function mockGeocode(page: Page) {
 	await page.route('**/api/geocode**', (route) => {

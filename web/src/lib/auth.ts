@@ -90,11 +90,6 @@ export async function deleteAccountAndData() {
 	const uid = user.uid;
 
 	const favs = await fs.getDocs(fs.collection(db, 'users', uid, 'favorites'));
-	for (let i = 0; i < favs.docs.length; i += 450) {
-		const b = fs.writeBatch(db);
-		for (const d of favs.docs.slice(i, i + 450)) b.delete(d.ref);
-		await b.commit();
-	}
 
 	const subs = await fs.getDocs(fs.query(fs.collection(db, 'submissions'), fs.where('ownerId', '==', uid)));
 	const userRef = fs.doc(db, 'users', uid);
@@ -105,7 +100,21 @@ export async function deleteAccountAndData() {
 		await b.commit();
 	}
 
-	await fs.deleteDoc(userRef);
+	// Preferiti e profilo insieme: le regole tolgono i limiti solo se il profilo sparisce nello stesso batch (max 500 scritture).
+	// Oltre quel numero (impossibile col tetto di 200, possibile solo per preferiti molto vecchi) prima il profilo, poi il resto.
+	if (favs.docs.length < 500) {
+		const b = fs.writeBatch(db);
+		for (const d of favs.docs) b.delete(d.ref);
+		b.delete(userRef);
+		await b.commit();
+	} else {
+		await fs.deleteDoc(userRef);
+		for (let i = 0; i < favs.docs.length; i += 450) {
+			const b = fs.writeBatch(db);
+			for (const d of favs.docs.slice(i, i + 450)) b.delete(d.ref);
+			await b.commit();
+		}
+	}
 	await fb.a.deleteUser(user);
 	for (const k of [KEYS.favorites, KEYS.session, KEYS.loginHintShown, KEYS.emailForSignIn]) writeJson(k, null);
 }

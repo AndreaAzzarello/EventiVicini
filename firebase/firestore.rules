@@ -202,6 +202,45 @@ service cloud.firestore {
           && !existsAfter(submissionPath(sid)));
     }
 
+    // ---- Preferiti: tetto e limite giornaliero ---------------------------
+    // Ogni aggiunta o rimozione cambia, nello stesso batch, i campi del profilo: favCount (max 200), favChanges
+    // (modifiche del giorno UTC di favAt, max 100) e lastFavId (l'unico preferito del batch). Le due regole si
+    // controllano a vicenda come per le proposte. I preferiti nati prima dei contatori non sono contati: rimuoverli
+    // non porta favCount sotto zero.
+    function favPath(uid, id) {
+      return /databases/$(database)/documents/users/$(uid)/favorites/$(id);
+    }
+
+    function dayNum(t) {
+      return t.year() * 10000 + t.month() * 100 + t.day();
+    }
+
+    function favCountAfterRemove(c) {
+      return c > 0 ? c - 1 : 0;
+    }
+
+    function validFavChange(uid) {
+      let r = resource.data;
+      let n = request.resource.data;
+      let c0 = r.get('favCount', 0);
+      let ch0 = r.get('favChanges', 0);
+      return (n.get('favCount', 0) == c0
+          && n.get('favChanges', 0) == ch0
+          && n.get('favAt', null) == r.get('favAt', null)
+          && n.get('lastFavId', '') == r.get('lastFavId', ''))
+        || (n.get('favAt', null) == request.time
+          && n.get('lastFavId', '') is string
+          && n.get('lastFavId', '').matches('[A-Za-z0-9_]{1,64}')
+          && n.get('favChanges', 0) is int
+          && n.get('favChanges', 0) <= 100
+          && n.get('favChanges', 0) == (r.get('favAt', null) != null && dayNum(r.favAt) == dayNum(request.time) ? ch0 + 1 : 1)
+          && n.get('favCount', 0) is int
+          && ((n.favCount == c0 + 1 && n.favCount <= 200
+              && !exists(favPath(uid, n.lastFavId)) && existsAfter(favPath(uid, n.lastFavId)))
+            || (n.favCount == favCountAfterRemove(c0)
+              && exists(favPath(uid, n.lastFavId)) && !existsAfter(favPath(uid, n.lastFavId)))));
+    }
+
     match /users/{uid} {
       allow read: if isOwner(uid);
 
@@ -214,10 +253,12 @@ service cloud.firestore {
 
       allow update: if (isOwner(uid)
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['name', 'city', 'homePlace', 'pendingCount', 'lastSubmissionId'])
+               .hasOnly(['name', 'city', 'homePlace', 'pendingCount', 'lastSubmissionId',
+                 'favCount', 'favChanges', 'favAt', 'lastFavId'])
           && validProfile(request.resource.data)
           && request.resource.data.pendingCount is int
-          && validCounterChange(uid))
+          && validCounterChange(uid)
+          && validFavChange(uid))
         // L'admin, approvando o rifiutando, scala di uno il contatore: non legge nulla.
         || (isAdmin()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingCount'])
@@ -228,14 +269,21 @@ service cloud.firestore {
       allow delete: if isOwner(uid) && resource.data.pendingCount == 0;
 
       match /favorites/{eventId} {
-        allow read, delete: if isOwner(uid);
-        // Id dell'evento come in firestore.ts (getEvent) e data non nel futuro.
-        allow create, update: if isOwner(uid)
+        allow read: if isOwner(uid);
+        // Id dell'evento come in firestore.ts (getEvent) e data non nel futuro. Niente update: un preferito si crea o si toglie.
+        allow create: if isOwner(uid)
           && eventId.matches('[A-Za-z0-9_]{1,64}')
           && request.resource.data.keys().hasOnly(['addedAt'])
           && request.resource.data.addedAt is int
           && request.resource.data.addedAt >= 0
-          && request.resource.data.addedAt <= request.time.toMillis() + 86400000;
+          && request.resource.data.addedAt <= request.time.toMillis() + 86400000
+          && userAfter(uid).get('lastFavId', '') == eventId
+          && userAfter(uid).get('favCount', 0) == userBefore(uid).get('favCount', 0) + 1;
+        // Con il profilo che sparisce nello stesso batch ("Elimina account e dati") non ci sono limiti.
+        allow delete: if isOwner(uid)
+          && (!existsAfter(/databases/$(database)/documents/users/$(uid))
+            || (userAfter(uid).get('lastFavId', '') == eventId
+              && userAfter(uid).get('favCount', 0) == favCountAfterRemove(userBefore(uid).get('favCount', 0))));
       }
     }
 
