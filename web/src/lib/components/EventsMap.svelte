@@ -45,13 +45,15 @@
 			.then((lib) => {
 				if (cancelled) return;
 				map = baseMap(lib, el);
+				// Guardie su `map`: un evento in coda dopo lo smontaggio non deve toccare una mappa già rimossa.
 				map.on('moveend', () => {
-					const c = map!.getCenter();
-					view = { lat: c.lat, lng: c.lng, zoom: map!.getZoom() };
+					if (!map) return;
+					const c = map.getCenter();
+					view = { lat: c.lat, lng: c.lng, zoom: map.getZoom() };
 				});
 				// Cambiando zoom i pin vicini si fondono o si separano.
 				map.on('zoomend', () => {
-					if (!fitting) draw();
+					if (map && !fitting) draw();
 				});
 				layer = lib.layerGroup().addTo(map);
 				L = lib;
@@ -60,7 +62,16 @@
 		return () => {
 			cancelled = true;
 			mounted.forEach((m) => unmount(m));
-			map?.remove();
+			mounted = [];
+			const m = map;
+			map = null;
+			layer = null;
+			markers = {};
+			if (!m) return;
+			m.stop();
+			m.off();
+			// shortcut: Leaflet 1.9 chiude lo zoom animato con un setTimeout di 250 ms che remove() non annulla e che rompe su una mappa già rimossa (_leaflet_pos); si rimuove dopo. Da rivedere se Leaflet lo corregge.
+			setTimeout(() => m.remove(), 300);
 		};
 	});
 
