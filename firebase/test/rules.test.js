@@ -58,7 +58,18 @@ beforeEach(async () => {
 });
 
 describe('events', () => {
-  it('lettura pubblica', () => assertSucceeds(getDoc(doc(db(), 'events', 'e1'))));
+  it('lettura chiusa: né anonimi né utenti, solo l’admin', async () => {
+    await assertFails(getDoc(doc(db(), 'events', 'e1')));
+    await assertFails(getDoc(doc(db('alice'), 'events', 'e1')));
+    await assertFails(getDocs(collection(db(), 'events')));
+    await assertFails(getDocs(query(collection(db('alice'), 'events'), where('citySlug', '==', 'modena'))));
+    await assertSucceeds(getDoc(doc(db('adm', ADMIN), 'events', 'e1')));
+    await assertSucceeds(getDocs(collection(db('adm', ADMIN), 'events')));
+  });
+  it('un admin con email non verificata o diversa non legge', async () => {
+    await assertFails(getDoc(doc(db('adm', { ...ADMIN, email_verified: false }), 'events', 'e1')));
+    await assertFails(getDoc(doc(db('adm', { email: 'altro@example.org', email_verified: true }), 'events', 'e1')));
+  });
   it('anonimo e utente non scrivono', async () => {
     await assertFails(setDoc(doc(db(), 'events', 'x'), { ...event(), source: 'manual' }));
     await assertFails(setDoc(doc(db('alice'), 'events', 'x'), { ...event(), source: 'manual' }));
@@ -126,10 +137,12 @@ describe('events', () => {
 });
 
 describe('coverage', () => {
-  it('lettura pubblica, scrittura mai (nemmeno dall\'admin: scrive l\'importer)', async () => {
+  it('lettura solo admin, scrittura mai (nemmeno dall\'admin: scrive l\'importer)', async () => {
     await seed((fs) => setDoc(doc(fs, 'coverage', 'lombardia'), { name: 'Lombardia', updatedAt: 1, comuni: [] }));
-    await assertSucceeds(getDoc(doc(db(), 'coverage', 'lombardia')));
-    await assertSucceeds(getDocs(collection(db(), 'coverage')));
+    await assertFails(getDoc(doc(db(), 'coverage', 'lombardia')));
+    await assertFails(getDocs(collection(db(), 'coverage')));
+    await assertFails(getDoc(doc(db('alice'), 'coverage', 'lombardia')));
+    await assertSucceeds(getDoc(doc(db('adm', ADMIN), 'coverage', 'lombardia')));
     await assertFails(setDoc(doc(db('alice'), 'coverage', 'x'), { name: 'X' }));
     await assertFails(setDoc(doc(db('adm', ADMIN), 'coverage', 'x'), { name: 'X' }));
     await assertFails(updateDoc(doc(db('adm', ADMIN), 'coverage', 'lombardia'), { name: 'Y' }));
@@ -138,9 +151,11 @@ describe('coverage', () => {
 });
 
 describe('bundles', () => {
-  it('lettura pubblica, scrittura mai (nemmeno dall\'admin: scrive l\'importer)', async () => {
+  it('lettura solo admin, scrittura mai (nemmeno dall\'admin: scrive l\'importer)', async () => {
     await seed((fs) => setDoc(doc(fs, 'bundles', 'g_u0qa'), { json: '[]', hash: 'h', parts: 1 }));
-    await assertSucceeds(getDoc(doc(db(), 'bundles', 'g_u0qa')));
+    await assertFails(getDoc(doc(db(), 'bundles', 'g_u0qa')));
+    await assertFails(getDoc(doc(db('alice'), 'bundles', 'g_u0qa')));
+    await assertSucceeds(getDoc(doc(db('adm', ADMIN), 'bundles', 'g_u0qa')));
     await assertFails(setDoc(doc(db('alice'), 'bundles', 'x'), { json: '[]' }));
     await assertFails(setDoc(doc(db('adm', ADMIN), 'bundles', 'x'), { json: '[]' }));
     await assertFails(updateDoc(doc(db('adm', ADMIN), 'bundles', 'g_u0qa'), { json: '[1]' }));
@@ -149,10 +164,13 @@ describe('bundles', () => {
 });
 
 describe('stats', () => {
-  it('lettura pubblica, scrittura mai (nemmeno admin: scrive solo importer)', async () => {
+  it('lettura solo admin, scrittura mai (nemmeno admin: scrive solo importer)', async () => {
     await seed((fs) => setDoc(doc(fs, 'stats', 'lombardia_2026-11'), { region: 'lombardia', month: '2026-11', events: 412 }));
-    await assertSucceeds(getDoc(doc(db(), 'stats', 'lombardia_2026-11')));
-    await assertSucceeds(getDocs(collection(db(), 'stats')));
+    await assertFails(getDoc(doc(db(), 'stats', 'lombardia_2026-11')));
+    await assertFails(getDocs(collection(db(), 'stats')));
+    await assertFails(getDocs(collection(db('alice'), 'stats')));
+    await assertSucceeds(getDoc(doc(db('adm', ADMIN), 'stats', 'lombardia_2026-11')));
+    await assertSucceeds(getDocs(collection(db('adm', ADMIN), 'stats')));
     await assertFails(setDoc(doc(db('alice'), 'stats', 'x_2026-11'), { events: 1 }));
     await assertFails(setDoc(doc(db('adm', ADMIN), 'stats', 'x_2026-11'), { events: 1 }));
     await assertFails(updateDoc(doc(db('adm', ADMIN), 'stats', 'lombardia_2026-11'), { events: 2 }));

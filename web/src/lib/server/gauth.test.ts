@@ -43,9 +43,9 @@ describe('firestoreAuthHeader', () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
-	it('con l’emulatore non serve nessuna credenziale', async () => {
+	it('con l’emulatore presenta "Bearer owner" (salta le regole) e non chiama Google', async () => {
 		cfg.env = { FIREBASE_READER_SA: secret, FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080' };
-		expect(await firestoreAuthHeader()).toBeNull();
+		expect(await firestoreAuthHeader()).toBe('Bearer owner');
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 

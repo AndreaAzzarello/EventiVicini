@@ -71,7 +71,9 @@ async function fetchToken(a: Account): Promise<string> {
  * Una sola richiesta di token alla volta, anche con molte letture in parallelo.
  */
 export async function firestoreAuthHeader(): Promise<string | null> {
-	if (env.FIRESTORE_EMULATOR_HOST) return null; // l'emulatore non chiede credenziali
+	// L'emulatore tratta "Bearer owner" come proprietario e salta le regole, come fa l'account di servizio vero in produzione:
+	// senza, le regole a lettura chiusa bloccherebbero il Worker anche nei test e in locale.
+	if (env.FIRESTORE_EMULATOR_HOST) return 'Bearer owner';
 	const a = account();
 	if (!a) return null;
 	if (cached && cached.expiresAt - REFRESH_MARGIN_MS > Date.now()) return `Bearer ${cached.token}`;

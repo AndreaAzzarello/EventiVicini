@@ -7,7 +7,7 @@ Dall'audit di sicurezza del 30 ottobre 2026 (run-1). Le correzioni a basso costo
 
 **Stato (3 novembre 2026).**
 1. Il Worker sa leggere con un account di servizio (`web/src/lib/server/gauth.ts`, ticket #10): fatto nel codice. Senza il segreto `FIREBASE_READER_SA` ripiega sulla chiave web, quindi si può pubblicare prima di configurarlo.
-2. Le regole chiudono la lettura pubblica di `events`, `bundles`, `coverage`, `stats` (ticket #11): da fare, solo dopo aver verificato in produzione che il Worker legge con il token.
+2. Le regole chiudono la lettura pubblica di `events`, `bundles`, `coverage`, `stats` (ticket #11): pronte nel repo (test delle regole e e2e: lettura diretta negata con e senza chiave web); da pubblicare con `npm run deploy:rules` ora che il Worker legge con il token in produzione. Rollback: `git revert` del commit delle regole e di nuovo `npm run deploy:rules`.
 3. App Check sulle scritture del browser (ticket #12, #13): da fare. Da solo non protegge le letture REST del Worker, per questo il punto 1 viene prima.
 
 **Ordine.** Worker con il segreto → verifica delle letture in produzione → regole con lettura chiusa (`npm run deploy:rules` in `firebase/`) → App Check in monitoraggio → enforcement. Se si pubblicano le regole prima del Worker con il token, il sito smette di leggere.

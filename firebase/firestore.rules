@@ -66,9 +66,11 @@ service cloud.firestore {
     }
 
     // ---- Eventi pubblici ------------------------------------------------
-    // L'importer scrive con l'Admin SDK, che non passa da queste regole.
+    // Lettura chiusa a chiunque tranne l'admin: il sito legge dal Worker con un account di servizio (che non passa da
+    // queste regole) e le pagine pubbliche non toccano mai Firestore dal browser. Così nessuno consuma la quota di
+    // letture con la chiave web pubblica. L'importer scrive con l'Admin SDK, che non passa da queste regole.
     match /events/{eventId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow delete: if isAdmin();
       allow create, update: if isAdmin()
         && request.resource.data.keys().hasAll(eventKeys().concat(['source']))
@@ -90,9 +92,9 @@ service cloud.firestore {
     }
 
     // ---- Copertura per regione ------------------------------------------
-    // Scritta solo dall'importer (Admin SDK, che non passa da queste regole); la webapp la legge per la scelta del luogo.
+    // Scritta solo dall'importer (Admin SDK, che non passa da queste regole); la webapp la legge dal Worker per la scelta del luogo.
     match /coverage/{region} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow write: if false;
     }
 
@@ -100,14 +102,14 @@ service cloud.firestore {
     // bundles/{g_<cella>|c_<città>|sitemap|coverage}: scritti solo dall'importer (Admin SDK). La webapp li legge
     // al posto delle query sugli eventi (una lettura per cella invece di una per evento).
     match /bundles/{id} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow write: if false;
     }
 
     // ---- Statistiche mensili per regione ---------------------------------
-    // stats/{regione}_{AAAA-MM}: scritte solo dall'importer (Admin SDK). Pubbliche per le pagine /regione e l'admin.
+    // stats/{regione}_{AAAA-MM}: scritte solo dall'importer (Admin SDK). Le pagine /regione le leggono dal Worker; l'admin dal browser.
     match /stats/{id} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow write: if false;
     }
 

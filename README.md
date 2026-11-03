@@ -140,7 +140,7 @@ Elenco completo in [docs/importer.md](docs/importer.md) e [docs/quote-firestore.
 <a id="sicurezza"></a>
 ## Sicurezza
 
-Le regole Firestore sono testate (`firebase/test/`): `events` in lettura pubblica e scrittura solo admin, proposte validate, `users` solo del proprietario. Le chiavi web di Firebase sono pubbliche per costruzione; il service account dell'importer è un segreto di GitHub Actions. Per segnalare una vulnerabilità leggi [SECURITY.md](SECURITY.md).
+Le regole Firestore sono testate (`firebase/test/`): `events`, `coverage`, `bundles` e `stats` leggibili solo dall'admin (il sito le legge dal Worker con un account di servizio) e scrittura solo admin/importer, proposte validate, `users` solo del proprietario. Le chiavi web di Firebase sono pubbliche per costruzione; il service account dell'importer è un segreto di GitHub Actions. Per segnalare una vulnerabilità leggi [SECURITY.md](SECURITY.md).
 
 <a id="crediti"></a>
 ## Crediti
