@@ -33,6 +33,9 @@ Agenda gratuita di eventi pubblici locali (partita da Modena). Dettagli completi
 ## Cartelle importanti
 `web/src/lib/server/firestore.ts` (letture REST; legge i bundle `bundles/*` scritti da `tools/importer/bundles.py`, ripiega sulle query per cella), `web/src/lib/styles/`, `firebase/firestore.rules`, `tools/importer/sources/*.csv` (registro fonti), `.github/workflows/`.
 
+## Grafo Graphify
+- `graphify-out/` è locale (in `.gitignore`) e l'hook post-commit lo aggiorna da solo, senza LLM. Consultalo prima di esplorare i file: `graphify query/explain/path`. Dopo un clone: `graphify update .` e `graphify hook install`.
+
 ## Da non fare
 - Nei test usa `emulators:exec` (chiude da solo), non `emulators:start`.
 - Gli emulatori Firebase vogliono Java 21 (`C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot`), nel PATH di sistema ma dopo il Java 8 Oracle. Se `java -version` mostra 1.8, imposta `JAVA_HOME` e `Path` solo per il comando (vedi `ClaudeVault\lezioni\emulatori-firebase-richiedono-java-21.md`). Se una run interrotta lascia un emulatore vivo, chiudi solo quel PID.
