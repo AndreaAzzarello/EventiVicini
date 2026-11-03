@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { SITE_NAME, siteUrl } from '$lib/config';
+	import { metaDescription } from '$lib/format';
 
 	let {
 		title,
@@ -13,7 +14,7 @@
 
 	const full = $derived(title === SITE_NAME ? title : `${title} · ${SITE_NAME}`);
 	const canonical = $derived(siteUrl() + path);
-	const desc = $derived(description.length > 160 ? description.slice(0, 157).trimEnd() + '…' : description);
+	const desc = $derived(metaDescription(description));
 	const ogImage = $derived(image || `${siteUrl()}/icons/og.png`);
 </script>
 

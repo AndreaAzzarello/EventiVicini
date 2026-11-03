@@ -2,6 +2,16 @@
 const nf = new Intl.NumberFormat('it-IT', { useGrouping: 'always' });
 export const fmtNum = (n: number): string => nf.format(n);
 
+/** Meta description: spazi e a capo normalizzati, al massimo `max` caratteri, tagliata su un confine di parola con "…". */
+export function metaDescription(text: string, max = 155): string {
+	const s = text.replace(/\s+/g, ' ').trim();
+	if (s.length <= max) return s;
+	const cut = s.slice(0, max - 1);
+	const space = cut.lastIndexOf(' ');
+	// shortcut: una sola parola più lunga del limite viene tagliata a metà, caso che nei testi italiani non si presenta
+	return (space > 0 ? cut.slice(0, space) : cut).replace(/[\s,;:.\-–]+$/, '') + '…';
+}
+
 /** Chiavi AAAA-MM del mese corrente e del precedente, a ora di Roma. */
 export function monthKeys(now = new Date()): { cur: string; prev: string } {
 	const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit' }).formatToParts(now);

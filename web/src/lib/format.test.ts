@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { fmtNum, monthKeys, monthLine } from './format';
+import { fmtNum, metaDescription, monthKeys, monthLine } from './format';
+
+describe('metaDescription', () => {
+	it('normalizza spazi e a capo', () => {
+		expect(metaDescription('Quartetto\n\n  dal vivo.\r\nPorta   una sedia.')).toBe('Quartetto dal vivo. Porta una sedia.');
+	});
+	it('un testo lungo si taglia a parola intera, entro 155 caratteri, con ellissi', () => {
+		const long = 'parola '.repeat(60);
+		const d = metaDescription(long);
+		expect(d.length).toBeLessThanOrEqual(155);
+		expect(d.endsWith('parola…')).toBe(true);
+	});
+	it('un testo corto resta intatto', () => {
+		expect(metaDescription('Breve.')).toBe('Breve.');
+	});
+});
 
 describe('fmtNum', () => {
 	it('separa le migliaia con il punto, anche a quattro cifre', () => {

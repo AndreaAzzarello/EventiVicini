@@ -14,7 +14,6 @@
 	import FilterBar from '$lib/components/FilterBar.svelte';
 	import SearchBox from '$lib/components/SearchBox.svelte';
 	import Seo from '$lib/components/Seo.svelte';
-	import { SITE_NAME } from '$lib/config';
 	import { comuniStore } from '$lib/comuni.svelte';
 	import { coverageStore } from '$lib/coverage.svelte';
 	import type { Event } from '$lib/event';
@@ -212,7 +211,8 @@
 	const count = $derived(visible.length === 1 ? '1 evento' : `${fmtNum(visible.length)} eventi`);
 </script>
 
-<Seo title={SITE_NAME} path="/" />
+<!-- Il canonical resta "/" (Seo con path="/"); il titolo segue il luogo dell'URL, deciso dal server. -->
+<Seo title={data.fromUrl ? `Eventi a ${data.place.label} e dintorni` : 'Cosa fare oggi e nel weekend vicino a te'} path="/" />
 
 <div class="container home">
 	<section class="intro" aria-labelledby="h1">

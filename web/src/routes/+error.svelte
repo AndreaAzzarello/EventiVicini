@@ -3,7 +3,13 @@
 	import Seo from '$lib/components/Seo.svelte';
 </script>
 
-<Seo title={page.status === 404 ? 'Pagina non trovata' : 'Errore'} noindex />
+<Seo
+	title={page.status === 404 ? 'Pagina non trovata' : 'Errore'}
+	description={page.status === 404
+		? 'La pagina che cerchi non esiste o è stata spostata. Torna all’agenda degli eventi vicino a te.'
+		: 'Qualcosa è andato storto. Riprova tra poco o torna all’agenda degli eventi vicino a te.'}
+	noindex
+/>
 
 <div class="container narrow err">
 	<p class="code" aria-hidden="true">{page.status}</p>
