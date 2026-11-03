@@ -7,8 +7,8 @@ Dall'audit di sicurezza del 30 ottobre 2026 (run-1). Le correzioni a basso costo
 
 **Stato (3 novembre 2026).**
 1. Il Worker sa leggere con un account di servizio (`web/src/lib/server/gauth.ts`, ticket #10): fatto nel codice. Senza il segreto `FIREBASE_READER_SA` ripiega sulla chiave web, quindi si può pubblicare prima di configurarlo.
-2. Le regole chiudono la lettura pubblica di `events`, `bundles`, `coverage`, `stats` (ticket #11): pronte nel repo (test delle regole e e2e: lettura diretta negata con e senza chiave web); da pubblicare con `npm run deploy:rules` ora che il Worker legge con il token in produzione. Rollback: `git revert` del commit delle regole e di nuovo `npm run deploy:rules`.
-3. App Check sulle scritture del browser (ticket #12): pronto nel repo, in modalità monitoraggio (vedi sotto). L'enforcement (ticket #13) viene dopo 7 giorni di metriche. Da solo non protegge le letture REST del Worker, per questo il punto 1 viene prima.
+2. Le regole chiudono la lettura pubblica di `events`, `bundles`, `coverage`, `stats` (ticket #11): pubblicate e **verificate in produzione il 3 novembre 2026**: REST anonimo su `events`, `bundles`, `coverage`, `stats` (con e senza chiave web) → HTTP 403 `PERMISSION_DENIED`; 19 pagine `/citta/` (una per regione, tutte in sitemap) → 200 con eventi; dettaglio evento → 200. Il Molise non ha città in sitemap (la sitemap è limitata a 500 eventi): non verificato, la pagina `/regione/molise` risponde 200. Rollback: `git revert` del commit delle regole e di nuovo `npm run deploy:rules`.
+3. App Check sulle scritture del browser (ticket #12): pushato ma inattivo finché non è impostata `PUBLIC_TURNSTILE_SITEKEY` (vedi sotto). L'enforcement (ticket #13) viene dopo 7 giorni di metriche. Da solo non protegge le letture REST del Worker, per questo il punto 1 viene prima.
 
 **Ordine.** Worker con il segreto → verifica delle letture in produzione → regole con lettura chiusa (`npm run deploy:rules` in `firebase/`) → App Check in monitoraggio → enforcement. Se si pubblicano le regole prima del Worker con il token, il sito smette di leggere.
 
@@ -28,11 +28,11 @@ Dall'audit di sicurezza del 30 ottobre 2026 (run-1). Le correzioni a basso costo
 **Limite di verifica.** L'emulatore Firestore non applica App Check: l'enforcement e lo scambio reale con Google si vedono solo in produzione.
 
 **Attivazione (ogni passo con conferma).**
-1. Dashboard Cloudflare → Turnstile → nuovo widget, modalità *Managed*, hostname del sito Pages. Si ottengono chiave pubblica e segreto.
-2. Segreto: `npx wrangler pages secret put TURNSTILE_SECRET --project-name <progetto>`. Variabile pubblica `PUBLIC_TURNSTILE_SITEKEY` nelle variabili di build di Pages.
-3. Google Cloud → IAM → ruolo personalizzato con il solo permesso `firebaseappcheck.tokens.mint` (verificare il nome nella console al momento della creazione), assegnato a `eventi-vicini-reader`. Abilitare l'API *Firebase App Check* sul progetto.
+1. Dashboard Cloudflare → Turnstile → nuovo widget, hostname `eventi-vicini.pages.dev`, modalità **Managed**: è quella coerente con il codice (`web/src/lib/firebase/appcheck.ts` usa `appearance: 'interaction-only'`, render esplicito, azione `appcheck`): il widget resta invisibile e compare in basso solo se Cloudflare chiede un'interazione. *Non-interactive* mostrerebbe sempre un riquadro; *Invisible* non permette di rispondere a una sfida. Si ottengono chiave pubblica e segreto.
+2. Segreto (da `web/`, interattivo): `npx wrangler pages secret put TURNSTILE_SECRET --project-name eventi-vicini`. La chiave pubblica `PUBLIC_TURNSTILE_SITEKEY` va in `[vars]` di `web/wrangler.toml` (è la fonte delle variabili), poi commit e push.
+3. Google Cloud → IAM → ruolo personalizzato con il solo permesso `firebaseappcheck.tokens.mint` (confermato dalla [documentazione dei permessi Firebase](https://firebase.google.com/docs/projects/iam/permissions)), assegnato a `eventi-vicini-reader`. Abilitare l'API *Firebase App Check* sul progetto. Un account dedicato non serve: la chiave starebbe comunque nei segreti dello stesso Worker.
 4. Console Firebase → App Check → app web → *Provider personalizzato* (nessuna chiave da inserire: i token sono firmati dall'account di servizio).
-5. Push. Monitoraggio per 7 giorni in console App Check → Firestore: richieste verificate / non verificate / obsolete.
+5. Push. Monitoraggio per 7 giorni in console App Check → Firestore: richieste verificate / non verificate / obsolete. **Inizio monitoraggio: _da compilare_ · fine: inizio + 7 giorni.**
 6. Enforcement (ticket #13) solo se le non verificate sono quasi zero. Rollback: «Unenforce» in console (propagazione fino a circa 15 minuti). Per disattivare tutto: svuotare `PUBLIC_TURNSTILE_SITEKEY` e ripubblicare.
 
 **Firebase Auth.** Il supporto di App Check per Auth è in anteprima e potrebbe richiedere l'upgrade a Identity Platform (irreversibile, con limiti diversi dallo Spark): non attivarlo senza decisione esplicita.
@@ -46,4 +46,5 @@ Dall'audit di sicurezza del 30 ottobre 2026 (run-1). Le correzioni a basso costo
 - Importer: allowlist degli host di biglietteria, limite di dimensione delle risposte, `persist-credentials: false` nei checkout senza push, action GitHub fissate per commit, Dependabot.
 - `/citta/<slug>`: costa una lettura per ogni slug nuovo (cache 6 ore); non validabile sulla copertura perché le città con eventi ma fuori da `coverage` devono restare raggiungibili.
 - Dipendenze: dev di `web/` con 6 vulnerabilità basse risolvibili solo con aggiornamenti major; `pytest` 8.4.2 (PYSEC-2026-1845, solo test). Da rivedere al prossimo aggiornamento maggiore.
+- Importer, Modena: 0 eventi per `timed out (anche al secondo tentativo)` nei run del 31 ottobre e del 2 novembre 2026 (client `httpx` con `timeout=30`, Plone con `fullobjects=1`). La fonte è raggiungibile e ha 256 eventi futuri (pagina da 25 in circa 3 s da qui). `/citta/modena` dà 404 perché non c'è alcun evento con città Modena, mentre `/?luogo=modena` mostra quelli nel raggio. Da aprire come ticket a parte, nessuna correzione fatta.
 - Ping `apis.google.com/js/gen_204` bloccato dalla CSP in circa 1 caricamento su 40: telemetria dello script di Google, il login non ne dipende; volutamente non autorizzato (il test e2e lo ignora, vedi `web/e2e/headers.spec.ts`).
