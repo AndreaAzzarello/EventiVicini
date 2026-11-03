@@ -21,6 +21,7 @@ tools/importer/geocache.json
 *serviceAccount*.json
 *service-account*.json
 *-firebase-adminsdk-*.json
+*-reader*.json
 
 # Variabili d'ambiente locali (gli esempi .env.example sì)
 .env

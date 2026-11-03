@@ -1,10 +1,11 @@
 // Letture Firestore lato server via API REST pubblica: niente Admin SDK nel Worker.
-// La collezione events è a lettura pubblica (firestore.rules), quindi basta la API key web.
+// Credenziali: account di servizio di sola lettura (gauth.ts); finché il segreto non c'è si ripiega sulla lettura pubblica con la API key web.
 import { env } from '$env/dynamic/private';
 import { env as pub } from '$env/dynamic/public';
 import { compareEvents, fromData, type Event } from '$lib/event';
 import { SNAP_MARGIN_KM, distanceKm, radiusBounds, snapCoord, type LatLng } from '$lib/geo';
 import { cellsAround, parseRows, rowToEvent } from './bundles';
+import { firestoreAuthHeader } from './gauth';
 
 type Value = {
 	stringValue?: string;
@@ -48,10 +49,13 @@ export let readCount = 0; // per i test e per la stima delle letture
 
 async function call<T>(path: string, body?: unknown): Promise<T | null> {
 	const r = root();
+	// Con l'account di servizio si legge con il suo token (le regole non si applicano, i permessi sono quelli IAM);
+	// senza (segreto assente) si ripiega sulla chiave web e sulla lettura pubblica delle regole. Mai entrambi.
+	const authorization = await firestoreAuthHeader();
 	const sep = path.includes('?') ? '&' : '?';
-	const res = await fetch(`${r.url}${path}${r.key ? sep + r.key : ''}`, {
+	const res = await fetch(`${r.url}${path}${!authorization && r.key ? sep + r.key : ''}`, {
 		method: body ? 'POST' : 'GET',
-		headers: body ? { 'content-type': 'application/json' } : undefined,
+		headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(authorization ? { authorization } : {}) },
 		body: body ? JSON.stringify(body) : undefined
 	});
 	if (res.status === 404) return null;

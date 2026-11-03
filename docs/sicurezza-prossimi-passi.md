@@ -5,14 +5,22 @@ Dall'audit di sicurezza del 30 ottobre 2026 (run-1). Le correzioni a basso costo
 ## A2 — Chiudere la lettura diretta di Firestore (alta)
 **Problema.** Le regole hanno `allow read: if true` su `events`, `bundles`, `coverage` e `stats`, e la chiave web Firebase è pubblica (`web/wrangler.toml`). Chiunque può interrogare Firestore via REST senza passare dal Worker, quindi i limiti e le cache del Worker non servono contro un abuso intenzionale: bastano poche richieste per esaurire le 50.000 letture giornaliere del piano Spark. Sito e importer (budget 40.000 letture) si fermano fino al reset; nessun dato va perso.
 
-**Opzioni, dalla più forte alla più debole**
-1. **Account di servizio in sola lettura per il Worker.** Il Worker firma un token OAuth con WebCrypto (chiave in un segreto Cloudflare) e legge con quello; le regole passano a lettura solo admin per `events`, `bundles`, `coverage`, `stats`. Chiude davvero la porta. Costo: 1-2 giorni, un nuovo segreto, il token va rinnovato (scade in un'ora, si tiene in cache). Prima di toccare le regole il Worker deve essere già in produzione con il token, altrimenti il sito smette di leggere. Attenzione: la webapp legge `stats` e `events` dal browser anche nell'area admin (già coperta da `isAdmin()`).
-2. **App Check (reCAPTCHA gratuito)** sulle chiamate del browser, con applicazione obbligatoria su Firestore. Da solo non protegge le letture REST fatte dal Worker (non ha un token App Check), quindi va abbinato all'opzione 1 oppure il Worker deve presentare un token App Check generato con l'Admin SDK. Utile soprattutto per limitare le scritture degli utenti (preferiti, proposte).
-3. **Restringere la chiave API** nella console Google (referrer HTTP e API ammesse). Meno forte: il Worker non invia un referrer e un attaccante può falsificarlo; da usare solo come difesa aggiuntiva.
+**Stato (3 novembre 2026).**
+1. Il Worker sa leggere con un account di servizio (`web/src/lib/server/gauth.ts`, ticket #10): fatto nel codice. Senza il segreto `FIREBASE_READER_SA` ripiega sulla chiave web, quindi si può pubblicare prima di configurarlo.
+2. Le regole chiudono la lettura pubblica di `events`, `bundles`, `coverage`, `stats` (ticket #11): da fare, solo dopo aver verificato in produzione che il Worker legge con il token.
+3. App Check sulle scritture del browser (ticket #12, #13): da fare. Da solo non protegge le letture REST del Worker, per questo il punto 1 viene prima.
 
-**Ordine consigliato.** 1) implementare e pubblicare il Worker con l'account di servizio, 2) verificare le letture in produzione, 3) pubblicare le regole con lettura chiusa (`npm run deploy:rules` in `firebase/`), 4) attivare App Check per le scritture degli utenti. Aggiornare `README.md`/`docs/architettura.md` (oggi dicono che la lettura è pubblica) e i test delle regole.
+**Ordine.** Worker con il segreto → verifica delle letture in produzione → regole con lettura chiusa (`npm run deploy:rules` in `firebase/`) → App Check in monitoraggio → enforcement. Se si pubblicano le regole prima del Worker con il token, il sito smette di leggere.
 
-**Vincoli.** Tutto gratis, nessuna carta: account di servizio e reCAPTCHA sono gratuiti. Non mettere la chiave dell'account di servizio nel repository (solo variabili Cloudflare).
+### Account di servizio del Worker (`eventi-vicini-reader`)
+- **Permessi minimi.** Un solo ruolo: *Cloud Datastore Viewer* (`roles/datastore.viewer`), sul progetto `appeventi-1e860`. Nessun ruolo di scrittura, nessun ruolo di proprietà. Per la creazione dei token App Check (ticket #12) servirà un ruolo personalizzato con il solo permesso di firma richiesto, da aggiungere allora.
+- **Cosa legge davvero.** Le regole non valgono per un account di servizio, quindi *Datastore Viewer* legge **ogni** collezione, compresi dati personali (`users`, `submissions`, `reports`, preferiti). Il codice del Worker legge solo `events`, `bundles`, `coverage`; il limite è nel codice, non nei permessi. Per questo la chiave va trattata come critica.
+- **Dove sta la chiave.** Solo come segreto Cloudflare `FIREBASE_READER_SA` (JSON). Mai nel repository, in `wrangler.toml`, in `.env`, nei log o nei ticket. Il file scaricato dalla console si tiene fuori dal repo e si cancella appena caricato il segreto. Gli errori del modulo non riportano né chiave né risposte del server (coperto dai test).
+- **Rotazione.** Ogni 12 mesi (promemoria: ottobre 2027, e comunque a ogni sospetto): creare una nuova chiave, aggiornare il segreto, verificare le letture, poi eliminare la chiave vecchia dalla console.
+- **Revoca immediata (sospetto di fuga).** 1) Console Google Cloud → IAM e amministrazione → Account di servizio → `eventi-vicini-reader` → Chiavi → elimina la chiave: il token già emesso scade entro un'ora, nuovi token non se ne emettono. 2) Se serve fermare subito anche quello, disabilita l'account di servizio. 3) Crea una nuova chiave e aggiorna il segreto. Il sito, nel frattempo, serve le copie in cache fino a 2 giorni.
+- **Costo.** Gratuito: l'account di servizio e il token OAuth non costano; le letture contano nella stessa quota di Firestore. CPU della firma RSA-2048: circa 1,5 ms a freddo e 0,5 ms a regime, una volta all'ora per istanza (misura su Node; il limite del piano gratuito è 10 ms per richiesta). Da confermare con le metriche di Cloudflare dopo il deploy.
+
+**Vincoli.** Tutto gratis, nessuna carta. Se la console impedisce di creare la chiave (criterio dell'organizzazione `iam.disableServiceAccountKeyCreation`), fermarsi e chiedere: non esistono alternative gratuite equivalenti senza cambiare approccio.
 
 ## Altri punti aperti
 - Console Firebase/Google: provider attivi (solo Google e link email), domini autorizzati, restrizioni della chiave API (da lì dipende la sicurezza dell'admin, basata sull'email verificata).
@@ -21,3 +29,4 @@ Dall'audit di sicurezza del 30 ottobre 2026 (run-1). Le correzioni a basso costo
 - Importer: allowlist degli host di biglietteria, limite di dimensione delle risposte, `persist-credentials: false` nei checkout senza push, action GitHub fissate per commit, Dependabot.
 - `/citta/<slug>`: costa una lettura per ogni slug nuovo (cache 6 ore); non validabile sulla copertura perché le città con eventi ma fuori da `coverage` devono restare raggiungibili.
 - Dipendenze: dev di `web/` con 6 vulnerabilità basse risolvibili solo con aggiornamenti major; `pytest` 8.4.2 (PYSEC-2026-1845, solo test). Da rivedere al prossimo aggiornamento maggiore.
+- Ping `apis.google.com/js/gen_204` bloccato dalla CSP in circa 1 caricamento su 40: telemetria dello script di Google, il login non ne dipende; volutamente non autorizzato (il test e2e lo ignora, vedi `web/e2e/headers.spec.ts`).

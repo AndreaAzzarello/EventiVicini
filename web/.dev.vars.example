@@ -6,5 +6,7 @@ PUBLIC_FIREBASE_PROJECT_ID=demo-eventi
 PUBLIC_FIREBASE_APP_ID=demo-app
 PUBLIC_USE_EMULATORS=true
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+# FIREBASE_READER_SA: in produzione è un segreto di Cloudflare (JSON dell'account di servizio). Non metterlo qui:
+# con l'emulatore non serve, e contro Firestore reale in locale si legge con la chiave web.
 CONTACT_EMAIL=privacy@example.org
 CONTROLLER_NAME=Mario Rossi (esempio)
