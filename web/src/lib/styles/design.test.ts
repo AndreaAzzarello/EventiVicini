@@ -90,6 +90,12 @@ describe('design system', () => {
 			})
 		));
 
+	it('strong e b a peso semibold, segnaposto dal token --placeholder (non il grigio del browser)', () => {
+		const appCss = readFileSync(join(SRC, 'app.css'), 'utf8');
+		expect(appCss).toMatch(/strong,\s*b\s*\{[^}]*font-weight:\s*var\(--fw-strong\)/);
+		expect(appCss).toMatch(/::placeholder\s*\{[^}]*color:\s*var\(--placeholder\)/);
+	});
+
 	it('niente maiuscolo forzato, gradienti, ombre colorate, filtri decorativi', () =>
 		none(
 			scan((t) => {
@@ -182,7 +188,7 @@ describe.each([
 	const c = (n: string) => resolve(`var(--${n})`, theme);
 	const grounds = ['bg', 'surface', 'surface-2'];
 
-	it.each(['text', 'muted', 'accent', 'danger'])('%s su bg, surface e surface-2 ≥ 4.5', (fg) => {
+	it.each(['text', 'muted', 'placeholder', 'accent', 'danger'])('%s su bg, surface e surface-2 ≥ 4.5', (fg) => {
 		for (const bg of grounds) expect(ratio(c(fg), c(bg)), `${fg} su ${bg}`).toBeGreaterThanOrEqual(4.5);
 	});
 

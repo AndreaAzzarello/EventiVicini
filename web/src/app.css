@@ -45,6 +45,11 @@ h3 {
 		font-size: var(--text-3xl);
 	}
 }
+/* DESIGN.md prevede solo 400 e 600: il grassetto di default (700) non esiste nella scala */
+strong,
+b {
+	font-weight: var(--fw-strong);
+}
 p {
 	margin: 0 0 var(--space-3);
 	text-wrap: pretty;
@@ -197,6 +202,10 @@ textarea {
 	color: var(--text);
 	font: inherit;
 	transition: border-color var(--dur);
+}
+::placeholder {
+	color: var(--placeholder);
+	opacity: 1; /* Firefox altrimenti lo sbiadisce */
 }
 input:hover,
 select:hover,
