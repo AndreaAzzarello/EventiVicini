@@ -11,7 +11,10 @@ import httpx
 from fetch import Fetcher
 from mapping import to_event
 
-PAGE_SIZE = 25
+# Pagine piccole: con fullobjects=1 25 elementi pesano ~800 KB e il server (Modena) li genera in 2-30 s; da 10 elementi (~300 KB)
+# un timeout o un retry costa meno e ogni risposta arriva prima. I campi restano quelli di prima: i contentHash non cambiano.
+PAGE_SIZE = 10
+READ_TIMEOUT = httpx.Timeout(60, connect=5)  # il default dell'importer (30 s di lettura) a Modena scattava ogni giorno
 
 
 @dataclass(frozen=True)
@@ -33,7 +36,7 @@ class PloneAdapter:
             "sort_on": "start", "b_size": PAGE_SIZE, "fullobjects": 1,
         }
         while url:
-            res = f.get_api(url, params=params, headers={"Accept": "application/json"})
+            res = f.get_api(url, params=params, headers={"Accept": "application/json"}, timeout=READ_TIMEOUT)
             if res is None:  # robots.txt vieta le API
                 return
             res.raise_for_status()

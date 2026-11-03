@@ -281,3 +281,43 @@ def test_api_con_robots_4xx_nessuna_restrizione(make):
     handler, seen = api_routes(httpx.Response(404), items=[] if make is wordpress else None)
     a, client = make(handler)
     assert list(a.events(client, NOW, 60)) == [] and seen[0] == "/robots.txt" and len(seen) == 2
+
+
+# --- Plone (Modena): pagine piccole, timeout di lettura lungo, retry ---
+
+def test_plone_pagine_piccole_e_segue_il_batching():
+    from adapters.plone import PAGE_SIZE
+    seen = []
+
+    def handler(req):
+        if req.url.path == "/robots.txt":
+            return httpx.Response(404)
+        seen.append(dict(req.url.params))
+        nxt = "https://www.comune.x.it/++api++/@search?b_start=10"
+        return httpx.Response(200, json={"items": [], "batching": {"next": nxt} if "b_start" not in req.url.params else {}})
+    a, client = plone(handler)
+    assert list(a.events(client, NOW, 60)) == []
+    assert len(seen) == 2 and seen[0]["b_size"] == str(PAGE_SIZE) == "10" and seen[0]["fullobjects"] == "1"  # stessi campi di prima
+    assert seen[1] == {"b_start": "10"}
+
+
+def test_plone_timeout_di_lettura_60s_e_retry():
+    from adapters.plone import READ_TIMEOUT
+    assert READ_TIMEOUT.read == 60 and READ_TIMEOUT.connect == 5
+    timeouts, calls = [], []
+
+    class Transport(httpx.BaseTransport):
+        def handle_request(self, req):
+            timeouts.append(req.extensions["timeout"])
+            if req.url.path == "/robots.txt":
+                return httpx.Response(404)
+            calls.append(1)
+            if len(calls) == 1:
+                raise httpx.ReadTimeout("lento")
+            return httpx.Response(200, json={"items": [], "batching": {}})
+    from adapters.plone import PloneAdapter
+    client = httpx.Client(transport=Transport())
+    a = PloneAdapter("x", "https://www.comune.x.it", "X", "MO", "Emilia-Romagna",
+                     fetcher=Fetcher(client, min_interval=0, backoff=0, retries=2))
+    assert list(a.events(client, NOW, 60)) == [] and len(calls) == 2  # il primo timeout si ritenta
+    assert timeouts[-1]["read"] == 60
