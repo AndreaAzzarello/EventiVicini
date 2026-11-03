@@ -97,6 +97,8 @@ jobs:
     env:
       # 4 job in parallelo × 1 richiesta ogni 4 s = 1 richiesta al secondo in tutto verso Nominatim
       NOMINATIM_INTERVAL: "4"
+      # log in tempo reale: senza, lo stdout è bufferizzato e i tempi per fonte compaiono solo a fine job
+      PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6

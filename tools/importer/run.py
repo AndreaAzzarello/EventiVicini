@@ -28,12 +28,14 @@ import manifest
 from adapters import SOURCES, Adapter, fallback_place
 from geo import PROVINCES, enrich, in_viewbox, slugify
 from geocode import Geocoder
+from meter import SourceMeter
 from mapping import ROME, content_hash, dedupe_key, html_to_text, is_long_running, one_line
 from registry import USER_AGENT, read_rows
 from relevance import exclusion_reason
 
 HERE = Path(__file__).parent
 WORKERS = 4  # fonti scaricate in parallelo
+METER = SourceMeter()
 log = logging.getLogger("importer")
 
 
@@ -48,15 +50,22 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
     owner: dict[tuple, str] = {}  # chiave di deduplica → fonte che ha tenuto l'evento
     stats = {} if stats is None else stats
 
-    def fetch(name: str) -> tuple[list[dict], str | None]:
-        """Solo rete (un host per fonte, 1 richiesta/s ciascuno): può girare in parallelo."""
+    METER.attach(client)
+
+    def fetch(name: str) -> tuple[list[dict], str | None, float, int]:
+        """Solo rete (un host per fonte, 1 richiesta/s ciascuno): può girare in parallelo. Ultimi due valori: secondi e richieste."""
+        METER.start()
         try:
-            return list(SOURCES[name].events(client, now, horizon_days)), None
+            found, error = list(SOURCES[name].events(client, now, horizon_days)), None
         except httpx.HTTPError as e:
-            return [], logsafe.redact(str(e)) or type(e).__name__
+            found, error = [], logsafe.redact(str(e)) or type(e).__name__
         except Exception as e:  # un bug o una pagina anomala in una fonte non deve fermare le altre
             log.exception("%s: errore imprevisto", name)
-            return [], logsafe.redact(f"{type(e).__name__}: {e}")
+            found, error = [], logsafe.redact(f"{type(e).__name__}: {e}")
+        seconds, requests = METER.stop()
+        log.info("%s: %s s, %d richieste, %s", name, f"{seconds:.1f}".replace(".", ","), requests,
+                 f"errore ({error[:120]})" if error else f"ok, {len(found)} eventi grezzi")  # subito: lo stdout del job si legge mentre gira
+        return found, error, seconds, requests
 
     def process(batch: list[str]) -> None:
         with ThreadPoolExecutor(WORKERS) as pool:
@@ -64,8 +73,9 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
         # Geocoding (Nominatim, 1 richiesta/s in tutto) in sequenza, dagli eventi più vicini nel tempo: se il budget
         # di richieste del giro finisce, i più lontani restano senza geocoding e lo prendono nei giorni dopo.
         pending = []
-        for name, (found, error) in zip(batch, fetched):
-            stats[name] = {"events": 0, "skipped": 0, "excluded": 0, "duplicates": 0, "error": error}
+        for name, (found, error, seconds, requests) in zip(batch, fetched):
+            stats[name] = {"events": 0, "skipped": 0, "excluded": 0, "duplicates": 0, "error": error,
+                           "seconds": round(seconds, 1), "requests": requests}
             if error:
                 log.error("%s: fonte non raggiungibile (%s), la salto", name, error)
             pending += [(name, ev) for ev in found]
@@ -593,6 +603,11 @@ def summary(stats: dict[str, dict], sources: dict) -> str:
         lines.append(f"| {sources[name].city} | {st['events']} | {st['skipped']} | {(st['error'] or '') + retried}{done} |")
     zero = [sources[n].city for n, st in sorted(stats.items()) if st["events"] == 0]
     errors = [sources[n].city for n, st in sorted(stats.items()) if st["error"]]
+    slow = sorted(((st.get("seconds", 0), n) for n, st in stats.items()), reverse=True)[:10]
+    if slow and slow[0][0]:
+        lines += ["", "Fonti più lente:", "| comune | secondi | richieste | esito |", "|---|---|---|---|"]
+        lines += [f"| {sources[n].city} | {sec:.0f} | {stats[n].get('requests', 0)} | {'errore' if stats[n]['error'] else 'ok'} |"
+                  for sec, n in slow]
     lines += ["", f"Totale: {sum(st['events'] for st in stats.values())} eventi da {len(stats)} comuni",
               f"Comuni a zero ({len(zero)}): {', '.join(zero) or '-'}",
               f"Comuni con errori ({len(errors)}): {', '.join(errors) or '-'}"]

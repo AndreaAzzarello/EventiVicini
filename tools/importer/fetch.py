@@ -33,6 +33,7 @@ class Fetcher:
         self.client, self.min_interval = client, min_interval
         self.cache_dir, self.retries, self.backoff = cache_dir, retries, backoff
         self._robots: dict[str, Protego | None] = {}
+        self._why: dict[str, str] = {}  # origine → motivo dell'ultimo fallimento di robots.txt
         self._next: dict[str, float] = {}
         self._lock = threading.Lock()
         self.hits = self.requests = 0
@@ -50,12 +51,15 @@ class Fetcher:
             if origin in self._robots:
                 return self._robots[origin]
         rp: Protego | None = None
+        why = ""
         for attempt in range(self.retries + 1):  # un errore momentaneo non deve spegnere la fonte per tutto l'import
             try:
                 self._wait(urlsplit(origin).netloc)
                 res = self.client.get(origin + "/robots.txt")
-            except httpx.HTTPError:
-                res = None
+            except httpx.HTTPError as e:
+                res, why = None, type(e).__name__
+            else:
+                why = f"HTTP {res.status_code}"
             if res is not None and res.status_code < 400:
                 rp = Protego.parse(res.text)
             elif res is not None and res.status_code < 500:
@@ -65,7 +69,12 @@ class Fetcher:
             time.sleep(self.backoff * 2 ** attempt)
         with self._lock:
             self._robots[origin] = rp
+            self._why[origin] = why
         return rp
+
+    def why_unknown(self, url: str) -> str:
+        p = urlsplit(url)
+        return self._why.get(f"{p.scheme}://{p.netloc}", "")
 
     def allowed(self, url: str) -> bool | None:
         """True/False secondo robots.txt, None se non raggiungibile."""
@@ -81,7 +90,7 @@ class Fetcher:
     def get(self, url: str) -> httpx.Response:
         ok = self.allowed(url)
         if ok is None:
-            raise RobotsUnknown(url)
+            raise RobotsUnknown(f"{url} [{self.why_unknown(url)}]")
         if not ok:
             raise Blocked(url)
         host = urlsplit(url).netloc
