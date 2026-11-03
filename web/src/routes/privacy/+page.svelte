@@ -77,7 +77,7 @@
 	<h2>Fornitori e trasferimenti</h2>
 	<ul>
 		<li><strong>Google Firebase</strong> (Google LLC / Google Ireland Ltd): autenticazione e database. Responsabile del trattamento. Il browser contatta i server di Google (SDK di accesso) solo se accedi o usi funzioni dell’account.</li>
-		<li><strong>Cloudflare, Inc.</strong>: hosting e consegna delle pagine{#if data.analytics} e statistiche aggregate (Web Analytics, senza cookie né identificazione dei visitatori){/if}. Responsabile del trattamento.</li>
+		<li><strong>Cloudflare, Inc.</strong>: hosting e consegna delle pagine{#if data.analytics}, statistiche aggregate (Web Analytics, senza cookie né identificazione dei visitatori){/if}{#if data.appCheck} e verifica anti-bot (Turnstile){/if}. Responsabile del trattamento.{#if data.appCheck} Quando usi funzioni dell’account (accesso, preferiti sincronizzati, proposte, segnalazioni) il browser carica il controllo Turnstile da Cloudflare, che vede il tuo indirizzo IP e le caratteristiche del browser per distinguere le persone dai programmi automatici. Il nostro server riceve solo l’esito, senza il tuo IP, e rilascia un token temporaneo (30 minuti) che Firebase usa per accettare le richieste.{/if}</li>
 		<li>
 			<strong>OpenStreetMap Foundation</strong> (Regno Unito): le tessere della mappa sono scaricate direttamente dal tuo
 			browser, quindi OpenStreetMap vede il tuo indirizzo IP. La ricerca di luoghi (Nominatim) passa dal nostro server,

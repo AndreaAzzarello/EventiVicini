@@ -8,17 +8,34 @@ Dall'audit di sicurezza del 30 ottobre 2026 (run-1). Le correzioni a basso costo
 **Stato (3 novembre 2026).**
 1. Il Worker sa leggere con un account di servizio (`web/src/lib/server/gauth.ts`, ticket #10): fatto nel codice. Senza il segreto `FIREBASE_READER_SA` ripiega sulla chiave web, quindi si può pubblicare prima di configurarlo.
 2. Le regole chiudono la lettura pubblica di `events`, `bundles`, `coverage`, `stats` (ticket #11): pronte nel repo (test delle regole e e2e: lettura diretta negata con e senza chiave web); da pubblicare con `npm run deploy:rules` ora che il Worker legge con il token in produzione. Rollback: `git revert` del commit delle regole e di nuovo `npm run deploy:rules`.
-3. App Check sulle scritture del browser (ticket #12, #13): da fare. Da solo non protegge le letture REST del Worker, per questo il punto 1 viene prima.
+3. App Check sulle scritture del browser (ticket #12): pronto nel repo, in modalità monitoraggio (vedi sotto). L'enforcement (ticket #13) viene dopo 7 giorni di metriche. Da solo non protegge le letture REST del Worker, per questo il punto 1 viene prima.
 
 **Ordine.** Worker con il segreto → verifica delle letture in produzione → regole con lettura chiusa (`npm run deploy:rules` in `firebase/`) → App Check in monitoraggio → enforcement. Se si pubblicano le regole prima del Worker con il token, il sito smette di leggere.
 
 ### Account di servizio del Worker (`eventi-vicini-reader`)
-- **Permessi minimi.** Un solo ruolo: *Cloud Datastore Viewer* (`roles/datastore.viewer`), sul progetto `appeventi-1e860`. Nessun ruolo di scrittura, nessun ruolo di proprietà. Per la creazione dei token App Check (ticket #12) servirà un ruolo personalizzato con il solo permesso di firma richiesto, da aggiungere allora.
+- **Permessi minimi.** Un solo ruolo: *Cloud Datastore Viewer* (`roles/datastore.viewer`), sul progetto `appeventi-1e860`. Nessun ruolo di scrittura, nessun ruolo di proprietà. Per la creazione dei token App Check (ticket #12) serve in più un ruolo personalizzato con il solo permesso `firebaseappcheck.tokens.mint` (vedi sotto).
 - **Cosa legge davvero.** Le regole non valgono per un account di servizio, quindi *Datastore Viewer* legge **ogni** collezione, compresi dati personali (`users`, `submissions`, `reports`, preferiti). Il codice del Worker legge solo `events`, `bundles`, `coverage`; il limite è nel codice, non nei permessi. Per questo la chiave va trattata come critica.
 - **Dove sta la chiave.** Solo come segreto Cloudflare `FIREBASE_READER_SA` (JSON). Mai nel repository, in `wrangler.toml`, in `.env`, nei log o nei ticket. Il file scaricato dalla console si tiene fuori dal repo e si cancella appena caricato il segreto. Gli errori del modulo non riportano né chiave né risposte del server (coperto dai test).
 - **Rotazione.** Ogni 12 mesi (promemoria: ottobre 2027, e comunque a ogni sospetto): creare una nuova chiave, aggiornare il segreto, verificare le letture, poi eliminare la chiave vecchia dalla console.
 - **Revoca immediata (sospetto di fuga).** 1) Console Google Cloud → IAM e amministrazione → Account di servizio → `eventi-vicini-reader` → Chiavi → elimina la chiave: il token già emesso scade entro un'ora, nuovi token non se ne emettono. 2) Se serve fermare subito anche quello, disabilita l'account di servizio. 3) Crea una nuova chiave e aggiorna il segreto. Il sito, nel frattempo, serve le copie in cache fino a 2 giorni.
 - **Costo.** Gratuito: l'account di servizio e il token OAuth non costano; le letture contano nella stessa quota di Firestore. CPU della firma RSA-2048: circa 1,5 ms a freddo e 0,5 ms a regime, una volta all'ora per istanza (misura su Node; il limite del piano gratuito è 10 ms per richiesta). Da confermare con le metriche di Cloudflare dopo il deploy.
+
+### App Check con Cloudflare Turnstile (ticket #12)
+**Come funziona.** Il browser carica il widget Turnstile (solo insieme all'SDK Firebase, mai per chi naviga e basta) → `POST /api/appcheck` con il token del widget → il Worker lo verifica con `siteverify` (Cloudflare lo accetta una sola volta; si controllano `action=appcheck` e `hostname`) → solo allora firma un token personalizzato con l'account di servizio e lo scambia con `exchangeCustomToken` (TTL 30 minuti, il minimo) → l'SDK allega il token a Firestore e Auth. Senza Turnstile valido: 400/403 e nessun token (coperto da `web/src/lib/server/appcheck.test.ts`). Gli errori non riportano mai token né chiavi.
+
+**Cosa scrive nel browser.** IndexedDB `firebase-app-check-database` (dominio del sito) e `cf.turnstile.u` in localStorage dentro l'iframe di `challenges.cloudflare.com` (non nel dominio del sito). Nessun cookie, verificato con le chiavi di test pubbliche di Cloudflare. Dichiarato in `web/src/lib/cookies.ts`, `/cookie` e `/privacy` (mostrati solo se `PUBLIC_TURNSTILE_SITEKEY` è impostata).
+
+**Limite di verifica.** L'emulatore Firestore non applica App Check: l'enforcement e lo scambio reale con Google si vedono solo in produzione.
+
+**Attivazione (ogni passo con conferma).**
+1. Dashboard Cloudflare → Turnstile → nuovo widget, modalità *Managed*, hostname del sito Pages. Si ottengono chiave pubblica e segreto.
+2. Segreto: `npx wrangler pages secret put TURNSTILE_SECRET --project-name <progetto>`. Variabile pubblica `PUBLIC_TURNSTILE_SITEKEY` nelle variabili di build di Pages.
+3. Google Cloud → IAM → ruolo personalizzato con il solo permesso `firebaseappcheck.tokens.mint` (verificare il nome nella console al momento della creazione), assegnato a `eventi-vicini-reader`. Abilitare l'API *Firebase App Check* sul progetto.
+4. Console Firebase → App Check → app web → *Provider personalizzato* (nessuna chiave da inserire: i token sono firmati dall'account di servizio).
+5. Push. Monitoraggio per 7 giorni in console App Check → Firestore: richieste verificate / non verificate / obsolete.
+6. Enforcement (ticket #13) solo se le non verificate sono quasi zero. Rollback: «Unenforce» in console (propagazione fino a circa 15 minuti). Per disattivare tutto: svuotare `PUBLIC_TURNSTILE_SITEKEY` e ripubblicare.
+
+**Firebase Auth.** Il supporto di App Check per Auth è in anteprima e potrebbe richiedere l'upgrade a Identity Platform (irreversibile, con limiti diversi dallo Spark): non attivarlo senza decisione esplicita.
 
 **Vincoli.** Tutto gratis, nessuna carta. Se la console impedisce di creare la chiave (criterio dell'organizzazione `iam.disableServiceAccountKeyCreation`), fermarsi e chiedere: non esistono alternative gratuite equivalenti senza cambiare approccio.
 

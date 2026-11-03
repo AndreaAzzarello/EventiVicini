@@ -40,7 +40,7 @@
 				<tr role="row"><th scope="col" role="columnheader">Nome</th><th scope="col" role="columnheader">Dove</th><th scope="col" role="columnheader">A cosa serve</th><th scope="col" role="columnheader">Durata</th><th scope="col" role="columnheader">Chi lo scrive</th></tr>
 			</thead>
 			<tbody>
-				{#each TOOLS as t (t.kind + t.label)}
+				{#each TOOLS.filter((t) => !t.needs || data.appCheck) as t (t.kind + t.label)}
 					<tr>
 						<th scope="row" role="rowheader"><code>{t.label}</code>{#if t.account}<br /><span class="muted small">solo con un account</span>{/if}</th>
 						<td role="cell" data-label="Dove">{where[t.kind]}</td>

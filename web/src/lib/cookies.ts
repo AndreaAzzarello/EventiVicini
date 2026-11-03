@@ -15,6 +15,8 @@ export type Tool = {
 	origin: string;
 	/** Dopo il login con l'emulatore (o solo per chi ha un account). */
 	account?: boolean;
+	/** Presente solo se la funzione è attiva (si mostra in /cookie solo allora): App Check con Turnstile. */
+	needs?: 'appCheck';
 };
 
 const SITE = 'Eventi Vicini';
@@ -33,6 +35,9 @@ export const TOOLS: Tool[] = [
 	{ kind: 'sessionStorage', name: 'sveltekit:snapshot', label: 'sveltekit:snapshot', purpose: 'Ripristina campi e filtri quando torni indietro.', duration: 'Fino alla chiusura della scheda', origin: 'SvelteKit (framework del sito)' },
 	{ kind: 'indexedDB', name: 'firebaseLocalStorageDb', label: 'firebaseLocalStorageDb', purpose: 'Sessione di accesso (token dell’account).', duration: 'Fino all’uscita dall’account', origin: FIREBASE, account: true },
 	{ kind: 'indexedDB', name: 'firebase-heartbeat-database', label: 'firebase-heartbeat-database', purpose: 'Dato tecnico dell’SDK Firebase: data dell’ultimo utilizzo, allegata alle richieste a Firebase.', duration: 'Finché non cancelli i dati del sito', origin: FIREBASE, account: true },
+	{ kind: 'indexedDB', name: 'firebase-app-check-database', label: 'firebase-app-check-database', purpose: 'Conserva il token di verifica anti-abuso (App Check) per non rifare il controllo a ogni richiesta.', duration: 'Pochi minuti: il token scade dopo 30 minuti e si rinnova', origin: FIREBASE, account: true, needs: 'appCheck' },
+	// Scritto dentro il riquadro di Cloudflare (origine challenges.cloudflare.com), non nel dominio del sito: il test e2e non lo vede.
+	{ kind: 'localStorage', name: 'cf.turnstile.u', label: 'cf.turnstile.u', purpose: 'Controllo anti-bot di Cloudflare Turnstile: distingue le persone dai programmi automatici prima di salvare, proporre o segnalare. Resta nel dominio challenges.cloudflare.com.', duration: 'Non scade da solo: resta finché non cancelli i dati del browser', origin: 'Cloudflare Turnstile', account: true, needs: 'appCheck' },
 	{ kind: 'cacheStorage', name: /^shell-/, label: 'shell-…', purpose: 'File del sito (script, stili, font, icone) per aprirlo più in fretta e senza rete.', duration: 'Fino al prossimo aggiornamento del sito', origin: SITE },
 	{ kind: 'cacheStorage', name: 'pages-v1', label: 'pages-v1', purpose: 'Fino a 40 pagine pubbliche già visitate, per aprirle senza rete (non account, accesso e moduli).', duration: 'Finché non cancelli i dati del sito', origin: SITE }
 ];

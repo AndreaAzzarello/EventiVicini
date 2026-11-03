@@ -8,5 +8,7 @@ PUBLIC_USE_EMULATORS=true
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 # FIREBASE_READER_SA: in produzione è un segreto di Cloudflare (JSON dell'account di servizio). Non metterlo qui:
 # con l'emulatore non serve, e contro Firestore reale in locale si legge con la chiave web.
+# TURNSTILE_SECRET: segreto di Cloudflare Turnstile (solo produzione), mai nel repo. Senza, /api/appcheck risponde 403.
+# PUBLIC_TURNSTILE_SITEKEY: chiave pubblica del widget; vuota = App Check non attivo.
 CONTACT_EMAIL=privacy@example.org
 CONTROLLER_NAME=Mario Rossi (esempio)

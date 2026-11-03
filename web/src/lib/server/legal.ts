@@ -8,6 +8,8 @@ export function legalInfo() {
 		email: env.CONTACT_EMAIL || 'eventivicini.info@gmail.com',
 		updated: '3 novembre 2026',
 		// Le pagine dichiarano le statistiche solo se il token di Cloudflare Web Analytics è configurato.
-		analytics: Boolean(pub.PUBLIC_CF_BEACON_TOKEN)
+		analytics: Boolean(pub.PUBLIC_CF_BEACON_TOKEN),
+		// Idem per la verifica anti-abuso (App Check con Cloudflare Turnstile).
+		appCheck: Boolean(pub.PUBLIC_TURNSTILE_SITEKEY)
 	};
 }

@@ -26,7 +26,8 @@ export default {
 				'default-src': ['self'],
 				// apis.google.com: il popup di accesso con Google (Firebase Auth) carica da lì il suo script.
 				// static.cloudflareinsights.com: Cloudflare Web Analytics (senza cookie), caricato solo se c'è il token.
-				'script-src': ['self', 'https://apis.google.com', 'https://static.cloudflareinsights.com', ...inlineScripts],
+				// challenges.cloudflare.com: widget Cloudflare Turnstile (App Check), caricato solo insieme all'SDK Firebase.
+				'script-src': ['self', 'https://apis.google.com', 'https://static.cloudflareinsights.com', 'https://challenges.cloudflare.com', ...inlineScripts],
 				// unsafe-inline: stili inline di Svelte (transizioni, style=) e di Leaflet.
 				'style-src': ['self', 'unsafe-inline'],
 				// Immagini degli eventi: da siti di Comuni, Open Data Hub, Ticketmaster e URL proposti (https), più tile OSM.
@@ -34,7 +35,7 @@ export default {
 				'font-src': ['self'],
 				// googleapis.com: Firestore, Identity Toolkit, Secure Token. Le porte locali sono gli emulatori (e2e e sviluppo), solo se attivati.
 				'connect-src': ['self', 'https://*.googleapis.com', 'https://cloudflareinsights.com', ...(emulators ? ['http://127.0.0.1:9099', 'http://127.0.0.1:8080'] : [])],
-				'frame-src': ['https://*.firebaseapp.com', 'https://accounts.google.com', ...(emulators ? ['http://127.0.0.1:9099'] : [])],
+				'frame-src': ['https://*.firebaseapp.com', 'https://accounts.google.com', 'https://challenges.cloudflare.com', ...(emulators ? ['http://127.0.0.1:9099'] : [])],
 				'worker-src': ['self'],
 				'manifest-src': ['self'],
 				'object-src': ['none'],
