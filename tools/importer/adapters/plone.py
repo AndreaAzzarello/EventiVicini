@@ -14,7 +14,7 @@ from mapping import to_event
 # Pagine piccole: con fullobjects=1 25 elementi pesano ~800 KB e il server (Modena) li genera in 2-30 s; da 10 elementi (~300 KB)
 # un timeout o un retry costa meno e ogni risposta arriva prima. I campi restano quelli di prima: i contentHash non cambiano.
 PAGE_SIZE = 10
-READ_TIMEOUT = httpx.Timeout(60, connect=5)  # il default dell'importer (30 s di lettura) a Modena scattava ogni giorno
+READ_TIMEOUT = httpx.Timeout(60, connect=15)  # il default dell'importer (30 s di lettura) a Modena scattava ogni giorno
 
 
 @dataclass(frozen=True)

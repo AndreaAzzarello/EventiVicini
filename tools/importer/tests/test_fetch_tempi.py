@@ -303,7 +303,7 @@ def test_plone_pagine_piccole_e_segue_il_batching():
 
 def test_plone_timeout_di_lettura_60s_e_retry():
     from adapters.plone import READ_TIMEOUT
-    assert READ_TIMEOUT.read == 60 and READ_TIMEOUT.connect == 5
+    assert READ_TIMEOUT.read == 60 and READ_TIMEOUT.connect == run.CONNECT_TIMEOUT == 15
     timeouts, calls = [], []
 
     class Transport(httpx.BaseTransport):

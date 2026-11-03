@@ -39,6 +39,8 @@ from relevance import exclusion_reason
 HERE = Path(__file__).parent
 WORKERS = 4  # fonti scaricate in parallelo
 METER = SourceMeter()
+# 5 s tagliava host che col vecchio timeout di 30 s funzionavano (dry-run del 3/11: Veroli, Casorate Sempione...); i morti ora costano 15 s, una volta
+CONNECT_TIMEOUT = 15
 SOURCE_BUDGET = 600  # secondi per fonte: una fonte sana ha impiegato da 41 a 223 s (Albiano d'Ivrea, prova del 3/11); da tarare sul riepilogo "Fonti più lente"
 log = logging.getLogger("importer")
 
@@ -692,7 +694,7 @@ def main(argv: list[str] | None = None) -> int:
     if not names:
         log.error("Nessuna fonte attiva per questa selezione")
         return 1
-    with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=httpx.Timeout(30, connect=5), follow_redirects=True) as client:
+    with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=httpx.Timeout(30, connect=CONNECT_TIMEOUT), follow_redirects=True) as client:
         geocoder = Geocoder(client, HERE / "geocache.json", args.max_geocode,
                             float(os.environ.get("NOMINATIM_INTERVAL", "1")))
         stats: dict[str, dict] = {}

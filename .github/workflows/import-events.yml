@@ -87,7 +87,7 @@ jobs:
     needs: plan
     runs-on: ubuntu-latest
     # Misurato nel run del 3/11/2026: la Lombardia (271 comuni, 4 fonti in parallelo, 1 richiesta/s per host) impiega ~65 min, gli altri
-    # job meno; i 150+ min di Piemonte e Veneto erano host irraggiungibili (ora 5 s di connessione e ricordati tra i run) e ogni
+    # job meno; i 150+ min di Piemonte e Veneto erano host irraggiungibili (ora 15 s di connessione e ricordati tra i run) e ogni
     # fonte ha un tetto di 10 minuti (--source-budget). 90 minuti sono la rete di sicurezza. Nominatim: 0,25 richieste/s per job.
     timeout-minutes: 90
     strategy:
