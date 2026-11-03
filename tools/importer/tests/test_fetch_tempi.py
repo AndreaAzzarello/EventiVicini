@@ -225,3 +225,59 @@ def test_fonte_regionale_non_si_parcheggia(monkeypatch):
     monkeypatch.setattr(run, "SOURCES", {"reg": src})
     run.collect(httpx.Client(), SimpleNamespace(), ["reg"], NOW, 60, {}, None, None, state)
     assert state == {}
+
+
+# --- robots.txt per gli adapter API (Plone, WordPress) ---
+
+def test_robots_429_e_sconosciuto():
+    with pytest.raises(RobotsUnknown, match="HTTP 429"):
+        fetcher(lambda req: httpx.Response(429), retries=0).get("https://x.it/a")
+
+
+def api_routes(robots, items=None):
+    seen = []
+
+    def handler(req):
+        seen.append(req.url.path)
+        if req.url.path == "/robots.txt":
+            return robots if isinstance(robots, httpx.Response) else httpx.Response(200, text=robots)
+        return httpx.Response(200, json=items if items is not None else {"items": [], "batching": {}})
+    return handler, seen
+
+
+def plone(handler):
+    from adapters.plone import PloneAdapter
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    return PloneAdapter("x", "https://www.comune.x.it", "X", "MO", "Emilia-Romagna",
+                        fetcher=Fetcher(client, min_interval=0, backoff=0)), client
+
+
+def wordpress(handler):
+    from adapters.wordpress import WordpressAdapter
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    return WordpressAdapter("x", "https://www.comune.x.it", "X", "MO", "Emilia-Romagna",
+                            fetcher=Fetcher(client, min_interval=0, backoff=0)), client
+
+
+@pytest.mark.parametrize("make", [plone, wordpress])
+def test_api_vietate_da_robots_zero_eventi_e_nessuna_richiesta(make):
+    handler, seen = api_routes("User-agent: *\nDisallow: /")
+    a, client = make(handler)
+    assert list(a.events(client, NOW, 60)) == [] and seen == ["/robots.txt"]
+
+
+@pytest.mark.parametrize("make", [plone, wordpress])
+@pytest.mark.parametrize("robots", [httpx.Response(500), httpx.Response(429)])
+def test_api_con_robots_irraggiungibile_e_un_errore(make, robots):
+    handler, seen = api_routes(robots)
+    a, client = make(handler)
+    with pytest.raises(httpx.ConnectError, match="robots.txt non raggiungibile"):
+        list(a.events(client, NOW, 60))
+    assert set(seen) == {"/robots.txt"}
+
+
+@pytest.mark.parametrize("make", [plone, wordpress])
+def test_api_con_robots_4xx_nessuna_restrizione(make):
+    handler, seen = api_routes(httpx.Response(404), items=[] if make is wordpress else None)
+    a, client = make(handler)
+    assert list(a.events(client, NOW, 60)) == [] and seen[0] == "/robots.txt" and len(seen) == 2

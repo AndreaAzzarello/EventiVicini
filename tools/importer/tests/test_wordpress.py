@@ -1,5 +1,6 @@
 """Adapter WordPress DCI: fixture reali dei 5 comuni, nessuna rete."""
 
+import dataclasses
 import json
 import logging
 import sys
@@ -13,6 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parents[1]))
 from adapters import load_sources  # noqa: E402
 from adapters.wordpress import WordpressAdapter  # noqa: E402
+from fetch import Fetcher  # noqa: E402
 from geo import PROVINCES  # noqa: E402
 from mapping import ROME, event_id  # noqa: E402
 from run import locate  # noqa: E402
@@ -43,7 +45,9 @@ def run(name, now=NOW, horizon=60, routes=None):
         return httpx.Response(404, json={"code": "rest_no_route"})
 
     a = adapter(name)
-    return list(a.events(httpx.Client(transport=httpx.MockTransport(handler)), now, horizon)), seen
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    a = dataclasses.replace(a, fetcher=Fetcher(client, min_interval=0, backoff=0))
+    return list(a.events(client, now, horizon)), seen
 
 
 def by_title(evs):
@@ -110,7 +114,7 @@ def test_autodetect_endpoint():
     routes = {"/wp-json/": {"routes": {"/wp/v2/posts": {}, "/wp/v2/events": {}}},
               "/wp-json/wp/v2/events": fixture("copparo")}
     evs, seen = run("copparo", routes=routes)
-    assert len(evs) == 2 and seen == ["/wp-json/wp/v2/eventi", "/wp-json/", "/wp-json/wp/v2/events"]
+    assert len(evs) == 2 and seen == ["/robots.txt", "/wp-json/wp/v2/eventi", "/wp-json/", "/wp-json/wp/v2/events"]
 
 
 def test_senza_endpoint_zero_eventi(caplog):

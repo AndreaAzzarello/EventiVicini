@@ -11,12 +11,13 @@ from __future__ import annotations
 import html
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Iterator
 
 import httpx
 
+from fetch import Fetcher
 from mapping import (KIDS_RE, ROME, category_from_title, event_id, geocode_queries, html_to_text, map_price,
                      shorten, too_long)
 
@@ -50,18 +51,24 @@ class WordpressAdapter:
     province: str
     region: str
     viewbox: str | None = None
+    fetcher: Fetcher | None = field(default=None, compare=False)  # solo per i test
 
     def _items(self, client: httpx.Client) -> list[dict]:
+        f = self.fetcher or Fetcher(client, retries=2, backoff=2.0)  # robots.txt, 1 richiesta/s, retry
         headers = {"Accept": "application/json"}
-        res = client.get(f"{self.base}/wp-json/wp/v2/eventi", headers=headers)
+        res = f.get_api(f"{self.base}/wp-json/wp/v2/eventi", headers=headers)
+        if res is None:  # robots.txt vieta le API
+            return []
         if res.status_code == 404:
-            index = client.get(f"{self.base}/wp-json/", headers=headers)
-            routes = index.json().get("routes", {}) if index.status_code == 200 else {}
+            index = f.get_api(f"{self.base}/wp-json/", headers=headers)
+            routes = index.json().get("routes", {}) if index is not None and index.status_code == 200 else {}
             route = next((r for r in routes if ROUTE_RE.match(r)), None)
             if route is None:
                 log.warning("%s: nessun endpoint eventi REST, zero eventi", self.name)
                 return []
-            res = client.get(f"{self.base}/wp-json{route}", headers=headers)
+            res = f.get_api(f"{self.base}/wp-json{route}", headers=headers)
+            if res is None:
+                return []
         res.raise_for_status()
         data = res.json()
         return data if isinstance(data, list) else []

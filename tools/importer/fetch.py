@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import threading
 import time
 from pathlib import Path
@@ -15,6 +16,7 @@ from protego import Protego
 
 from registry import USER_AGENT
 
+log = logging.getLogger("importer")
 CACHE_DIR = Path(__file__).parent / ".httpcache"
 RETRY_STATUS = {429, 500, 502, 503, 504}
 CONNECT_FAILED = (httpx.ConnectError, httpx.ConnectTimeout)  # l'host non risponde: ritentare subito non serve
@@ -68,8 +70,8 @@ class Fetcher:
                 why = f"HTTP {res.status_code}"
             if res is not None and res.status_code < 400:
                 rp = Protego.parse(res.text)
-            elif res is not None and res.status_code < 500:
-                rp = Protego.parse("")  # nessun robots.txt: tutto permesso (RFC 9309)
+            elif res is not None and res.status_code < 500 and res.status_code != 429:
+                rp = Protego.parse("")  # nessun robots.txt (4xx): tutto permesso (RFC 9309); 429 = troppe richieste, per prudenza non si sa
             if rp is not None:
                 break
             time.sleep(self.backoff * 2 ** attempt)
@@ -93,7 +95,21 @@ class Fetcher:
         rp = self._robots_for(origin)
         return [urljoin(origin + "/", sm) for sm in rp.sitemaps] if rp else []  # alcuni siti dichiarano "Sitemap: /SiteMap.aspx"
 
-    def get(self, url: str) -> httpx.Response:
+    def get_api(self, url: str, **kw) -> httpx.Response | None:
+        """get() per gli adapter API (Plone, WordPress): robots.txt vietato → None (zero eventi), non raggiungibile → ConnectError,
+        come fa l'adapter HTML, così run.py lo conta tra le fonti saltate e non tra quelle vuote."""
+        try:
+            return self.get(url, **kw)
+        except Blocked as e:
+            log.warning("robots.txt non permette %s", e)
+            return None
+        except RobotsUnknown as e:
+            raise httpx.ConnectError(f"robots.txt non raggiungibile ({e})") from e
+
+    def get(self, url: str, params: dict | None = None, headers: dict | None = None,
+            timeout: httpx.Timeout | float | None = None) -> httpx.Response:
+        if params:
+            url = str(httpx.URL(url).copy_merge_params(params))
         ok = self.allowed(url)
         if ok is None:
             raise RobotsUnknown(f"{url} [{self.why_unknown(url)}]")
@@ -101,7 +117,8 @@ class Fetcher:
             raise Blocked(url)
         host = urlsplit(url).netloc
         meta = self._cached(url)
-        headers = {}
+        headers = dict(headers or {})
+        extra = {} if timeout is None else {"timeout": timeout}
         if meta:
             if meta.get("etag"):
                 headers["If-None-Match"] = meta["etag"]
@@ -111,7 +128,7 @@ class Fetcher:
             self._wait(host)
             self.requests += 1
             try:
-                res = self.client.get(url, headers=headers)
+                res = self.client.get(url, headers=headers, **extra)
             except httpx.TransportError as e:
                 if attempt == self.retries or isinstance(e, CONNECT_FAILED):
                     raise
