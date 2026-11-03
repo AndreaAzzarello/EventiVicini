@@ -376,14 +376,19 @@ class DesignComuniHtmlAdapter:
     fetcher: Fetcher | None = field(default=None, compare=False)  # solo per i test
 
     # -- rete
-    def _get(self, f: Fetcher, url: str) -> str | None:
+    def _get(self, f: Fetcher, url: str, why: list[str] | None = None) -> str | None:
+        """Testo della pagina, o None; why (opzionale) raccoglie il motivo: "Disallow" (robots.txt) oppure "HTTP <codice>"."""
         try:
             res = f.get(url)
         except Blocked as e:
             log.warning("%s: robots.txt non permette %s", self.name, e)
+            if why is not None:
+                why.append("Disallow")
             return None
         except RobotsUnknown as e:  # errore e non "zero eventi": run.py non deve scambiarlo per una fonte vuota
             raise httpx.ConnectError(f"robots.txt non raggiungibile ({e})") from e
+        if res.status_code >= 400 and why is not None:
+            why.append(f"HTTP {res.status_code}")
         return res.text if res.status_code < 400 else None
 
     def _list_urls(self, f: Fetcher, now: datetime) -> list[str]:
@@ -391,10 +396,11 @@ class DesignComuniHtmlAdapter:
         starts = [self.url_eventi] if self.url_eventi else [self.base + p for p in TYPICAL_PATHS]
         found: dict[str, None] = {}
         listing = ""
+        why: list[str] = []
         for start in starts:
             url: str | None = start
             for _ in range(self.max_pages):
-                page = self._get(f, url) if url else None
+                page = self._get(f, url, why) if url else None
                 if page is None:
                     break
                 listing = listing or url
@@ -406,7 +412,9 @@ class DesignComuniHtmlAdapter:
             if found:
                 break
         if not listing:
-            raise httpx.HTTPError(f"pagina eventi non raggiungibile o vietata da robots.txt: {starts[0]}")
+            if set(why) == {"Disallow"}:  # il sito risponde ma robots.txt vieta la pagina: scelta del sito, non un guasto
+                raise httpx.HTTPError(f"robots.txt vieta la pagina eventi (Disallow): {starts[0]}")
+            raise httpx.HTTPError(f"pagina eventi assente o non leggibile ({', '.join(dict.fromkeys(why)) or 'nessuna risposta'}): {starts[0]}")
         if listing:
             path = urlsplit(listing).path.rstrip("/")
             for u in self._sitemap_urls(f, path):

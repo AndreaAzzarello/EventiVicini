@@ -424,3 +424,25 @@ def test_nominatim_fallisce_sull_indirizzo_ma_risponde_per_il_centro():
     ev = {"_geocode": ["Via Diaz 5, Erba"], "lat": None, "lng": None, "sourceUrl": "https://x.it/e"}
     run.locate(ev, src, Geo())
     assert ev["lat"] == 44.6 and ev["approxLocation"] is True
+
+
+# --- adapter HTML: Disallow o pagina assente (Desio, Vergiate) ---
+
+def html_error(robots_text: str, list_status: int) -> str:
+    from adapters.design_comuni_html import DesignComuniHtmlAdapter
+
+    def handler(req):
+        if req.url.path == "/robots.txt":
+            return httpx.Response(200, text=robots_text)
+        return httpx.Response(list_status, text="<html></html>")
+    f = fetcher(handler)
+    a = DesignComuniHtmlAdapter("x", "https://x.it", "X", "MB", "Lombardia", None, "https://x.it/eventi/", fetcher=f)
+    with pytest.raises(httpx.HTTPError) as e:
+        list(a.events(None, NOW, 60))
+    return str(e.value)
+
+
+def test_pagina_vietata_da_robots_e_distinta_dalla_pagina_assente():
+    assert html_error("User-agent: *\nDisallow: /eventi", 200).startswith("robots.txt vieta la pagina eventi (Disallow): https://x.it/eventi/")
+    assert html_error("User-agent: *\nAllow: /", 404).startswith("pagina eventi assente o non leggibile (HTTP 404): https://x.it/eventi/")
+    assert "HTTP 503" in html_error("User-agent: *\nAllow: /", 503)
