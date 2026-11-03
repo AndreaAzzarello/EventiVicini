@@ -21,6 +21,7 @@ const PAGES: [string, string][] = [
 	['evento', '/eventi/jazz-in-piazza-grande-seedJazz'],
 	['accedi', '/accedi'],
 	['privacy', '/privacy'],
+	['cookie', '/cookie'],
 	['termini', '/termini']
 ];
 

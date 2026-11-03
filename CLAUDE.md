@@ -15,6 +15,7 @@ Agenda gratuita di eventi pubblici locali (partita da Modena). Dettagli completi
 - Cloudflare: flusso Pages, non Workers. Root `web`, build `npm run build`, output `.svelte-kit/cloudflare`, `NODE_VERSION=24`.
 - Rispetta robots.txt e licenze dei siti comunali; attiva una fonte solo con licenza sui contenuti (CC0/CC-BY).
 - OpenStreetMap/Nominatim: User-Agent identificativo, max 1 richiesta/s.
+- Cookie "senza banner" (dettagli in `ClaudeVault\decisioni\eventivicini-cookie.md`): solo storage tecnico dichiarato in `web/src/lib/cookies.ts` (alimenta `/cookie` e `e2e/storage.spec.ts`). Statistiche solo Cloudflare Web Analytics. Vietati Google Maps/Analytics/Fonts remoti, Meta Pixel, embed YouTube/social, SDK pubblicitari. Ogni dipendenza frontend nuova: dichiara nel piano cosa scrive nel browser e aggiorna `cookies.ts`.
 - Design: le regole sono in `DESIGN.md`, i valori in `web/src/lib/styles/tokens.css`, il controllo automatico in `design.test.ts`.
 
 ## Comandi (da `web/` salvo diversa indicazione)
@@ -37,7 +38,7 @@ Agenda gratuita di eventi pubblici locali (partita da Modena). Dettagli completi
 - Gli emulatori Firebase vogliono Java 21 (`C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot`), nel PATH di sistema ma dopo il Java 8 Oracle. Se `java -version` mostra 1.8, imposta `JAVA_HOME` e `Path` solo per il comando (vedi `ClaudeVault\lezioni\emulatori-firebase-richiedono-java-21.md`). Se una run interrotta lascia un emulatore vivo, chiudi solo quel PID.
 - Tieni fuori dai commit `.env`, `.dev.vars` e le chiavi service account: `FIREBASE_SERVICE_ACCOUNT` è un segreto.
 - Modifica `reports/` e `sources/*.csv` solo tramite gli script (`activate.py`, `licenses.py`), non a mano.
-- Le tile OSM pubbliche non sono adatte a traffico intenso; niente analytics né cookie di profilazione.
+- Le tile OSM pubbliche non sono adatte a traffico intenso; niente cookie di profilazione.
 
 ## Flusso per funzioni nuove
 - `/grill-me` prima di ogni piano: le ambiguità emergono prima del codice, non durante.

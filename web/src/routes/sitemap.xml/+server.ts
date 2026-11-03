@@ -22,6 +22,7 @@ export const GET: RequestHandler = async () => {
 		...cities.map((c) => `<url><loc>${esc(base + cityPath(c))}</loc><changefreq>daily</changefreq></url>`),
 		...events.map((e) => `<url><loc>${esc(base + eventPath(e))}</loc>${day(e.updatedAt ?? e.createdAt)}</url>`),
 		`<url><loc>${base}/privacy</loc></url>`,
+		`<url><loc>${base}/cookie</loc></url>`,
 		`<url><loc>${base}/termini</loc></url>`
 	];
 	return new Response(

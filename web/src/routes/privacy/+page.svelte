@@ -10,7 +10,7 @@
 	<p class="muted">Ultimo aggiornamento: {data.updated}</p>
 
 	<p>
-		Eventi Vicini è un’agenda gratuita di eventi. Non usiamo analytics, pixel, pubblicità né cookie di profilazione:
+		Eventi Vicini è un’agenda gratuita di eventi. Non usiamo pixel, pubblicità, cookie di profilazione né tracciamento individuale:
 		trattiamo solo i dati che servono a farti usare il servizio. Questa informativa è resa ai sensi degli artt. 13–14
 		del Regolamento (UE) 2016/679 (GDPR).
 	</p>
@@ -77,7 +77,7 @@
 	<h2>Fornitori e trasferimenti</h2>
 	<ul>
 		<li><strong>Google Firebase</strong> (Google LLC / Google Ireland Ltd): autenticazione e database. Responsabile del trattamento. Il browser contatta i server di Google (SDK di accesso) solo se accedi o usi funzioni dell’account.</li>
-		<li><strong>Cloudflare, Inc.</strong>: hosting e consegna delle pagine. Responsabile del trattamento.</li>
+		<li><strong>Cloudflare, Inc.</strong>: hosting e consegna delle pagine{#if data.analytics} e statistiche aggregate (Web Analytics, senza cookie né identificazione dei visitatori){/if}. Responsabile del trattamento.</li>
 		<li>
 			<strong>OpenStreetMap Foundation</strong> (Regno Unito): le tessere della mappa sono scaricate direttamente dal tuo
 			browser, quindi OpenStreetMap vede il tuo indirizzo IP. La ricerca di luoghi (Nominatim) passa dal nostro server,
@@ -106,13 +106,20 @@
 
 	<h2>Cookie e archiviazione locale</h2>
 	<p>
-			Usiamo solo archiviazione tecnica (localStorage, IndexedDB e la cache del browser): preferiti, posizione, tema, la
+			Non impostiamo cookie. Usiamo solo archiviazione tecnica, strettamente necessaria (localStorage, IndexedDB e la cache del browser): preferiti, posizione, tema, la
 				sessione di accesso di Firebase, l’indirizzo email inserito per ricevere il link di accesso (cancellato quando
 				l’accesso è completato), la memoria delle ultime ricerche di luoghi, per non ripeterle, l’elenco degli eventi che
 				hai già segnalato da questo dispositivo (per non duplicare la segnalazione) e fino a 40 pagine pubbliche già
 				visitate, per poterle aprire anche senza rete (restano fuori account, accesso e moduli). Nessun cookie
-		di terze parti per pubblicità o statistiche sul nostro sito (quelli dei siti a cui rimandiamo nascono solo dopo il clic), per questo non vedi banner. Se in futuro attivassimo statistiche,
-		useremmo Cloudflare Web Analytics, che non usa cookie né identifica i visitatori.
+		di terze parti per pubblicità o statistiche sul nostro sito (quelli dei siti a cui rimandiamo nascono solo dopo il clic), per questo non vedi banner.
+		{#if data.analytics}
+			Contiamo le visite in forma aggregata con Cloudflare Web Analytics, che non usa cookie né archiviazione nel browser e
+			non identifica i singoli visitatori: non c’è tracciamento individuale.
+		{:else}
+			Non raccogliamo statistiche; se le attivassimo useremmo solo Cloudflare Web Analytics, che non usa cookie né
+			archiviazione nel browser e non identifica i singoli visitatori.
+		{/if}
+		L’elenco completo, con nome, scopo e durata, è nella pagina <a href="/cookie">Cookie e archiviazione</a>.
 	</p>
 
 	<h2>I tuoi diritti</h2>

@@ -6,6 +6,7 @@
 	import frauncesItalicUrl from '@fontsource/fraunces/files/fraunces-latin-600-italic.woff2?url';
 	import { onMount } from 'svelte';
 	import { dev } from '$app/environment';
+	import { env as pub } from '$env/dynamic/public';
 	import { page } from '$app/state';
 	import Heart from '@lucide/svelte/icons/heart';
 	import Moon from '@lucide/svelte/icons/moon';
@@ -46,6 +47,10 @@
 <svelte:head>
 	<link rel="preload" href={frauncesUrl} as="font" type="font/woff2" crossorigin="anonymous" />
 	<link rel="preload" href={frauncesItalicUrl} as="font" type="font/woff2" crossorigin="anonymous" />
+	<!-- Statistiche aggregate senza cookie né storage (Cloudflare Web Analytics): attive solo se il token è configurato. -->
+	{#if pub.PUBLIC_CF_BEACON_TOKEN}
+		<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon={JSON.stringify({ token: pub.PUBLIC_CF_BEACON_TOKEN })}></script>
+	{/if}
 </svelte:head>
 
 <a class="skip" href="#main">Vai al contenuto</a>
@@ -102,6 +107,7 @@
 		<nav aria-label="Informazioni">
 			<a href="/proponi">Proponi un evento</a>
 			<a href="/privacy">Privacy</a>
+			<a href="/cookie">Cookie</a>
 			<a href="/termini">Termini</a>
 		</nav>
 		<p class="muted small">
