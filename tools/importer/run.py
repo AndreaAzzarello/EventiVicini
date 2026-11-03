@@ -216,6 +216,15 @@ def clean_texts(ev: dict) -> None:
         ev[k] = one_line(ev[k])
 
 
+def safe_lookup(geocoder: Geocoder, query: str, viewbox: str | None, **kw) -> tuple[float, float] | None:
+    """geocoder.lookup che, se Nominatim non risponde (503, timeout), dà "non trovato": un errore momentaneo non deve fermare la regione."""
+    try:
+        return geocoder.lookup(query, viewbox, **kw)
+    except httpx.HTTPError as e:
+        log.warning("  geocoding non riuscito (%s), passo oltre", str(e)[:80])
+        return None
+
+
 def locate(ev: dict, source: Adapter, geocoder: Geocoder) -> None:
     """Coordinate dell'evento, sempre dentro la provincia della fonte.
 
@@ -231,14 +240,14 @@ def locate(ev: dict, source: Adapter, geocoder: Geocoder) -> None:
     for q in queries:
         if ev["lat"] is not None:
             return
-        hit = geocoder.lookup(f"{q}, {prov}", source.viewbox)
+        hit = safe_lookup(geocoder, f"{q}, {prov}", source.viewbox)
         if hit:
             ev["lat"], ev["lng"] = hit
     if ev["lat"] is None:
         city = queries[0].rsplit(",", 1)[-1].strip() if queries else source.city
         # il centro del comune vale anche a budget finito (essential): meglio un punto approssimato che perdere l'evento
-        hit = (geocoder.lookup(f"{city}, {prov}", source.viewbox, essential=True)
-               or geocoder.lookup(f"{source.city}, {prov}", source.viewbox, essential=True))
+        hit = (safe_lookup(geocoder, f"{city}, {prov}", source.viewbox, essential=True)
+               or safe_lookup(geocoder, f"{source.city}, {prov}", source.viewbox, essential=True))
         if hit:
             ev["lat"], ev["lng"] = hit
             ev["approxLocation"] = True

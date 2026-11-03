@@ -397,3 +397,30 @@ def test_il_budget_non_viene_scambiato_per_robots_irraggiungibile(clock):
     with pytest.raises(BudgetExceeded):
         fetcher(handler, retries=4).get("https://x.it/a")  # nessun retry
     assert len(calls) == 1
+
+
+# --- Nominatim che risponde 503: la regione non si ferma ---
+
+class GeocoderRotto:
+    def lookup(self, query, viewbox=None, essential=False):
+        raise httpx.HTTPStatusError("Server error '503 first byte timeout'", request=httpx.Request("GET", "https://n.example/"),
+                                    response=httpx.Response(503))
+
+
+def test_nominatim_503_non_ferma_la_regione():
+    src = SimpleNamespace(viewbox=None, province="MO", city="Modena")
+    ev = {"_geocode": ["Via Diaz 5, Erba"], "lat": None, "lng": None, "sourceUrl": "https://x.it/e"}
+    run.locate(ev, src, GeocoderRotto())  # prima: HTTPStatusError, job fallito
+    assert ev["lat"] is None  # senza coordinate: lo scarta collect, ma niente crash
+
+
+def test_nominatim_fallisce_sull_indirizzo_ma_risponde_per_il_centro():
+    class Geo:
+        def lookup(self, query, viewbox=None, essential=False):
+            if essential:  # centro del comune
+                return (44.6, 10.9)
+            raise httpx.ReadTimeout("lento")
+    src = SimpleNamespace(viewbox=None, province="MO", city="Modena")
+    ev = {"_geocode": ["Via Diaz 5, Erba"], "lat": None, "lng": None, "sourceUrl": "https://x.it/e"}
+    run.locate(ev, src, Geo())
+    assert ev["lat"] == 44.6 and ev["approxLocation"] is True
