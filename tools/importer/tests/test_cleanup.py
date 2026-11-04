@@ -87,13 +87,22 @@ def test_contatori_limits_di_account_eliminati_o_fermi_da_30_giorni_senza_prefer
 def test_run_elimina_i_contatori_e_il_controllo_account_e_facoltativo():
     data = {"limits/gone": lim(1, 5), "limits/idle0": lim(40), "limits/idle_favs": lim(40, 3), "limits/ok": lim(1)}
     db = FakeFirestore(dict(data))
-    assert run(db, NOW, accounts=lambda uids: {"gone"} & set(uids))["deleted"] == 2
+    assert run(db, NOW, accounts=lambda uids: {"gone"} & set(uids), delete_limits=True)["deleted"] == 2
     assert set(db.data) == {"limits/idle_favs", "limits/ok"}
     db2 = FakeFirestore(dict(data))  # senza controllo account: solo la regola dei 30 giorni
-    assert run(db2, NOW)["deleted"] == 1 and "limits/gone" in db2.data
+    assert run(db2, NOW, delete_limits=True)["deleted"] == 1 and "limits/gone" in db2.data
     db3 = FakeFirestore(dict(data))  # Authentication non risponde: nessun errore, nessun account considerato eliminato
     def down(_):
         raise RuntimeError("auth giù")
-    assert run(db3, NOW, accounts=down)["deleted"] == 1 and "limits/gone" in db3.data
+    assert run(db3, NOW, accounts=down, delete_limits=True)["deleted"] == 1 and "limits/gone" in db3.data
     db4 = FakeFirestore(dict(data))
-    assert run(db4, NOW, dry_run=True, accounts=lambda u: {"gone"})["due"] == 2 and db4.writes == 0
+    assert run(db4, NOW, dry_run=True, accounts=lambda u: {"gone"}, delete_limits=True)["due"] == 2 and db4.writes == 0
+
+
+def test_limits_flag_spento_di_default_conta_e_non_elimina(caplog):
+    data = {"limits/gone": lim(1, 5), "limits/idle0": lim(40), "limits/idle_favs": lim(40, 3), "limits/ok": lim(1)}
+    db = FakeFirestore(dict(data))
+    with caplog.at_level("INFO", logger="importer"):
+        stats = run(db, NOW, accounts=lambda uids: {"gone"})
+    assert (stats["deleted"], stats["limits_due"], set(db.data)) == (0, 2, set(data))
+    assert "NON eliminati" in caplog.text and "gone" not in caplog.text and "idle0" not in caplog.text  # nel log solo numeri

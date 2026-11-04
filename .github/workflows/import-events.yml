@@ -20,6 +20,10 @@ on:
         description: "Rilegge gli eventi da Firestore ignorando il manifest locale (riconciliazione completa)"
         type: boolean
         default: false
+      cleanup_limits:
+        description: "La pulizia elimina anche i contatori limits/{uid} scaduti (senza: li registra solo nel log). Per le esecuzioni automatiche vale la variabile del repo CLEANUP_LIMITS=true"
+        type: boolean
+        default: false
       auto:
         description: "Avvio automatico (Worker /scheduler): salta se l'import completo di oggi è già partito"
         type: boolean
@@ -173,7 +177,7 @@ jobs:
       - name: Pulizia del database
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: python cleanup.py --stats-out cleanup.json
+        run: python cleanup.py --stats-out cleanup.json ${{ (inputs.cleanup_limits || vars.CLEANUP_LIMITS == 'true') && '--delete-limits' || '' }}
       - uses: actions/download-artifact@v7
         with:
           pattern: stats-*

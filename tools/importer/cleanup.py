@@ -8,6 +8,7 @@ Regole:
   segnalazioni decise (rimosse o respinte) da più di 180 giorni   → eliminate; le aperte restano
   contatori limits/{uid} di account eliminati                    → eliminati (l'uid non si tiene oltre l'account)
   contatori limits/{uid} senza preferiti e fermi da più di 30 gg → eliminati (con preferiti restano: servono al tetto di 200)
+  ...ma solo con --delete-limits: senza, i contatori si contano e si registrano nel log, nulla si elimina
 
 Uso:  python cleanup.py --dry-run        # conta senza eliminare
       python cleanup.py                  # elimina, al massimo --max-deletes documenti per giro
@@ -80,9 +81,10 @@ def missing_accounts(uids: list[str]) -> set[str]:
 
 
 def run(db, now: datetime, dry_run: bool = False, max_deletes: int = MAX_DELETES,
-        accounts: Callable[[list[str]], set[str]] | None = None) -> dict:
+        accounts: Callable[[list[str]], set[str]] | None = None, delete_limits: bool = False) -> dict:
     """Legge solo i candidati (query a campo singolo con proiezione) ed elimina a lotti, fino a max_deletes.
-    `accounts` dice quali uid non esistono più in Authentication; senza, si eliminano solo i contatori fermi da 30 giorni."""
+    `accounts` dice quali uid non esistono più in Authentication; senza, si eliminano solo i contatori fermi da 30 giorni.
+    `delete_limits` spento (default): i contatori limits/{uid} si contano e si registrano nel log, ma non si eliminano."""
     from google.cloud.firestore_v1.base_query import FieldFilter
 
     now_ms = int(now.timestamp() * 1000)
@@ -117,14 +119,19 @@ def run(db, now: datetime, dry_run: bool = False, max_deletes: int = MAX_DELETES
     targets = [events.document(i) for i in expired_events(docs, now_ms)]
     targets += [subs.document(i) for i in expired_submissions(sub_docs, now_ms)]
     targets += [reports.document(i) for i in expired_reports(report_docs, now_ms)]
-    targets += [limits.document(i) for i in expired_limits(limit_docs, gone, now_ms)]
+    limits_due = expired_limits(limit_docs, gone, now_ms)
+    if delete_limits:
+        targets += [limits.document(i) for i in limits_due]
+    else:  # solo numeri nel log (l'uid è pseudonimo e il log del repo pubblico è leggibile)
+        log.info("limits/{uid}: %d da eliminare (%d di account eliminati, %d fermi da 30 giorni), NON eliminati: %d totali, "
+                 "flag --delete-limits spento", len(limits_due), len(set(limits_due) & gone), len(set(limits_due) - gone), len(limit_docs))
     due = len(targets)
     if due > max_deletes:
         log.warning("Da eliminare %d documenti, oltre il tetto di %d: il resto al prossimo giro", due, max_deletes)
         targets = targets[:max_deletes]
     if not dry_run:
         commit_in_batches(db, [lambda b, r=r: b.delete(r) for r in targets])
-    stats = {"reads": reads, "deleted": 0 if dry_run else len(targets), "due": due}
+    stats = {"reads": reads, "deleted": 0 if dry_run else len(targets), "due": due, "limits_due": len(limits_due)}
     log.info("Pulizia%s: %d da eliminare, %d eliminati, %d letture", " (dry-run)" if dry_run else "", due,
              stats["deleted"], reads)
     return stats
@@ -134,12 +141,13 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dry-run", action="store_true", help="conta senza eliminare")
     p.add_argument("--max-deletes", type=int, default=MAX_DELETES)
+    p.add_argument("--delete-limits", action="store_true", help="elimina anche i contatori limits/{uid} scaduti (senza: solo log)")
     p.add_argument("--stats-out", type=Path, help="scrive qui le statistiche (JSON)")
     args = p.parse_args(argv)
     logsafe.setup()
     from db import client
 
-    stats = run(client(), datetime.now(timezone.utc), args.dry_run, args.max_deletes, missing_accounts)
+    stats = run(client(), datetime.now(timezone.utc), args.dry_run, args.max_deletes, missing_accounts, args.delete_limits)
     if args.stats_out:
         args.stats_out.write_text(json.dumps(stats), encoding="utf-8")
     return 0
