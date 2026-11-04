@@ -116,6 +116,42 @@ const events = [
 	ev('seedFinito', 'modena', { title: 'Evento già concluso', startTime: at(-3, 10), endTime: at(-3, 12) })
 ];
 
+// SEED_XSS=1: eventi con contenuto ostile, come potrebbe arrivare da una fonte importata (scrittura Admin, quindi senza le
+// regole). Servono ai test di sicurezza dinamici (Strix) sul rendering di HTML, JSON-LD e .ics. Solo emulatore: fuori dal
+// seed normale perché gli e2e non devono vederli nelle liste.
+if (process.env.SEED_XSS) {
+	const evil = ['<img src=x onerror=alert(1)>', '</script><script>alert(2)</script>', '"><svg onload=alert(3)>', '{{7*7}}${7*7}'];
+	events.push(
+		ev('xssUno', 'modena', {
+			title: `Prova ${evil[0]} ${evil[1]}`,
+			shortDescription: `${evil[2]} <b>grassetto</b> ${evil[3]} \u2028 \u0000 fine`,
+			venueName: `<script>alert(4)</script>${evil[0]}`,
+			address: `Via "Roma" 1, <i>Modena</i> ${evil[1]}`,
+			tags: ['family', `<script>alert(5)</script>`],
+			category: 'music',
+			startTime: at(1, 20),
+			endTime: at(1, 23),
+			imageUrl: 'javascript:alert(6)',
+			ticketUrl: 'javascript:alert(7)',
+			source: 'scraper',
+			sourceUrl: 'javascript:alert(8)'
+		}),
+		ev('xssDue', 'modena', {
+			title: 'Titolo\r\nBEGIN:VEVENT\r\nSUMMARY:iniettato\r\nEND:VEVENT',
+			shortDescription: 'Riga1\r\nATTENDEE:mailto:x@example.test\\;,;',
+			venueName: 'Luogo; con, virgole\\e\nnuova riga',
+			address: 'data:text/html,<script>alert(9)</script>',
+			category: 'culture',
+			startTime: at(1, 18),
+			endTime: at(1, 19),
+			imageUrl: 'https://example.org/x.jpg" onerror="alert(10)',
+			ticketUrl: 'data:text/html;base64,PHNjcmlwdD5hbGVydCgxMSk8L3NjcmlwdD4=',
+			source: 'scraper',
+			sourceUrl: 'https://example.org/a b"><script>alert(12)</script>'
+		})
+	);
+}
+
 const enc = (v) => {
 	if (typeof v === 'string') return { stringValue: v };
 	if (typeof v === 'number') return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
