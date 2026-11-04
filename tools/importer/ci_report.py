@@ -3,6 +3,7 @@
   python ci_report.py matrix                       # regioni con fonti attive e quote per job → GITHUB_OUTPUT
   python ci_report.py summary <cartella> [cleanup.json]   # riepilogo unico → stdout e GITHUB_STEP_SUMMARY
   python ci_report.py simulate [regioni.json]      # quote per giorno della settimana (scenario Italia)
+  python ci_report.py sizes <cartella> <sizes.json>   # aggiorna gli eventi per regione (minimo di letture del job)
   python ci_report.py guard                        # avvio automatico: go=false se l'import completo di oggi c'è già
 
 Quote Spark giornaliere (50.000 letture, 20.000 scritture, 20.000 cancellazioni) divise tra i job della matrice.
@@ -49,8 +50,22 @@ def reconcile_days(weights: dict[str, int]) -> dict[str, int]:
     return out
 
 
-def matrix(rows: list[dict], only: str = "", weekday: int | None = None, force_reconcile: bool = False) -> dict:
+FLOOR_FACTOR = 1.5  # senza manifest valido il job rilegge tutti i documenti della regione: ~eventi dell'ultimo import + ritirati/passati
+FLOOR_MIN = 50
+
+
+def read_floor(events: int) -> int:
+    return int(events * FLOOR_FACTOR) + FLOOR_MIN
+
+
+def matrix(rows: list[dict], only: str = "", weekday: int | None = None, force_reconcile: bool = False,
+           sizes: dict[str, int] | None = None) -> dict:
     """Regioni da importare con il budget di letture per job.
+
+    `sizes` (slug → eventi dell'ultimo import) fissa un minimo per regione: il peso in fonti non basta, perché una sola
+    fonte regionale (Trentino-Alto Adige: 88 comuni ma ~1.800 eventi) può valere migliaia di letture se il manifest è
+    scaduto. Il minimo si riserva per primo, il resto si divide come prima; se i minimi non stanno nel budget vale la
+    sola proporzione (il budget totale non si supera mai).
 
     Il giorno di riconciliazione si assegna su tutte le regioni attive (anche con `only`), così non cambia
     quando si lancia una regione sola. Il budget di 40.000 letture si divide in proporzione al peso
@@ -65,12 +80,25 @@ def matrix(rows: list[dict], only: str = "", weekday: int | None = None, force_r
     flags = {r: force_reconcile or (weekday is not None and days[r] == weekday) for r in regions}
     shares = {r: weights[r] * (RECONCILE_WEIGHT if flags[r] else 1) for r in regions}
     total = sum(shares.values()) or 1
-    include = [{"region": r, "reads": BUDGET["reads"] * shares[r] // total, "reconcile": flags[r]} for r in regions]
+    floors = {r: read_floor(sizes.get(r, 0)) if sizes and sizes.get(r) else 0 for r in regions}
+    spare = BUDGET["reads"] - sum(floors.values())
+    if spare < 0:
+        floors, spare = dict.fromkeys(regions, 0), BUDGET["reads"]
+    include = [{"region": r, "reads": floors[r] + spare * shares[r] // total, "reconcile": flags[r]} for r in regions]
     # Scritture: quota in parti uguali, ma mai sotto un terzo del budget, altrimenti con 20 job (750 ciascuno) il primo
     # caricamento di una regione grande (Trentino-Alto Adige: ~1.900 eventi) supera il tetto e non scrive nulla.
     per_job = {k: v // n for k, v in BUDGET.items() if k != "reads"}
     per_job["writes"] = max(per_job["writes"], BUDGET["writes"] // 3)
     return {"regions": regions, "include": include, **per_job}
+
+
+def update_sizes(stats: list[dict], old: dict[str, int]) -> dict[str, int]:
+    """Eventi per regione dall'ultimo import riuscito; le regioni senza statistiche (job fallito) mantengono il valore precedente."""
+    new = dict(old)
+    for s in stats:
+        if s.get("region") and s.get("events"):
+            new[s["region"]] = int(s["events"])
+    return new
 
 
 def simulate(regions: dict[str, dict]) -> dict:
@@ -206,13 +234,21 @@ def guard() -> bool:
     return go
 
 
+def load_sizes(path: Path) -> dict[str, int]:
+    try:
+        d = json.loads(path.read_text(encoding="utf-8"))
+        return {k: int(v) for k, v in d.items()} if isinstance(d, dict) else {}
+    except (OSError, ValueError, TypeError):
+        return {}  # cache assente: vale la sola proporzione in fonti
+
+
 def main(argv: list[str]) -> int:
     if argv[:1] == ["guard"]:
         guard()
         return 0
     if argv[:1] == ["matrix"]:
         m = matrix(read_rows(), os.environ.get("ONLY", ""), datetime.now(ZoneInfo("Europe/Rome")).weekday(),
-                   os.environ.get("RECONCILE") == "true")
+                   os.environ.get("RECONCILE") == "true", load_sizes(Path(os.environ.get("SIZES", "sizes.json"))))
         out = "\n".join(f"{k}={json.dumps(v) if k in ('regions', 'include') else v}" for k, v in m.items())
         print(out)
         if path := os.environ.get("GITHUB_OUTPUT"):
@@ -230,6 +266,11 @@ def main(argv: list[str]) -> int:
         if path := os.environ.get("GITHUB_STEP_SUMMARY"):
             with open(path, "a", encoding="utf-8") as f:
                 f.write(text + "\n")
+        return 0
+    if argv[:1] == ["sizes"] and len(argv) == 3:
+        stats = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(Path(argv[1]).rglob("stats-*.json"))]
+        out = Path(argv[2])
+        out.write_text(json.dumps(update_sizes(stats, load_sizes(out)), sort_keys=True), encoding="utf-8")
         return 0
     if argv[:1] == ["simulate"]:
         if len(argv) > 1:

@@ -46,3 +46,4 @@ graphify-out/
 
 # Report dei test di sicurezza dinamici (Strix): descrivono falle, il repo e pubblico
 strix_runs/
+tools/importer/sizes.json

@@ -77,6 +77,12 @@ jobs:
       - run: python -m pytest -q tests
       # Regioni con almeno una fonte attiva e quote per job: le soglie giornaliere si dividono tra i job.
       # Ogni regione si riconcilia con Firestore in un giorno fisso della settimana (ci_report.reconcile_days).
+      # Eventi per regione dell'ultimo import (scritti dal job cleanup): fissano il minimo di letture di ogni job.
+      - uses: actions/cache/restore@v5
+        with:
+          path: tools/importer/sizes.json
+          key: importer-sizes-${{ github.run_id }}
+          restore-keys: importer-sizes-
       - id: matrix
         env:
           ONLY: ${{ inputs.regione }}
@@ -162,3 +168,10 @@ jobs:
       # Un solo riepilogo: eventi per regione, letture, scritture e cancellazioni rispetto alle quote.
       - name: Riepilogo
         run: python ci_report.py summary stats cleanup.json
+      # Aggiorna le dimensioni per regione (le regioni fallite mantengono il valore precedente); la cache si salva a fine job.
+      - uses: actions/cache@v5
+        with:
+          path: tools/importer/sizes.json
+          key: importer-sizes-${{ github.run_id }}
+          restore-keys: importer-sizes-
+      - run: python ci_report.py sizes stats sizes.json

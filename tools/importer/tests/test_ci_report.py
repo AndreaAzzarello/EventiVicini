@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
-from ci_report import BUDGET, QUOTA, matrix, reconcile_days, simulate, summary  # noqa: E402
+from ci_report import BUDGET, QUOTA, load_sizes, matrix, read_floor, reconcile_days, simulate, summary, update_sizes  # noqa: E402
 
 
 def row(regione, stato="attivo"):
@@ -64,3 +64,48 @@ def test_simulazione_italia_nessun_giorno_oltre_l_80_per_cento():
     sim = simulate(regions)
     assert len(sim["days"]) == 7 and all(t["worst"] <= 0.8 for t in sim["days"])
     assert all(t["reads"] <= BUDGET["reads"] for t in sim["days"]) and QUOTA["reads"] > BUDGET["reads"]
+
+
+# Run del 4/11/2026: 978 fonti attive, Piemonte (116) si riconciliava, Trentino-Alto Adige (88 fonti, ~1.800 eventi) ebbe 2.102 letture
+# ma ne stimava 2.274 (manifest scaduto: rilettura dei suoi documenti) e non scrisse nulla.
+OGGI = {"trentino-alto-adige": 88, "piemonte": 116, "lombardia": 270} | {f"altra-{i:02d}": w for i, w in enumerate([30] * 16 + [24])}
+
+
+def giorno_piemonte():
+    return reconcile_days(OGGI)["piemonte"]
+
+
+def test_caso_trentino_budget_per_fonti_non_basta():
+    m = matrix([row(r) for r, w in OGGI.items() for _ in range(w)], weekday=giorno_piemonte())
+    budget = {j["region"]: j["reads"] for j in m["include"]}
+    assert 1_900 < budget["trentino-alto-adige"] < 2_274  # ~2.102 come nel run: la stima 2.274 lo supera
+
+
+def test_minimo_per_regione_dagli_eventi_dell_ultimo_import():
+    rows = [row(r) for r, w in OGGI.items() for _ in range(w)]
+    m = matrix(rows, weekday=giorno_piemonte(), sizes={"trentino-alto-adige": 1_773, "lombardia": 1_575})
+    budget = {j["region"]: j["reads"] for j in m["include"]}
+    assert budget["trentino-alto-adige"] >= 2_274 and budget["lombardia"] >= read_floor(1_575)
+    assert sum(budget.values()) <= BUDGET["reads"]  # i minimi sono tolti dalla quota, non aggiunti
+    assert all(j["reconcile"] for j in m["include"] if j["region"] == "piemonte")
+
+
+def test_minimi_troppo_grandi_o_cache_assente_tornano_alla_proporzione():
+    rows = [row(r) for r, w in OGGI.items() for _ in range(w)]
+    base = matrix(rows)["include"]
+    assert matrix(rows, sizes={})["include"] == base and matrix(rows, sizes=None)["include"] == base
+    enormi = matrix(rows, sizes={"trentino-alto-adige": 60_000})["include"]
+    assert enormi == base and sum(j["reads"] for j in enormi) <= BUDGET["reads"]
+    una = matrix(rows, only="trentino-alto-adige", sizes={"trentino-alto-adige": 1_773})["include"]
+    assert una[0]["reads"] == BUDGET["reads"]  # rilancio di una regione sola: tutto il budget
+
+
+def test_dimensioni_aggiornate_dalle_statistiche_e_cache_illeggibile(tmp_path):
+    assert update_sizes([{"region": "lombardia", "events": 1_575}, {"region": "x", "events": 0}, {}], {"veneto": 834, "x": 9}) == {
+        "veneto": 834, "x": 9, "lombardia": 1_575}
+    f = tmp_path / "sizes.json"
+    assert load_sizes(f) == {}
+    f.write_text("non json", encoding="utf-8")
+    assert load_sizes(f) == {}
+    f.write_text('{"veneto": 834}', encoding="utf-8")
+    assert load_sizes(f) == {"veneto": 834}
