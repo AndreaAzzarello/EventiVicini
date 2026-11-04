@@ -164,7 +164,7 @@ jobs:
       - uses: actions/download-artifact@v7
         with:
           pattern: stats-*
-          path: stats
+          path: tools/importer/stats  # i run girano in tools/importer, download-artifact parte dalla radice
       # Un solo riepilogo: eventi per regione, letture, scritture e cancellazioni rispetto alle quote.
       - name: Riepilogo
         run: python ci_report.py summary stats cleanup.json
