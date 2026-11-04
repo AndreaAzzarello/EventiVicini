@@ -6,6 +6,8 @@ Regole:
   eventi manual e user finiti da più di 30 giorni                → eliminati
   proposte rifiutate da più di 90 giorni, approvate da più di 30 → eliminate
   segnalazioni decise (rimosse o respinte) da più di 180 giorni   → eliminate; le aperte restano
+  contatori limits/{uid} di account eliminati                    → eliminati (l'uid non si tiene oltre l'account)
+  contatori limits/{uid} senza preferiti e fermi da più di 30 gg → eliminati (con preferiti restano: servono al tetto di 200)
 
 Uso:  python cleanup.py --dry-run        # conta senza eliminare
       python cleanup.py                  # elimina, al massimo --max-deletes documenti per giro
@@ -17,6 +19,7 @@ import argparse
 import json
 import logging
 import sys
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -28,6 +31,7 @@ DAY = 86_400_000
 SCRAPER_AFTER, OTHER_AFTER, REMOVED_AFTER = 7 * DAY, 30 * DAY, 30 * DAY
 APPROVED_AFTER, REJECTED_AFTER = 30 * DAY, 90 * DAY
 REPORT_AFTER = 180 * DAY  # segnalazioni DSA chiuse: tracciabilità delle decisioni, poi via (anche l'email di chi ha segnalato)
+LIMITS_IDLE_AFTER = 30 * DAY  # contatori dei preferiti (limits/{uid}): solo numeri, ma l'uid è pseudonimo e non si tiene per sempre
 MAX_DELETES = 15_000  # quota Spark 20.000 cancellazioni al giorno, con margine
 
 
@@ -58,8 +62,27 @@ def expired_reports(docs: dict[str, dict], now_ms: int) -> list[str]:
             and r < now_ms - REPORT_AFTER]
 
 
-def run(db, now: datetime, dry_run: bool = False, max_deletes: int = MAX_DELETES) -> dict:
-    """Legge solo i candidati (query a campo singolo con proiezione) ed elimina a lotti, fino a max_deletes."""
+def expired_limits(docs: dict[str, dict], gone: set[str], now_ms: int) -> list[str]:
+    """Contatori da eliminare: account che non esiste più, oppure fermi da più di 30 giorni e senza preferiti (favCount 0).
+    Con preferiti il documento resta, altrimenti il tetto di 200 ripartirebbe da zero."""
+    return [i for i, d in docs.items()
+            if i in gone or ((a := ms(d.get("favAt"))) is not None and a < now_ms - LIMITS_IDLE_AFTER and not d.get("favCount"))]
+
+
+def missing_accounts(uids: list[str]) -> set[str]:
+    """Uid che non esistono più in Firebase Authentication (get_users accetta 100 identificatori per chiamata)."""
+    from firebase_admin import auth
+
+    gone: set[str] = set()
+    for i in range(0, len(uids), 100):
+        gone |= {u.uid for u in auth.get_users([auth.UidIdentifier(x) for x in uids[i:i + 100]]).not_found}
+    return gone
+
+
+def run(db, now: datetime, dry_run: bool = False, max_deletes: int = MAX_DELETES,
+        accounts: Callable[[list[str]], set[str]] | None = None) -> dict:
+    """Legge solo i candidati (query a campo singolo con proiezione) ed elimina a lotti, fino a max_deletes.
+    `accounts` dice quali uid non esistono più in Authentication; senza, si eliminano solo i contatori fermi da 30 giorni."""
     from google.cloud.firestore_v1.base_query import FieldFilter
 
     now_ms = int(now.timestamp() * 1000)
@@ -80,9 +103,21 @@ def run(db, now: datetime, dry_run: bool = False, max_deletes: int = MAX_DELETES
     for d in reports.where(filter=FieldFilter("decidedAt", "<", now - timedelta(milliseconds=REPORT_AFTER))).select(["status", "decidedAt"]).stream():
         reads += 1
         report_docs[d.id] = d.to_dict() or {}
+    limits = db.collection("limits")
+    limit_docs: dict[str, dict] = {}
+    for d in limits.select(["favAt", "favCount"]).stream():  # una lettura per utente che ha usato i preferiti
+        reads += 1
+        limit_docs[d.id] = d.to_dict() or {}
+    gone: set[str] = set()
+    if accounts and limit_docs:
+        try:
+            gone = accounts(list(limit_docs))
+        except Exception as e:  # Authentication non risponde: resta la sola regola dei 30 giorni
+            log.warning("Controllo degli account non riuscito (%s): salto i contatori di account eliminati", type(e).__name__)
     targets = [events.document(i) for i in expired_events(docs, now_ms)]
     targets += [subs.document(i) for i in expired_submissions(sub_docs, now_ms)]
     targets += [reports.document(i) for i in expired_reports(report_docs, now_ms)]
+    targets += [limits.document(i) for i in expired_limits(limit_docs, gone, now_ms)]
     due = len(targets)
     if due > max_deletes:
         log.warning("Da eliminare %d documenti, oltre il tetto di %d: il resto al prossimo giro", due, max_deletes)
@@ -104,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
     logsafe.setup()
     from db import client
 
-    stats = run(client(), datetime.now(timezone.utc), args.dry_run, args.max_deletes)
+    stats = run(client(), datetime.now(timezone.utc), args.dry_run, args.max_deletes, missing_accounts)
     if args.stats_out:
         args.stats_out.write_text(json.dumps(stats), encoding="utf-8")
     return 0

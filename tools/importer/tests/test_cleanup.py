@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 sys.path.insert(0, str(Path(__file__).parent))
-from cleanup import DAY, expired_events, expired_reports, expired_submissions, run  # noqa: E402
+from cleanup import DAY, expired_events, expired_limits, expired_reports, expired_submissions, run  # noqa: E402
 from fake_firestore import FakeFirestore  # noqa: E402
 
 NOW = datetime(2026, 12, 1, 6, 0, tzinfo=timezone.utc)
@@ -73,3 +73,27 @@ def test_run_elimina_le_segnalazioni_vecchie_e_non_le_aperte():
                         "reports/open": {"status": "open"}})
     assert run(db, NOW)["deleted"] == 1
     assert set(db.data) == {"reports/new", "reports/open"}
+
+
+def lim(idle_days, favs=0):
+    return {"favAt": NOW - timedelta(days=idle_days), "favCount": favs, "favChanges": 3}
+
+
+def test_contatori_limits_di_account_eliminati_o_fermi_da_30_giorni_senza_preferiti():
+    docs = {"gone": lim(1, 5), "idle0": lim(31), "idle_favs": lim(90, 7), "recent": lim(2), "limite": lim(30)}
+    assert expired_limits(docs, {"gone"}, NOW_MS) == ["gone", "idle0"]  # con preferiti restano (tetto di 200), a 30 giorni esatti pure
+
+
+def test_run_elimina_i_contatori_e_il_controllo_account_e_facoltativo():
+    data = {"limits/gone": lim(1, 5), "limits/idle0": lim(40), "limits/idle_favs": lim(40, 3), "limits/ok": lim(1)}
+    db = FakeFirestore(dict(data))
+    assert run(db, NOW, accounts=lambda uids: {"gone"} & set(uids))["deleted"] == 2
+    assert set(db.data) == {"limits/idle_favs", "limits/ok"}
+    db2 = FakeFirestore(dict(data))  # senza controllo account: solo la regola dei 30 giorni
+    assert run(db2, NOW)["deleted"] == 1 and "limits/gone" in db2.data
+    db3 = FakeFirestore(dict(data))  # Authentication non risponde: nessun errore, nessun account considerato eliminato
+    def down(_):
+        raise RuntimeError("auth giù")
+    assert run(db3, NOW, accounts=down)["deleted"] == 1 and "limits/gone" in db3.data
+    db4 = FakeFirestore(dict(data))
+    assert run(db4, NOW, dry_run=True, accounts=lambda u: {"gone"})["due"] == 2 and db4.writes == 0
