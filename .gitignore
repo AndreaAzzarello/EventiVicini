@@ -43,3 +43,6 @@ web/.review/
 
 # Grafo Graphify: locale, rigenerato dall'hook post-commit (contiene percorsi assoluti in .graphify_build_state.json)
 graphify-out/
+
+# Report dei test di sicurezza dinamici (Strix): descrivono falle, il repo e pubblico
+strix_runs/
