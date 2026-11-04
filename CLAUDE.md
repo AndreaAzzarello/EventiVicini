@@ -29,6 +29,7 @@ Agenda gratuita di eventi pubblici locali (partita da Modena). Dettagli completi
 - In `web/` passano `npm run check`, `npm run lint`, `npm test` e `npm run build`. Se tocchi le regole passa anche `npm test` in `firebase/`; se tocchi l'importer, `python -m pytest -q tests`.
 - Per il frontend controlla a 360 px (vedi `DESIGN.md`).
 - Dichiara se non hai eseguito `test:e2e`, il `--dry-run` dell'importer o il controllo visivo. Un import reale lo esegui solo con la mia conferma.
+- Prima di ogni rilascio importante: scansione Strix sull'ambiente locale con emulatori; mai sulla produzione.
 
 ## Cartelle importanti
 `web/src/lib/server/firestore.ts` (letture REST; legge i bundle `bundles/*` scritti da `tools/importer/bundles.py`, ripiega sulle query per cella), `web/src/lib/styles/`, `firebase/firestore.rules`, `tools/importer/sources/*.csv` (registro fonti), `.github/workflows/`.
