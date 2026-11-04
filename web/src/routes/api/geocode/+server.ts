@@ -1,4 +1,4 @@
-import { error, json } from '@sveltejs/kit';
+import { error, isHttpError, json } from '@sveltejs/kit';
 import { placeFromNominatim } from '$lib/geo';
 import { siteUrl } from '$lib/config';
 import type { GeoResult } from '$lib/geocode';
@@ -54,13 +54,19 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 		params.set('zoom', '14');
 	} else error(400, 'Parametri mancanti');
 
-	const res = await throttle(() =>
-		fetch(`${NOMINATIM}/${endpoint}?${params}`, {
-			headers: { 'User-Agent': USER_AGENT, Referer: siteUrl() }
-		})
-	);
-	if (!res.ok) error(502, 'Geocoding non disponibile');
-	const body = (await res.json()) as Hit[] | Hit | { error: string };
+	let body: Hit[] | Hit | { error: string };
+	try {
+		const res = await throttle(() =>
+			fetch(`${NOMINATIM}/${endpoint}?${params}`, {
+				headers: { 'User-Agent': USER_AGENT, Referer: siteUrl() }
+			})
+		);
+		if (!res.ok) error(502, 'Geocoding non disponibile');
+		body = (await res.json()) as Hit[] | Hit | { error: string };
+	} catch (e) {
+		if (isHttpError(e)) throw e; // 429 del limite interno e 502 di sopra restano quelli
+		error(502, 'Geocoding non disponibile'); // rete assente, timeout o risposta non JSON: Nominatim non è raggiungibile
+	}
 	const hits = Array.isArray(body) ? body : 'lat' in body ? [body] : [];
 	const results: GeoResult[] = hits.map((h) => ({
 		label: label(h, kind),
