@@ -19,7 +19,7 @@ const db = (uid) => env.authenticatedContext(uid).firestore();
 const seed = (fn) => env.withSecurityRulesDisabled((ctx) => fn(ctx.firestore()));
 const newUser = (uid) => seed((fs) => setDoc(doc(fs, 'users', uid), { name: uid, city: '', createdAt: new Date(), pendingCount: 0 }));
 /** Il giorno dopo: sposta all'indietro l'ultima modifica registrata, come farebbe il passare del tempo. */
-const yesterday = (uid) => seed((fs) => updateDoc(doc(fs, 'users', uid), { favAt: Timestamp.fromMillis(Date.now() - 2 * 86_400_000) }));
+const yesterday = (uid) => seed((fs) => updateDoc(doc(fs, 'limits', uid), { favAt: Timestamp.fromMillis(Date.now() - 2 * 86_400_000) }));
 
 // Come il client: proposta + contatore nello stesso batch.
 function submit(fs, uid, sid) {
@@ -34,11 +34,11 @@ function withdraw(fs, uid, sid) {
   b.update(doc(fs, 'users', uid), { pendingCount: increment(-1), lastSubmissionId: sid });
   return b.commit();
 }
-// Come il client: un preferito e i contatori del profilo nello stesso batch.
+// Come il client: un preferito e i contatori (limits/{uid}) nello stesso batch.
 function addFav(fs, uid, id, count, changes) {
   const b = writeBatch(fs);
   b.set(doc(fs, `users/${uid}/favorites/${id}`), { addedAt: Date.now() });
-  b.update(doc(fs, 'users', uid), { favCount: count, favChanges: changes, favAt: serverTimestamp(), lastFavId: id });
+  b.set(doc(fs, 'limits', uid), { favCount: count, favChanges: changes, favAt: serverTimestamp(), lastFavId: id });
   return b.commit();
 }
 
@@ -87,16 +87,16 @@ describe('100 modifiche al giorno e 200 preferiti, un preferito alla volta', () 
 });
 
 describe('azzerare i contatori cancellando e ricreando il profilo', () => {
-  // Il profilo si cancella con 0 proposte in attesa e si ricrea con i contatori vuoti: se i preferiti restano
-  // (sono una sottocollezione), il tetto di 200 e le 100 modifiche al giorno ripartirebbero da zero.
-  // FALLA NOTA (verificata il 4/11/2026): le regole oggi lo permettono, quindi il test è `it.fails`. Quando si corregge la regola
-  // (es. users/{uid} non cancellabile, o contatori non azzerabili alla ricreazione) il test passa da solo e il suite
-  // segnala che `it.fails` va tolto.
-  it.fails('dopo 100 modifiche oggi, cancellare e ricreare il profilo non permette altre 100 modifiche', async () => {
+  // Il profilo si cancella con 0 proposte in attesa e si ricrea vuoto, ma i contatori stanno in limits/{uid}, che il client
+  // non cancella: tetto di 200 e 100 modifiche al giorno non ripartono da zero. (Prima di limits/{uid} questo test
+  // era it.fails: la falla è stata verificata il 4/11/2026.)
+  it('dopo 100 modifiche oggi, cancellare e ricreare il profilo non permette altre modifiche', async () => {
     const a = db('alice');
     for (let i = 1; i <= 100; i++) await assertSucceeds(addFav(a, 'alice', `e${i}`, i, i));
     await assertSucceeds(deleteDoc(doc(a, 'users', 'alice')));
     await assertSucceeds(setDoc(doc(a, 'users', 'alice'), { createdAt: serverTimestamp(), pendingCount: 0 }));
-    await assertFails(addFav(a, 'alice', 'x1', 1, 1));
+    await assertFails(addFav(a, 'alice', 'x1', 1, 1)); // contatori da zero: rifiutato
+    await assertFails(addFav(a, 'alice', 'x1', 101, 101)); // oltre il tetto del giorno
+    await assertFails(deleteDoc(doc(a, 'limits', 'alice')));
   });
 });

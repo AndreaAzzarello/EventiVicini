@@ -204,7 +204,7 @@ class Favorites {
 		const snap = await fs.getDocs(fs.collection(db, 'users', uid, 'favorites'));
 		const remoteIds = snap.docs.map((d) => d.id);
 		this.#remote = { fb, uid };
-		this.#counters = countersOf(profile);
+		this.#counters = await this.#readCounters(fb, uid, profile);
 		const { toUpload } = mergeFavorites(readJson<string[]>(KEYS.favorites, []), remoteIds);
 		const fits = toUpload.slice(0, Math.max(0, MAX_FAVORITES - remoteIds.length));
 		this.#setPending(fits);
@@ -230,6 +230,14 @@ class Favorites {
 		return run;
 	}
 
+	/** Contatori da limits/{uid}; per chi è nato prima, quelli nel profilo (la prima modifica crea limits). */
+	async #readCounters(fb: Firebase, uid: string, profile?: unknown): Promise<FavCounters> {
+		const { fs, db } = fb;
+		const lim = await fs.getDoc(fs.doc(db, 'limits', uid));
+		if (lim.exists()) return countersOf(lim.data());
+		return countersOf(profile ?? (await fs.getDoc(fs.doc(db, 'users', uid))).data());
+	}
+
 	/** Una modifica (preferito + contatori nello stesso batch). false = limite del giorno raggiunto, nulla di scritto. */
 	async #change(op: 'add' | 'remove', id: string): Promise<boolean> {
 		const { fb, uid } = this.#remote!;
@@ -242,15 +250,15 @@ class Favorites {
 			const ref = fs.doc(db, 'users', uid, 'favorites', id);
 			if (op === 'add') batch.set(ref, { addedAt: now });
 			else batch.delete(ref);
-			batch.update(fs.doc(db, 'users', uid), { ...next, favAt: fs.serverTimestamp(), lastFavId: id });
+			batch.set(fs.doc(db, 'limits', uid), { ...next, favAt: fs.serverTimestamp(), lastFavId: id });
 			try {
 				await batch.commit();
 				this.#counters = { count: next.favCount, changes: next.favChanges, at: now };
 				return true;
 			} catch (e) {
 				if ((e as { code?: string }).code !== 'permission-denied' || attempt) throw e;
-				// Contatori non aggiornati (altro dispositivo, orologio sfasato): si rileggono dal profilo e si riprova una volta.
-				this.#counters = countersOf((await fs.getDoc(fs.doc(db, 'users', uid))).data());
+				// Contatori non aggiornati (altro dispositivo, orologio sfasato): si rileggono e si riprova una volta.
+				this.#counters = await this.#readCounters(fb, uid);
 			}
 		}
 		return false;

@@ -93,6 +93,10 @@ export async function deleteAccountAndData() {
 
 	const subs = await fs.getDocs(fs.query(fs.collection(db, 'submissions'), fs.where('ownerId', '==', uid)));
 	const userRef = fs.doc(db, 'users', uid);
+	// limits/{uid} resta (il client non lo cancella, così il limite del giorno non si azzera ricreando il profilo): qui si
+	// porta solo il conteggio a 0; lo elimina cleanup.py quando l'account di accesso non esiste più.
+	const limitsRef = fs.doc(db, 'limits', uid);
+	const hasLimits = (await fs.getDoc(limitsRef)).exists();
 	for (const s of subs.docs) {
 		const b = fs.writeBatch(db);
 		b.delete(s.ref);
@@ -106,9 +110,13 @@ export async function deleteAccountAndData() {
 		const b = fs.writeBatch(db);
 		for (const d of favs.docs) b.delete(d.ref);
 		b.delete(userRef);
+		if (hasLimits) b.update(limitsRef, { favCount: 0 });
 		await b.commit();
 	} else {
-		await fs.deleteDoc(userRef);
+		const first = fs.writeBatch(db);
+		first.delete(userRef);
+		if (hasLimits) first.update(limitsRef, { favCount: 0 });
+		await first.commit();
 		for (let i = 0; i < favs.docs.length; i += 450) {
 			const b = fs.writeBatch(db);
 			for (const d of favs.docs.slice(i, i + 450)) b.delete(d.ref);

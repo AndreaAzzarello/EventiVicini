@@ -29,8 +29,9 @@ export async function buildExport(now = Date.now()): Promise<object> {
 	const { fs, db, auth } = await session.start();
 	const user = auth.currentUser;
 	if (!user) throw new Error('not-signed-in');
-	const [profile, favs, subs] = await Promise.all([
+	const [profile, limits, favs, subs] = await Promise.all([
 		fs.getDoc(fs.doc(db, 'users', user.uid)),
+		fs.getDoc(fs.doc(db, 'limits', user.uid)),
 		fs.getDocs(fs.collection(db, 'users', user.uid, 'favorites')),
 		fs.getDocs(fs.query(fs.collection(db, 'submissions'), fs.where('ownerId', '==', user.uid)))
 	]);
@@ -45,6 +46,7 @@ export async function buildExport(now = Date.now()): Promise<object> {
 			creatoIl: user.metadata.creationTime
 		},
 		profilo: profile.exists() ? plain(profile.data()) : null,
+		limiti: limits.exists() ? plain(limits.data()) : null,
 		preferiti: favs.docs.map((d) => ({ eventId: d.id, ...(plain(d.data()) as object) })),
 		proposte: subs.docs.map((d) => ({ id: d.id, ...(plain(d.data()) as object) })),
 		suQuestoDispositivo: localKeys()

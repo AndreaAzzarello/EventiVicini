@@ -35,7 +35,7 @@
 			<strong>Account (facoltativo).</strong> Se accedi con Google o con un link via email trattiamo: identificativo
 				dell’account (uid), nome, indirizzo email, città preferita se la indichi, la zona che scegli per cercare eventi
 				(nome e coordinate del comune o della zona, mai la tua posizione esatta, così la ritrovi su un altro dispositivo),
-				data di creazione, i tuoi preferiti (con un contatore e la data dell’ultima modifica, che servono a limitare gli abusi: al massimo 200 preferiti e 100 modifiche al giorno) e le proposte di evento che invii, con il loro stato.
+				data di creazione, i tuoi preferiti (con un contatore e la data dell’ultima modifica, che servono a limitare gli abusi: al massimo 200 preferiti e 100 modifiche al giorno; sono salvati in un documento separato, con il solo identificativo dell’account e senza altri dati personali) e le proposte di evento che invii, con il loro stato.
 		</li>
 		<li>
 			<strong>Proposte di evento.</strong> I dati dell’evento (titolo, luogo, date, link) vengono pubblicati se approvati.
@@ -69,6 +69,7 @@
 	<ul>
 		<li>Dati dell’account e preferiti: finché non elimini l’account. Puoi farlo in ogni momento da <a href="/account">Il mio account</a> → “Elimina account e dati” (il pulsante è sempre disponibile): cancelliamo profilo, preferiti, proposte e l’account di accesso. In alternativa puoi chiederlo scrivendo{#if data.email} a <a href="mailto:{data.email}">{data.email}</a>{:else} al titolare{/if}.</li>
 			<li>Proposte già esaminate: le eliminiamo in automatico, quelle rifiutate dopo 90 giorni e quelle approvate dopo 30 giorni dalla revisione; quelle ancora in attesa restano finché non le ritiri o elimini l’account.</li>
+		<li>Contatori dei preferiti (identificativo dell’account, numero di preferiti, modifiche del giorno e data dell’ultima): li eliminiamo in automatico quando l’account non esiste più, oppure dopo 30 giorni dall’ultima modifica se non hai preferiti.</li>
 		<li>Segnalazioni: quelle aperte restano finché non le esaminiamo; quelle decise, con la motivazione, le eliminiamo in automatico dopo 180 giorni dalla decisione.</li>
 		<li>Gli eventi approvati restano pubblicati come contenuto dell’agenda, senza alcun riferimento visibile a chi li ha proposti.</li>
 		<li>Dati sul tuo dispositivo: finché non li cancelli dalle impostazioni del browser.</li>

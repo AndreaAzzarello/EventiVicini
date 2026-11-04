@@ -32,13 +32,13 @@ function submit(fs, uid, sid, data = {}, counterDelta = 1) {
   return b.commit();
 }
 
-// Preferito aggiunto o tolto come fa il client: un solo preferito + i contatori del profilo nello stesso batch.
+// Preferito aggiunto o tolto come fa il client: un solo preferito + i contatori (limits/{uid}) nello stesso batch.
 function fav(fs, uid, id, { op = 'add', count, changes, addedAt = Date.now(), counters = true } = {}) {
   const b = writeBatch(fs);
   const ref = doc(fs, `users/${uid}/favorites/${id}`);
   if (op === 'add') b.set(ref, { addedAt });
   else b.delete(ref);
-  if (counters) b.update(doc(fs, 'users', uid), { favCount: count, favChanges: changes, favAt: serverTimestamp(), lastFavId: id });
+  if (counters) b.set(doc(fs, 'limits', uid), { favCount: count, favChanges: changes, favAt: serverTimestamp(), lastFavId: id });
   return b.commit();
 }
 
@@ -237,7 +237,7 @@ describe('users', () => {
 });
 
 describe('users: preferiti con tetto e limite giornaliero', () => {
-  const profile = (over) => seed((fs) => updateDoc(doc(fs, 'users', 'alice'), over));
+  const profile = (over) => seed((fs) => setDoc(doc(fs, 'limits', 'alice'), { favCount: 0, favChanges: 0, favAt: Timestamp.fromMillis(0), lastFavId: 'x', ...over }));
   let fsA; // una sola istanza per test: documenti e batch devono venire dalla stessa
   beforeEach(() => { fsA = db('alice'); });
   const A = () => fsA;
@@ -245,19 +245,20 @@ describe('users: preferiti con tetto e limite giornaliero', () => {
   it('senza contatore nello stesso batch è rifiutato (e il contatore da solo pure)', async () => {
     await assertFails(fav(A(), 'alice', 'e1', { count: 1, changes: 1, counters: false }));
     await assertFails(setDoc(doc(A(), 'users/alice/favorites/e1'), { addedAt: 1 }));
-    await assertFails(updateDoc(doc(A(), 'users', 'alice'), { favCount: 1, favChanges: 1, favAt: serverTimestamp(), lastFavId: 'e1' }));
+    await assertFails(setDoc(doc(A(), 'limits', 'alice'), { favCount: 1, favChanges: 1, favAt: serverTimestamp(), lastFavId: 'e1' }));
   });
   it('contatori a mano o incoerenti sono rifiutati', async () => {
     await assertFails(fav(A(), 'alice', 'e1', { count: 5, changes: 1 })); // salto di conteggio
     await assertFails(fav(A(), 'alice', 'e1', { count: 1, changes: 0 })); // modifica non contata
     await assertFails(fav(A(), 'alice', 'e1', { count: 1, changes: 7 })); // changes arbitrario
     await assertFails(updateDoc(doc(A(), 'users', 'alice'), { favCount: 5 }));
+    await assertFails(updateDoc(doc(A(), 'users', 'alice'), { favCount: 1, favChanges: 1, favAt: serverTimestamp(), lastFavId: 'e1' })); // i contatori non stanno più nel profilo
   });
   it('due preferiti nello stesso batch: rifiutato', async () => {
     const b = writeBatch(A());
     b.set(doc(A(), 'users/alice/favorites/e1'), { addedAt: 1 });
     b.set(doc(A(), 'users/alice/favorites/e2'), { addedAt: 1 });
-    b.update(doc(A(), 'users', 'alice'), { favCount: 1, favChanges: 1, favAt: serverTimestamp(), lastFavId: 'e1' });
+    b.set(doc(A(), 'limits', 'alice'), { favCount: 1, favChanges: 1, favAt: serverTimestamp(), lastFavId: 'e1' });
     await assertFails(b.commit());
   });
   it('un preferito esistente non si aggiorna', async () => {
@@ -313,8 +314,56 @@ describe('users: preferiti con tetto e limite giornaliero', () => {
     b.delete(doc(A(), 'users', 'alice'));
     await assertSucceeds(b.commit());
   });
-  it('altri utenti non toccano i contatori', () =>
-    assertFails(updateDoc(doc(db('bob'), 'users', 'alice'), { favCount: 1, favChanges: 1, favAt: serverTimestamp(), lastFavId: 'e1' })));
+  it('altri utenti non toccano né leggono i contatori', async () => {
+    await profile({ favCount: 3, favChanges: 3, favAt: Timestamp.now() });
+    await assertFails(setDoc(doc(db('bob'), 'limits', 'alice'), { favCount: 1, favChanges: 1, favAt: serverTimestamp(), lastFavId: 'e1' }));
+    await assertFails(getDoc(doc(db('bob'), 'limits', 'alice')));
+    await assertFails(getDoc(doc(db(), 'limits', 'alice')));
+    await assertFails(getDoc(doc(db('adm', ADMIN), 'limits', 'alice')));
+    await assertSucceeds(getDoc(doc(A(), 'limits', 'alice')));
+  });
+  it('il documento dei contatori non si cancella dal client, nemmeno con il profilo', async () => {
+    await profile({ favCount: 3, favChanges: 3, favAt: Timestamp.now() });
+    await assertFails(deleteDoc(doc(A(), 'limits', 'alice')));
+    const b = writeBatch(A());
+    b.delete(doc(A(), 'limits', 'alice'));
+    b.delete(doc(A(), 'users', 'alice'));
+    await assertFails(b.commit());
+  });
+  it('utenti precedenti: senza limits valgono i contatori del profilo, la prima modifica crea il documento', async () => {
+    await seed((fs) => updateDoc(doc(fs, 'users', 'alice'), { favCount: 5, favChanges: 99, favAt: Timestamp.now(), lastFavId: 'x' }));
+    await assertFails(fav(A(), 'alice', 'e1', { count: 1, changes: 1 })); // ripartire da zero non è permesso
+    await assertSucceeds(fav(A(), 'alice', 'e1', { count: 6, changes: 100 }));
+    await assertFails(fav(A(), 'alice', 'e2', { count: 7, changes: 101 }));
+  });
+  it('nessun profilo precedente e nessun limits: la prima volta parte da zero', () =>
+    assertSucceeds(fav(A(), 'alice', 'e1', { count: 1, changes: 1 })));
+  it('"Elimina account e dati": il conteggio torna a 0 ma il limite del giorno resta', async () => {
+    await profile({ favCount: 2, favChanges: 40, favAt: Timestamp.now(), lastFavId: 'e2' });
+    await seed(async (fs) => {
+      await setDoc(doc(fs, 'users/alice/favorites/e1'), { addedAt: 1 });
+      await setDoc(doc(fs, 'users/alice/favorites/e2'), { addedAt: 1 });
+    });
+    await assertFails(updateDoc(doc(A(), 'limits', 'alice'), { favCount: 0 })); // da solo no: servono preferiti e profilo via
+    const b = writeBatch(A());
+    b.delete(doc(A(), 'users/alice/favorites/e1'));
+    b.delete(doc(A(), 'users/alice/favorites/e2'));
+    b.delete(doc(A(), 'users', 'alice'));
+    b.update(doc(A(), 'limits', 'alice'), { favCount: 0 });
+    await assertSucceeds(b.commit());
+    await assertSucceeds(setDoc(doc(A(), 'users', 'alice'), { createdAt: serverTimestamp(), pendingCount: 0 }));
+    await assertFails(fav(A(), 'alice', 'n1', { count: 1, changes: 1 })); // il giorno non riparte
+    await assertSucceeds(fav(A(), 'alice', 'n1', { count: 1, changes: 41 }));
+  });
+  it("l'erasure non permette di cambiare favChanges o di mettere un conteggio diverso da 0", async () => {
+    await profile({ favCount: 2, favChanges: 40, favAt: Timestamp.now(), lastFavId: 'e2' });
+    for (const over of [{ favChanges: 0 }, { favCount: 1 }, { favAt: serverTimestamp() }]) {
+      const b = writeBatch(A());
+      b.delete(doc(A(), 'users', 'alice'));
+      b.update(doc(A(), 'limits', 'alice'), { favCount: 0, ...over });
+      await assertFails(b.commit());
+    }
+  });
 });
 
 describe('users (resto)', () => {

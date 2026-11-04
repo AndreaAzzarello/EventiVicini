@@ -64,17 +64,17 @@ test('preferito senza account propone il login, che unisce i preferiti', async (
 	await expect(page.getByRole('link', { name: 'Jazz in Piazza Grande' })).toBeVisible();
 	const uid = await uidOf(page);
 	await expect.poll(() => getDocument(`users/${uid}/favorites/seedJazz`)).not.toBeNull();
-	// La copia locale viene svuotata dopo l'unione, e il profilo conta la modifica (le regole lo pretendono).
+	// La copia locale viene svuotata dopo l'unione, e limits/{uid} conta la modifica (le regole lo pretendono).
 	await expect.poll(() => page.evaluate(() => localStorage.getItem('ev:favorites'))).toBeNull();
-	const profile = await getDocument(`users/${uid}`);
-	expect(profile!.fields.favCount).toEqual({ integerValue: '1' });
-	expect(profile!.fields.favChanges).toEqual({ integerValue: '1' });
+	const limits = await getDocument(`limits/${uid}`);
+	expect(limits!.fields.favCount).toEqual({ integerValue: '1' });
+	expect(limits!.fields.favChanges).toEqual({ integerValue: '1' });
 });
 
 test('preferiti: oltre le 100 modifiche del giorno il preferito resta sul dispositivo, con un avviso', async ({ page }) => {
 	await signInByEmail(page, 'limite@example.org', '/');
 	const uid = await uidOf(page);
-	await patchDocument(`users/${uid}`, { favCount: { integerValue: '5' }, favChanges: { integerValue: '100' }, favAt: { timestampValue: new Date().toISOString() } });
+	await patchDocument(`limits/${uid}`, { favCount: { integerValue: '5' }, favChanges: { integerValue: '100' }, favAt: { timestampValue: new Date().toISOString() }, lastFavId: { stringValue: 'x' } });
 	await page.reload();
 	await page.goto('/eventi/mercato-dellantiquariato-seedMercato');
 	await expect(page.getByRole('link', { name: 'Account' })).toBeVisible(); // sessione caricata: altrimenti il click va solo in locale
