@@ -248,6 +248,7 @@ if (process.env.SEED_USERS) {
 	const specs = [
 		{ key: 'userA', email: 'utente.a@example.test' },
 		{ key: 'userB', email: 'utente.b@example.test' },
+		{ key: 'userNonVerificato', email: 'utente.nv@example.test', verify: false }, // email non verificata: le regole (isAdmin, ecc.) non devono fidarsi
 		{ key: 'admin', email: 'eventivicini.info@gmail.com' } // l'email che le regole considerano admin: finta, solo nell'emulatore
 	];
 	const creds = {};
@@ -256,8 +257,10 @@ if (process.env.SEED_USERS) {
 		const res = await fetch(`${ID}/v1/accounts:signUp?key=demo-key`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: s.email, password, returnSecureToken: false }) });
 		if (!res.ok) throw new Error(`signUp ${s.key}: ${res.status}`);
 		const { localId } = await res.json();
-		const up = await fetch(`${ID}/v1/projects/${PROJECT}/accounts:update`, { method: 'POST', headers: owner, body: JSON.stringify({ localId, emailVerified: true }) });
-		if (!up.ok) throw new Error(`verifica ${s.key}: ${up.status}`);
+		if (s.verify !== false) {
+			const up = await fetch(`${ID}/v1/projects/${PROJECT}/accounts:update`, { method: 'POST', headers: owner, body: JSON.stringify({ localId, emailVerified: true }) });
+			if (!up.ok) throw new Error(`verifica ${s.key}: ${up.status}`);
+		}
 		creds[s.key] = { email: s.email, password, uid: localId };
 	}
 	const put = async (path, data) => {
@@ -268,6 +271,7 @@ if (process.env.SEED_USERS) {
 	await put(`users/${creds.userA.uid}`, { createdAt: created, pendingCount: 1, favCount: 2, favChanges: 2, favAt: created, lastFavId: 'seedMercato' });
 	await put(`users/${creds.userB.uid}`, { createdAt: created, pendingCount: 0 });
 	await put(`users/${creds.admin.uid}`, { createdAt: created, pendingCount: 0 });
+	await put(`users/${creds.userNonVerificato.uid}`, { createdAt: created, pendingCount: 0 });
 	for (const id of ['seedJazz', 'seedMercato']) await put(`users/${creds.userA.uid}/favorites/${id}`, { addedAt: now });
 	const p = places.modena;
 	const lat = p.lat;
@@ -280,5 +284,5 @@ if (process.env.SEED_USERS) {
 	});
 	await put('reports/seedSegnalazione', { eventId: 'seedJazz', reason: 'other', text: 'Segnalazione di prova per il test', email: '', status: 'open', createdAt: created });
 	writeFileSync(out, JSON.stringify(creds, null, 2), { mode: 0o600 });
-	console.log(`Creati 3 utenti finti, preferiti, 1 proposta e 1 segnalazione (credenziali in ${out})`);
+	console.log(`Creati 4 utenti finti (uno con email non verificata), preferiti, 1 proposta e 1 segnalazione (credenziali in ${out})`);
 }
