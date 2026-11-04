@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fromData } from './event';
 import { romeTime } from './dates';
 import { buildIcs, foldLine } from './ics';
+import { xssDue, xssUno } from './hostileEvents';
 
 const bytes = (s: string) => new TextEncoder().encode(s).length;
 const unfold = (s: string) => s.split('\r\n').map((l, i) => (i ? l.slice(1) : l)).join('');
@@ -76,5 +77,34 @@ describe('buildIcs, orari e giorni interi', () => {
 		const ics = mk(romeTime(2026, 10, 24, 22), romeTime(2026, 10, 25, 4));
 		expect(ics).toContain('DTSTART:20261024T200000Z');
 		expect(ics).toContain('DTEND:20261025T030000Z');
+	});
+});
+
+describe('buildIcs: contenuto ostile (payload di xssUno/xssDue)', () => {
+	const logical = (s: string) => s.replace(/\r\n /g, '').split('\r\n').filter(Boolean);
+	it('xssDue: a capo, punto e virgola, virgole e backslash non aprono righe né proprietà nuove', () => {
+		const out = buildIcs(xssDue(), 'https://example.test/eventi/x');
+		const lines = logical(out);
+		expect(lines.filter((l) => l === 'BEGIN:VEVENT')).toHaveLength(1);
+		expect(lines.filter((l) => l === 'END:VEVENT')).toHaveLength(1);
+		expect(lines.some((l) => l.startsWith('ATTENDEE'))).toBe(false);
+		expect(lines.find((l) => l.startsWith('SUMMARY:'))).toBe('SUMMARY:Titolo\\nBEGIN:VEVENT\\nSUMMARY:iniettato\\nEND:VEVENT');
+		expect(lines.find((l) => l.startsWith('LOCATION:'))).toContain('Luogo\\; con\\, virgole\\\\e\\nnuova riga');
+		expect(out.split('\r\n').every((l) => bytes(l) <= 75)).toBe(true);
+		expect(lines.find((l) => l.startsWith('UID:'))).toBe('UID:xssDue@eventi-vicini');
+	});
+	it('xssUno: U+2028, U+2029 e <!-- restano testo in una sola proprietà', () => {
+		const out = buildIcs(xssUno(), 'https://example.test/eventi/x');
+		const lines = logical(out);
+		expect(lines.filter((l) => l.startsWith('DESCRIPTION:'))).toHaveLength(1);
+		expect(lines.find((l) => l.startsWith('DESCRIPTION:'))).toContain('<!-- fine');
+		expect(lines.filter((l) => l === 'BEGIN:VEVENT')).toHaveLength(1);
+		expect(out.endsWith('\r\n')).toBe(true);
+		expect(out.split('\r\n').every((l) => bytes(l) <= 75)).toBe(true);
+	});
+	it('un CR da solo (senza LF) non resta nel file: alcuni lettori lo trattano come fine riga', () => {
+		const e = fromData('cr', { title: 'A\rBEGIN:VEVENT\rSUMMARY:x', shortDescription: 'p\rq', venueName: 'v\ru', startTime: 1, endTime: 2, lat: 44, lng: 10 });
+		const out = buildIcs(e, 'https://x.it/e');
+		expect(out.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
 	});
 });
