@@ -1,6 +1,8 @@
 // Popola l'emulatore Firestore con eventi di prova sparsi in Italia (solo sviluppo e test E2E).
 // Uso: node scripts/seed-emulator.mjs   (con `npm run emulators` attivo)
 import { geohashForLocation } from 'geofire-common';
+import { randomBytes } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 
 const HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
 if (!/^(127\.0\.0\.1|localhost|\[::1\])(:|$)/.test(HOST)) {
@@ -225,4 +227,58 @@ if (!process.env.SEED_NO_BUNDLES) {
 		if (!res.ok) throw new Error(`bundles/${name}: ${res.status} ${await res.text()}`);
 	}
 	console.log(`Inseriti ${Object.keys(buckets).length} bundle`);
+}
+
+// SEED_USERS=1: utenti finti solo nell'emulatore Auth, per i test di sicurezza dinamici (Strix). Mai in produzione:
+// l'host Auth deve essere locale. Le password sono casuali a ogni run e vanno solo nel file SEED_USERS_OUT
+// (fuori dal repo), mai nei log.
+if (process.env.SEED_USERS) {
+	const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9099';
+	if (!/^(127\.0\.0\.1|localhost|\[::1\])(:|$)/.test(AUTH_HOST) || !PROJECT.startsWith('demo-')) {
+		console.error('Rifiuto di creare utenti: servono emulatore Auth locale e progetto demo-*.');
+		process.exit(1);
+	}
+	const out = process.env.SEED_USERS_OUT;
+	if (!out) {
+		console.error('SEED_USERS_OUT obbligatorio: file fuori dal repo dove scrivere le credenziali.');
+		process.exit(1);
+	}
+	const ID = `http://${AUTH_HOST}/identitytoolkit.googleapis.com`;
+	const owner = { 'content-type': 'application/json', Authorization: 'Bearer owner' };
+	const specs = [
+		{ key: 'userA', email: 'utente.a@example.test' },
+		{ key: 'userB', email: 'utente.b@example.test' },
+		{ key: 'admin', email: 'eventivicini.info@gmail.com' } // l'email che le regole considerano admin: finta, solo nell'emulatore
+	];
+	const creds = {};
+	for (const s of specs) {
+		const password = randomBytes(12).toString('base64url');
+		const res = await fetch(`${ID}/v1/accounts:signUp?key=demo-key`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: s.email, password, returnSecureToken: false }) });
+		if (!res.ok) throw new Error(`signUp ${s.key}: ${res.status}`);
+		const { localId } = await res.json();
+		const up = await fetch(`${ID}/v1/projects/${PROJECT}/accounts:update`, { method: 'POST', headers: owner, body: JSON.stringify({ localId, emailVerified: true }) });
+		if (!up.ok) throw new Error(`verifica ${s.key}: ${up.status}`);
+		creds[s.key] = { email: s.email, password, uid: localId };
+	}
+	const put = async (path, data) => {
+		const res = await fetch(`${BASE}/${path}`, { method: 'PATCH', headers: owner, body: JSON.stringify({ fields: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v instanceof Date ? { timestampValue: v.toISOString() } : enc(v)])) }) });
+		if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`);
+	};
+	const created = new Date();
+	await put(`users/${creds.userA.uid}`, { createdAt: created, pendingCount: 1, favCount: 2, favChanges: 2, favAt: created, lastFavId: 'seedMercato' });
+	await put(`users/${creds.userB.uid}`, { createdAt: created, pendingCount: 0 });
+	await put(`users/${creds.admin.uid}`, { createdAt: created, pendingCount: 0 });
+	for (const id of ['seedJazz', 'seedMercato']) await put(`users/${creds.userA.uid}/favorites/${id}`, { addedAt: now });
+	const p = places.modena;
+	const lat = p.lat;
+	const lng = p.lng;
+	await put('submissions/seedProposta', {
+		title: 'Proposta in attesa', shortDescription: 'Evento di prova da moderare', category: 'other', priceType: 'free',
+		startTime: at(3, 18), endTime: at(3, 21), venueName: 'Sala di prova', address: 'Centro, Modena', lat, lng,
+		imageUrl: '', ticketUrl: '', tags: [], geohash: geohashForLocation([lat, lng]), city: p.city, citySlug: p.citySlug,
+		province: p.province, region: p.region, ownerId: creds.userA.uid, status: 'pending', createdAt: created
+	});
+	await put('reports/seedSegnalazione', { eventId: 'seedJazz', reason: 'other', text: 'Segnalazione di prova per il test', email: '', status: 'open', createdAt: created });
+	writeFileSync(out, JSON.stringify(creds, null, 2), { mode: 0o600 });
+	console.log(`Creati 3 utenti finti, preferiti, 1 proposta e 1 segnalazione (credenziali in ${out})`);
 }
