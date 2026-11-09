@@ -615,8 +615,10 @@ def find_centers(names: list[str], geocoder: Geocoder) -> dict[tuple[str, str], 
 
 
 def write_coverage(db, events: list[dict], names: list[str], centers: dict, now_ms: int,
-                   failed: set[str] | frozenset[str] = frozenset(), previous: dict[str, dict] | None = None) -> int:
-    """Una scrittura al giorno per regione (coverage/{slug}). `failed`: fonti che oggi non hanno risposto (vedi coverage_doc)."""
+                   failed: set[str] | frozenset[str] = frozenset(), previous: dict[str, dict] | None = None,
+                   docs_out: dict[str, dict] | None = None) -> int:
+    """Una scrittura al giorno per regione (coverage/{slug}). `failed`: fonti che oggi non hanno risposto (vedi coverage_doc).
+    docs_out (opzionale): riceve i documenti scritti, per le metriche di copertura."""
     by_region: dict[str, list] = {}
     docs: dict[str, dict] = {}
     for n in names:  # anche le regioni con sole fonti regionali: le loro città vengono dagli eventi
@@ -629,7 +631,39 @@ def write_coverage(db, events: list[dict], names: list[str], centers: dict, now_
             region, sources, events, centers, now_ms, (previous or {}).get(slugify(region)),
             {slugify(a.city) for a in bad if not getattr(a, "regional", False)}, any(getattr(a, "regional", False) for a in bad))
         db.collection("coverage").document(slugify(region)).set(docs[slugify(region)])
+    if docs_out is not None:
+        docs_out.update(docs)
     return len(by_region) + bundles.write_coverage(db, docs, now_ms)["writes"]
+
+
+def coverage_metrics(collected: dict[str, dict], docs: dict[str, dict] | None, state: dict | None, health: dict | None,
+                     today: date) -> dict:
+    """Metriche di copertura del giro, senza letture in più (vengono dai documenti coverage già calcolati e dai registri locali).
+
+    - eventi visibili: eventi dei comuni nel documento coverage, compresi quelli che le fonti saltate oggi lasciano in Firestore
+      (una stima: il numero di una fonte ferma resta quello dell'ultimo giorno in cui ha risposto);
+    - comuni con almeno un evento; fonti attive, in errore, parcheggiate, in cluster, con connessione fallita;
+    - lastOkAt: età in giorni dell'ultimo successo più vecchio tra le fonti del giro, e quante non sono mai riuscite;
+    - subnet giù oggi e ultime interruzioni risolte (da unreachable.json e health.json)."""
+    comuni = [c for d in (docs or {}).values() for c in d.get("comuni", [])]
+    sources = (health or {}).get("sources", {})
+    ages = [(today - date.fromisoformat(sources[n]["lastOkAt"])).days for n in collected if sources.get(n, {}).get("lastOkAt")]
+    down = [{"subnet": k[len(clusters.PREFIX):], "since": v["since"], "sources": v.get("sources", 0)}
+            for k, v in sorted((state or {}).items()) if k.startswith(clusters.PREFIX) and v.get("last") == today.isoformat()]
+    return {
+        "visible": sum(c.get("events", 0) for c in comuni) if docs is not None else None,
+        "comuni_with_events": sum(1 for c in comuni if c.get("events", 0) > 0) if docs is not None else None,
+        "comuni": len(comuni) if docs is not None else None,
+        "sources": len(collected),
+        "sources_error": sum(1 for s in collected.values() if s.get("error") is not None),
+        "sources_parked": sum(1 for s in collected.values() if s.get("parked")),
+        "sources_cluster": sum(1 for s in collected.values() if s.get("cluster")),
+        "sources_connect": sum(1 for s in collected.values() if s.get("connect")),
+        "oldest_ok_days": max(ages) if ages else None,
+        "never_ok": sum(1 for n in collected if not sources.get(n, {}).get("lastOkAt")),
+        "clusters_down": down,
+        "outages": list((health or {}).get("outages", []))[-3:],
+    }
 
 
 def month_bounds(now: datetime) -> tuple[str, int, int]:
@@ -841,8 +875,10 @@ def _main(argv: list[str] | None = None) -> int:
     failed = {n for n, st in collected.items() if st["error"]}
     previous = previous_coverage(db, {slugify(SOURCES[n].region) for n in failed})
     stats["reads"] += len({slugify(SOURCES[n].region) for n in failed})
+    coverage_docs: dict[str, dict] | None = None
     if not args.source:  # con --source il conteggio per comune sarebbe parziale
-        stats["writes"] += write_coverage(db, events, names, centers, int(now.timestamp() * 1000), failed, previous)
+        coverage_docs = {}
+        stats["writes"] += write_coverage(db, events, names, centers, int(now.timestamp() * 1000), failed, previous, coverage_docs)
         reads, writes = write_month_stats(db, events, {slugify(SOURCES[n].region): SOURCES[n].region for n in names
                                                        if not getattr(SOURCES[n], "regional", False)}, now)
         stats["reads"] += reads
@@ -852,6 +888,7 @@ def _main(argv: list[str] | None = None) -> int:
             "region": "+".join(sorted({slugify(SOURCES[n].region) for n in names})), "events": len(events), "excluded": len(excluded),
             "sources": len(names), "geocode": geocoder.requests, "deferred": len(geocoder.deferred),
             "skipped_sources": skipped_sources(collected, previous), "net": net,
+            "coverage": coverage_metrics(collected, coverage_docs, state, health, now.date()),
             "retried_ok": sorted(SOURCES[n].city for n, st in collected.items() if st.get("retry") == "ok")}), encoding="utf-8")
     return 0
 
