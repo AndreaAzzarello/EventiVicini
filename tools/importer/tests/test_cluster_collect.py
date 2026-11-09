@@ -152,6 +152,56 @@ def test_subnet_giu_non_tocca_la_scala_degli_host_gia_fermi_ne_le_altre_subnet(m
     assert fonti["t0"].calls == 1 and fonti["t1"].calls == 1
 
 
+def giro_con_salute(monkeypatch, fonti, dns, state, health, giorno=DAY):
+    monkeypatch.setattr(run, "SOURCES", fonti)
+    monkeypatch.setattr(run, "WORKERS", 1)
+    monkeypatch.setattr(run.time, "sleep", lambda s: None)
+    monkeypatch.setattr(fetch, "DEFAULT_GATE", NetGate(Network(dns.get), ip_interval=0))
+    client = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200)))
+    stats: dict = {}
+    run.collect(client, SimpleNamespace(), list(fonti), giorno, 60, stats, None, None, state, None, health)
+    return stats
+
+
+def test_la_salute_registra_successi_cluster_giu_e_poi_la_durata_del_blocco(monkeypatch):
+    import sourcehealth
+
+    fonti, dns, mondo = mondo_di()
+    state: dict = {}
+    health = sourcehealth.load(Path("non-esiste.json"))
+    giro_con_salute(monkeypatch, fonti, dns, state, health)  # 7/11: tutte ok
+    assert health["sources"]["s3"]["lastOkAt"] == "2026-11-07"
+    mondo.update({f"s{i}": "connect" for i in range(6)})
+    giro_con_salute(monkeypatch, fonti, dns, state, health, DAY + timedelta(days=1))  # 8/11: giù
+    giro_con_salute(monkeypatch, fonti, dns, state, health, DAY + timedelta(days=2))  # 9/11: ancora giù
+    assert health["sources"]["s3"]["failStreak"] == 2 and health["sources"]["s3"]["lastKind"] == "cluster"
+    assert health["sources"]["s3"]["lastOkAt"] == "2026-11-07" and health["outages"] == []
+    mondo.clear()
+    giro_con_salute(monkeypatch, fonti, dns, state, health, DAY + timedelta(days=4))  # 11/11: di nuovo su
+    assert health["outages"] == [{"subnet": SUB, "since": "2026-11-08", "until": "2026-11-11"}]
+    assert health["sources"]["s3"]["failStreak"] == 0 and health["sources"]["s3"]["lastOkAt"] == "2026-11-11"
+
+
+def test_le_sentinelle_preferiscono_chi_ha_risposto_piu_di_recente(monkeypatch):
+    import sourcehealth
+
+    fonti, dns, _ = mondo_di()
+    health = sourcehealth.load(Path("non-esiste.json"))
+    health["sources"]["s4"] = {"lastOkAt": "2026-11-06"}
+    health["sources"]["s5"] = {"lastOkAt": "2026-11-05"}
+    chiamati: list[str] = []
+    fonti["s4"].events, fonti["s5"].events = (lambda *a, n="s4": chiamati.append(n) or []), (lambda *a, n="s5": chiamati.append(n) or [])
+    fonti["s0"].events = lambda *a: (_ for _ in ()).throw(httpx.ConnectTimeout("x"))
+    giro_con_salute(monkeypatch, fonti, dns, {}, health)
+    assert chiamati[:2] == ["s4", "s5"]  # le prime due sono le sentinelle: ultimo successo più recente
+
+
+def test_senza_salute_collect_funziona_come_prima(monkeypatch):
+    fonti, dns, _ = mondo_di()
+    stats = giro(monkeypatch, fonti, dns, {})
+    assert all(s["error"] is None for s in stats.values())
+
+
 def test_senza_limiti_di_rete_o_senza_stato_non_ci_sono_sentinelle(monkeypatch):
     fonti, dns, _ = mondo_di(n_giu=range(6))
     monkeypatch.setattr(run, "SOURCES", fonti)

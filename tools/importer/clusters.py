@@ -34,9 +34,12 @@ def groups(names: list[str], subnet_of: Callable[[str], str | None], min_sources
     return {s: g for s, g in out.items() if len(g) >= min_sources}
 
 
-def pick_canaries(group: list[str], host_of: Callable[[str], str | None], state: dict[str, dict], n: int = CANARIES) -> list[str]:
-    """Sentinelle su host diversi, preferendo quelli senza fallimenti ricordati (un host morto di suo non deve far dichiarare giù la subnet)."""
-    ranked = sorted(group, key=lambda s: (host_of(s) in state, group.index(s)))
+def pick_canaries(group: list[str], host_of: Callable[[str], str | None], state: dict[str, dict], n: int = CANARIES,
+                  last_ok: Callable[[str], str] | None = None) -> list[str]:
+    """Sentinelle su host diversi, preferendo quelli senza fallimenti ricordati e, tra questi, l'ultimo successo più recente
+    (un host morto di suo non deve far dichiarare giù la subnet)."""
+    ranked = sorted(group, key=lambda s: last_ok(s) if last_ok else "", reverse=True)  # stabile: a parità resta l'ordine del gruppo
+    ranked = sorted(ranked, key=lambda s: host_of(s) in state)
     out: list[str] = []
     seen: set[str | None] = set()
     for s in ranked:
