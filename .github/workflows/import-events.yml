@@ -28,6 +28,10 @@ on:
         description: "Avvio automatico (Worker /scheduler): salta se l'import completo di oggi è già partito"
         type: boolean
         default: false
+      ip_interval:
+        description: "Secondi minimi tra due richieste allo stesso IP (vuoto = 1,0, il valore dell'importer). Per confrontare i limiti di rete in due dry-run"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -149,6 +153,8 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           # solo in questo step (non nel job): Ticketmaster Discovery API; il log passa da logsafe (apikey=***)
           TICKETMASTER_API_KEY: ${{ secrets.TICKETMASTER_API_KEY }}
+          # via ambiente e non nel comando: l'input è testo libero (run.py lo legge come numero e rifiuta il resto)
+          IP_INTERVAL: ${{ inputs.ip_interval }}
         run: >
           python run.py --regione ${{ matrix.region }}
           --max-reads ${{ matrix.reads }} --max-writes ${{ needs.plan.outputs.writes }}
@@ -156,6 +162,7 @@ jobs:
           --stats-out stats-${{ matrix.region }}.json
           ${{ inputs.dry_run && '--dry-run' || '' }}
           ${{ (inputs.reconcile || matrix.reconcile) && '--reconcile' || '' }}
+          ${IP_INTERVAL:+--ip-interval "$IP_INTERVAL"}
       - uses: actions/upload-artifact@v6
         if: ${{ !inputs.dry_run }}
         with:

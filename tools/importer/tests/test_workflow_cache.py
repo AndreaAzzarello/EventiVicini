@@ -38,3 +38,12 @@ def test_health_e_stato_di_rete_nella_stessa_cache_e_mai_salvati_nel_dry_run():
     salvano = [b for b in re.split(r"(?m)^      - ", text.replace("\r\n", "\n"))
                if "uses: actions/cache@" in b and ("health.json" in b or "unreachable.json" in b)]
     assert salvano and all("!inputs.dry_run" in b for b in salvano)
+
+
+def test_input_ip_interval_arriva_a_run_py_dall_ambiente_e_non_dentro_il_comando():
+    """L'input è testo libero: si passa per variabile d'ambiente (nessuna iniezione di shell); vuoto = valore dell'importer."""
+    text = WORKFLOW.read_text(encoding="utf-8").replace("\r\n", "\n")
+    assert re.search(r"(?m)^      ip_interval:\n        description: .+\n        type: string\n        default: \"\"$", text)
+    assert "IP_INTERVAL: ${{ inputs.ip_interval }}" in text
+    assert '${IP_INTERVAL:+--ip-interval "$IP_INTERVAL"}' in text
+    assert text.count("inputs.ip_interval") == 1, "l'input compare solo nell'assegnazione dell'ambiente"
