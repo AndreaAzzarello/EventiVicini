@@ -39,6 +39,7 @@ FINAL_REPORT.md
 tools/importer/.httpcache/
 tools/importer/manifests/
 tools/importer/unreachable.json
+tools/importer/health.json
 web/.review/
 
 # Grafo Graphify: locale, rigenerato dall'hook post-commit (contiene percorsi assoluti in .graphify_build_state.json)

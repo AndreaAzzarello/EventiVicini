@@ -169,6 +169,48 @@ def skipped_report(stats: list[dict]) -> tuple[list[str], list[str]]:
     return lines, warnings
 
 
+def coverage_report(stats: list[dict]) -> list[str]:
+    """Righe del riepilogo con le metriche di copertura (stats[i]["coverage"], vedi run.coverage_metrics): eventi visibili,
+    comuni con almeno un evento, fonti in errore, parcheggiate o in cluster, età dell'ultimo successo, subnet giù e rete.
+    Vuoto se nessuna regione le ha (statistiche di prima, o prove con --source)."""
+    rows = [s for s in stats if s.get("coverage")]
+    if not rows:
+        return []
+    c = {k: sum((s["coverage"].get(k) or 0) for s in rows) for k in ("visible", "comuni_with_events", "comuni", "sources",
+                                                                        "sources_error", "sources_parked", "sources_cluster", "never_ok")}
+    oldest = max((s["coverage"]["oldest_ok_days"] for s in rows if s["coverage"].get("oldest_ok_days") is not None), default=None)
+    today_events = sum(s["events"] for s in rows)
+    lines = ["", "### Copertura", "",
+             "| regione | fonti | in errore | parcheggiate | in cluster | eventi oggi | eventi visibili | comuni con eventi | ultimo successo più vecchio |",
+             "|---|---|---|---|---|---|---|---|---|"]
+    for s in sorted(rows, key=lambda s: s["region"]):
+        m = s["coverage"]
+        age = "" if m.get("oldest_ok_days") is None else f"{m['oldest_ok_days']} g"
+        vis = "" if m.get("visible") is None else m["visible"]
+        com = "" if m.get("comuni") is None else f"{m['comuni_with_events']} su {m['comuni']}"
+        lines.append(f"| {s['region']} | {m['sources']} | {m['sources_error']} | {m['sources_parked']} | {m['sources_cluster']} | "
+                     f"{s['events']} | {vis} | {com} | {age} |")
+    lines += ["", f"**Copertura**: {c['visible']} eventi visibili (stima, {today_events} estratti oggi), "
+              f"{c['comuni_with_events']} comuni con almeno un evento su {c['comuni']}; "
+              f"{c['sources']} fonti, {c['sources_error']} in errore ({c['sources_parked']} parcheggiate, {c['sources_cluster']} in cluster); "
+              f"ultimo successo più vecchio: {'-' if oldest is None else str(oldest) + ' giorni'}, {c['never_ok']} fonti mai riuscite."]
+    down = [(s["region"], d) for s in rows for d in s["coverage"].get("clusters_down", [])]
+    if down:
+        lines += ["", "### ⚠️ Cluster di rete non raggiungibili", "",
+                  "Più siti dello stesso hosting non rispondono dal runner: non sono stati parcheggiati uno a uno e si riprovano al prossimo import.", "",
+                  "| subnet | regione | fonti | giù dal |", "|---|---|---|---|"]
+        lines += [f"| {d['subnet']} | {r} | {d['sources']} | {d['since']} |" for r, d in down]
+    outages = [(s["region"], o) for s in rows for o in s["coverage"].get("outages", [])]
+    if outages:
+        lines += ["", "Interruzioni di rete risolte di recente: " + "; ".join(f"{o['subnet']} ({r}, dal {o['since']} al {o['until']})" for r, o in outages) + "."]
+    net = [s["net"] for s in rows if s.get("net")]
+    if net:
+        lines += ["", "Rete: " + "; ".join(f"{s['region']} {s['net']['throttle_s']:.0f} s di attesa per i limiti, "
+                                          f"{s['net']['cooldowns']} pause di subnet, picco {max((v['peak60'] for v in s['net']['top_ips'].values()), default=0)}/min per IP"
+                                          for s in sorted(rows, key=lambda s: s["region"]) if s.get("net")) + "."]
+    return lines
+
+
 def summary(stats: list[dict], cleanup: dict | None) -> str:
     cleanup = cleanup or {}
     head = ["| regione | comuni | eventi | letture | confronto | scritture | invariati | nascosti | geocoding | rimandati |",
@@ -186,6 +228,7 @@ def summary(stats: list[dict], cleanup: dict | None) -> str:
         lines.append(f"| {name} | {used} | {QUOTA[key]} | {'⚠️ oltre il 75%' if used > 0.75 * QUOTA[key] else 'ok'} |")
     if cleanup:
         lines += ["", f"Pulizia: {cleanup.get('deleted', 0)} documenti eliminati su {cleanup.get('due', 0)} da eliminare."]
+    lines += coverage_report(stats)
     lines += skipped_report(stats)[0]
     return "\n".join(lines)
 

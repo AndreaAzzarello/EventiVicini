@@ -16,12 +16,13 @@ NOMINATIM = "https://nominatim.openstreetmap.org"
 
 class Geocoder:
     def __init__(self, client: httpx.Client, cache_path: Path, max_requests: int | None = None,
-                 interval: float = 1.0):
+                 interval: float = 1.0, strict: bool = False):
         """max_requests: budget di richieste nuove per giro; finito, si risponde solo dalla cache (le richieste
         mancate finiscono in `deferred`). interval: secondi tra due richieste, mai sotto 1 (policy OSM); con N job
-        in parallelo ognuno usa interval=N."""
+        in parallelo ognuno usa interval=N. strict: il budget vale per tutte le richieste, anche quelle `essential`
+        (dry-run: non carica Nominatim con richieste che non si salvano)."""
         self._client = client
-        self.max_requests, self.interval = max_requests, max(1.0, interval)
+        self.max_requests, self.interval, self.strict = max_requests, max(1.0, interval), strict
         self.deferred: set[str] = set()
         self._path = cache_path
         self._cache: dict[str, object] = (
@@ -43,7 +44,7 @@ class Geocoder:
 
     def _spent(self, key: str, essential: bool = False) -> bool:
         """True (e la richiesta si rimanda) se il budget del giro è finito; essential lo ignora."""
-        if essential or self.max_requests is None or self.requests < self.max_requests:
+        if (essential and not self.strict) or self.max_requests is None or self.requests < self.max_requests:
             return False
         self.deferred.add(key)
         return True

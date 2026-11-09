@@ -8,4 +8,7 @@ Termini del dominio, come li usano codice, interfaccia e documenti. Usa questi, 
 - **Filtro di data**: finestra temporale scelta dall'utente. **Preset relativi** (`quando=oggi|domani|weekend|7giorni`, seguono il giorno corrente) oppure **periodo** (`dal=AAAA-MM-GG&al=AAAA-MM-GG`, date fisse). Include gli eventi che si **sovrappongono** alla finestra, anche se iniziati prima.
 - **Orizzonte**: giorni in avanti per cui l'importer carica eventi (`run.py --horizon-days`, 60 di default e quello dell'import vero; `activate.py` usa 45 solo per l'attivazione dei comuni); il selettore di date arriva a 60 giorni.
 - **Luogo**: comune o zona scelti dall'utente per cercare. La **posizione esatta** non lascia mai il dispositivo.
+- **Cluster di rete**: più siti dei Comuni sullo stesso hosting (stessa subnet /24) che non rispondono al runner insieme. Si gestisce a livello di subnet con due **sentinelle**, senza parcheggiare i singoli host (`clusters.py`).
+- **Parcheggio**: attesa di 1, 3 o 7 giorni per un host che non si connette (`unreachable.py`).
+- **Eventi visibili**: stima degli eventi presenti sul sito per una regione: quelli estratti oggi più quelli che le fonti saltate lasciano in Firestore.
 - **Punto di contatto**: l'indirizzo email pubblico per privacy, segnalazioni, autorità e sicurezza (DSA, artt. 11-12).

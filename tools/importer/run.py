@@ -15,7 +15,7 @@ import sys
 import time
 import uuid
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import urlsplit
@@ -24,13 +24,17 @@ import httpx
 from concurrent.futures import ThreadPoolExecutor
 
 import bundles
+import clusters
 import logsafe
+import sourcehealth
 import unreachable
 import manifest
 from adapters import SOURCES, Adapter, fallback_place
 from geo import PROVINCES, enrich, in_viewbox, slugify
+import fetch as httpfetch  # `fetch` è anche una funzione locale di collect()
 from fetch import CONNECT_FAILED
 from geocode import Geocoder
+from netcluster import NetGate, interleave
 from meter import BudgetExceeded, SourceMeter
 from mapping import ROME, content_hash, dedupe_key, html_to_text, is_long_running, one_line
 from registry import USER_AGENT, read_rows
@@ -41,6 +45,8 @@ WORKERS = 4  # fonti scaricate in parallelo
 METER = SourceMeter()
 # 5 s tagliava host che col vecchio timeout di 30 s funzionavano (dry-run del 3/11: Veroli, Casorate Sempione...); i morti ora costano 15 s, una volta
 CONNECT_TIMEOUT = 15
+IP_INTERVAL = 1.0  # secondi tra due richieste allo stesso IP (host diversi sullo stesso hosting contano insieme)
+SUBNET_CONCURRENCY = 2  # richieste in volo nella stessa subnet (/24): i 4 worker non si concentrano su un fornitore
 SOURCE_BUDGET = 600  # secondi per fonte: una fonte sana ha impiegato da 41 a 223 s (Albiano d'Ivrea, prova del 3/11); da tarare sul riepilogo "Fonti più lente"
 log = logging.getLogger("importer")
 
@@ -57,7 +63,7 @@ class Got(NamedTuple):
 def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: datetime,
             horizon_days: int, stats: dict[str, dict] | None = None, excluded: list[dict] | None = None,
             retry_wait: float | None = None, unreachable_state: dict[str, dict] | None = None,
-            source_budget: float | None = None) -> list[dict]:
+            source_budget: float | None = None, health: dict | None = None) -> list[dict]:
     """stats (opzionale): per fonte {"events", "skipped", "excluded", "error"}; "error" None = la fonte ha risposto.
     excluded (opzionale): riceve le pagine scartate dal filtro anti-avvisi, {"id", "title", "reason", "source", "region"}.
     retry_wait (opzionale): a fine giro le fonti che non hanno risposto si riprovano una volta dopo tanti secondi; in stats
@@ -65,7 +71,8 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
     unreachable_state (opzionale, vedi unreachable.py): gli host che non rispondono si saltano finché non scade l'attesa
     (stats "parked") e si aggiornano con l'esito di oggi; chi fallisce la connessione ("connect") non va al secondo giro.
     source_budget (opzionale): secondi concessi a ciascuna fonte dei Comuni; oltre, la fonte è saltata ("budget"), con gli eventi
-    letti fin lì scartati: la copertura di ieri resta valida e non si riprova nello stesso giro."""
+    letti fin lì scartati: la copertura di ieri resta valida e non si riprova nello stesso giro.
+    health (opzionale, vedi sourcehealth.py): si aggiorna con l'esito di ogni fonte e con le interruzioni di rete risolte."""
     events: dict[tuple, dict] = {}
     owner: dict[tuple, str] = {}  # chiave di deduplica → fonte che ha tenuto l'evento
     stats = {} if stats is None else stats
@@ -78,10 +85,11 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
         a = SOURCES[name]
         return None if unreachable_state is None or getattr(a, "regional", False) else urlsplit(a.base).netloc
 
-    def fetch(name: str) -> Got:
-        """Solo rete (un host per fonte, 1 richiesta/s ciascuno): può girare in parallelo."""
+    def fetch(name: str, force: bool = False) -> Got:
+        """Solo rete (un host per fonte, 1 richiesta/s ciascuno): può girare in parallelo. force: le sentinelle di un cluster
+        si provano anche se il loro host è parcheggiato."""
         host = host_of(name)
-        if host and not unreachable.due(unreachable_state, host, today):
+        if host and not force and not unreachable.due(unreachable_state, host, today):
             h = unreachable_state[host]
             return Got([], f"host irraggiungibile ({h['fails']} tentativi falliti, {h['reason']}): riprovo dal "
                            f"{unreachable.retry_on(unreachable_state, host):%d/%m}", 0.0, 0, "parked")
@@ -102,9 +110,58 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
                  f"errore ({error[:120]})" if error else f"ok, {len(found)} eventi grezzi")  # subito: lo stdout del job si legge mentre gira
         return Got(found, error, seconds, requests, kind)
 
-    def process(batch: list[str]) -> None:
+    def probe_clusters(batch: list[str]) -> dict[str, Got]:
+        """Sentinelle per subnet (vedi clusters.py). Restituisce gli esiti già pronti: le sentinelle e, per le subnet giù, tutte le
+        altre fonti del gruppo, che non si tentano né si parcheggiano. Senza limiti di rete o senza stato degli host non fa nulla."""
+        gate = httpfetch.DEFAULT_GATE
+        if gate is None or unreachable_state is None:
+            return {}
+        cand = [n for n in batch if host_of(n)]
+        subnet = {n: gate.net.subnet(host_of(n)) for n in cand}  # già risolte da process()
+        grouped = clusters.groups(cand, subnet.get)
+        chosen = {s: clusters.pick_canaries(g, host_of, unreachable_state, last_ok=lambda n: sourcehealth.last_ok(health, n))
+                  for s, g in grouped.items()}
+        chosen = {s: c for s, c in chosen.items() if len(c) == clusters.CANARIES}
+        sentinels = [n for c in chosen.values() for n in c]
+        if not sentinels:
+            return {}
         with ThreadPoolExecutor(WORKERS) as pool:
-            fetched = list(pool.map(fetch, batch))
+            tried = dict(zip(sentinels, pool.map(lambda n: fetch(n, force=True), sentinels)))
+        pre: dict[str, Got] = {}
+        for sub, canaries in chosen.items():
+            group = grouped[sub]
+            if clusters.is_down([tried[n].kind for n in canaries]):
+                since = clusters.mark_down(unreachable_state, sub, today, tried[canaries[0]].error or "", len(group))
+                why = (f"rete del fornitore non raggiungibile ({sub}, {len(canaries)} sentinelle senza risposta, "
+                       f"dal {date.fromisoformat(since):%d/%m}): riprovo al prossimo import")
+                for n in group:
+                    pre[n] = tried[n]._replace(kind="cluster") if n in tried else Got([], why, 0.0, 0, "cluster")
+                log.warning("Rete: %d fonti in %s non tentate (%d sentinelle su %d senza risposta, giù dal %s)",
+                            len(group) - len(canaries), sub, len(canaries), len(canaries), f"{date.fromisoformat(since):%d/%m}")
+            else:
+                for n in canaries:
+                    pre[n] = tried[n]
+                parked = [h for h in clusters.parked_hosts(group, host_of, unreachable_state)]
+                back = clusters.mark_up(unreachable_state, sub)
+                if back and health is not None:
+                    sourcehealth.record_outage(health, sub, back, today)
+                if clusters.should_release(back, parked):
+                    clusters.release(unreachable_state, parked)
+                    log.warning("Rete: %s risponde (%s), azzero i parcheggi di %d host", sub,
+                                f"era giù dal {date.fromisoformat(back):%d/%m}" if back else "molti host erano fermi", len(parked))
+        return pre
+
+    def process(batch: list[str], probe: bool = True) -> None:
+        pre: dict[str, Got] = {}
+        with ThreadPoolExecutor(WORKERS) as pool:
+            order = batch
+            if (gate := httpfetch.DEFAULT_GATE) is not None:  # i worker non si concentrano su un solo hosting
+                gate.net.prefetch(urlsplit(SOURCES[n].base).netloc for n in batch)  # DNS in parallelo, una volta
+                order = interleave(batch, lambda n: gate.net.subnet(urlsplit(SOURCES[n].base).netloc))
+                pre = probe_clusters(batch) if probe else {}
+            todo = [n for n in order if n not in pre]
+            done = pre | dict(zip(todo, pool.map(fetch, todo)))
+            fetched = [done[n] for n in batch]
         # Geocoding (Nominatim, 1 richiesta/s in tutto) in sequenza, dagli eventi più vicini nel tempo: se il budget
         # di richieste del giro finisce, i più lontani restano senza geocoding e lo prendono nei giorni dopo.
         pending = []
@@ -112,9 +169,9 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
             found, error = got.found, got.error
             stats[name] = {"events": 0, "skipped": 0, "excluded": 0, "duplicates": 0, "error": error,
                            "seconds": round(got.seconds, 1), "requests": got.requests}
-            if got.kind:  # "parked" (saltata senza rete), "connect" (connessione fallita) o "budget" (tempo esaurito): niente secondo giro
+            if got.kind:  # "parked" (saltata senza rete), "cluster" (subnet giù), "connect" (connessione fallita) o "budget" (tempo esaurito): niente secondo giro
                 stats[name][got.kind] = True
-            if (host := host_of(name)) and got.kind != "parked":  # lo stato degli host si aggiorna nel thread principale
+            if (host := host_of(name)) and got.kind not in ("parked", "cluster"):  # lo stato degli host si aggiorna nel thread principale
                 if error is None:
                     unreachable.ok(unreachable_state, host)
                 elif got.kind == "connect":
@@ -165,15 +222,17 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
                      stats[name]["skipped"], stats[name]["excluded"], stats[name]["duplicates"])
 
     process(names)
-    failed = [n for n in names if stats[n]["error"] and not any(stats[n].get(k) for k in ("parked", "connect", "budget"))]
+    failed = [n for n in names if stats[n]["error"] and not any(stats[n].get(k) for k in ("parked", "cluster", "connect", "budget"))]
     if failed and retry_wait is not None:
         log.warning("%d fonti non raggiungibili: riprovo tra %d s", len(failed), retry_wait)
         time.sleep(retry_wait)
         first = {n: stats[n]["error"] for n in failed}
-        process(failed)
+        process(failed, probe=False)
         for n in failed:
             stats[n] |= {"retry": "fallito" if stats[n]["error"] else "ok", "first_error": first[n]}
         log.info("Secondo tentativo: %d fonti recuperate su %d", sum(1 for n in failed if not stats[n]["error"]), len(failed))
+    if health is not None:
+        sourcehealth.update(health, stats, today)
     return list(events.values())
 
 
@@ -556,8 +615,10 @@ def find_centers(names: list[str], geocoder: Geocoder) -> dict[tuple[str, str], 
 
 
 def write_coverage(db, events: list[dict], names: list[str], centers: dict, now_ms: int,
-                   failed: set[str] | frozenset[str] = frozenset(), previous: dict[str, dict] | None = None) -> int:
-    """Una scrittura al giorno per regione (coverage/{slug}). `failed`: fonti che oggi non hanno risposto (vedi coverage_doc)."""
+                   failed: set[str] | frozenset[str] = frozenset(), previous: dict[str, dict] | None = None,
+                   docs_out: dict[str, dict] | None = None) -> int:
+    """Una scrittura al giorno per regione (coverage/{slug}). `failed`: fonti che oggi non hanno risposto (vedi coverage_doc).
+    docs_out (opzionale): riceve i documenti scritti, per le metriche di copertura."""
     by_region: dict[str, list] = {}
     docs: dict[str, dict] = {}
     for n in names:  # anche le regioni con sole fonti regionali: le loro città vengono dagli eventi
@@ -570,7 +631,39 @@ def write_coverage(db, events: list[dict], names: list[str], centers: dict, now_
             region, sources, events, centers, now_ms, (previous or {}).get(slugify(region)),
             {slugify(a.city) for a in bad if not getattr(a, "regional", False)}, any(getattr(a, "regional", False) for a in bad))
         db.collection("coverage").document(slugify(region)).set(docs[slugify(region)])
+    if docs_out is not None:
+        docs_out.update(docs)
     return len(by_region) + bundles.write_coverage(db, docs, now_ms)["writes"]
+
+
+def coverage_metrics(collected: dict[str, dict], docs: dict[str, dict] | None, state: dict | None, health: dict | None,
+                     today: date) -> dict:
+    """Metriche di copertura del giro, senza letture in più (vengono dai documenti coverage già calcolati e dai registri locali).
+
+    - eventi visibili: eventi dei comuni nel documento coverage, compresi quelli che le fonti saltate oggi lasciano in Firestore
+      (una stima: il numero di una fonte ferma resta quello dell'ultimo giorno in cui ha risposto);
+    - comuni con almeno un evento; fonti attive, in errore, parcheggiate, in cluster, con connessione fallita;
+    - lastOkAt: età in giorni dell'ultimo successo più vecchio tra le fonti del giro, e quante non sono mai riuscite;
+    - subnet giù oggi e ultime interruzioni risolte (da unreachable.json e health.json)."""
+    comuni = [c for d in (docs or {}).values() for c in d.get("comuni", [])]
+    sources = (health or {}).get("sources", {})
+    ages = [(today - date.fromisoformat(sources[n]["lastOkAt"])).days for n in collected if sources.get(n, {}).get("lastOkAt")]
+    down = [{"subnet": k[len(clusters.PREFIX):], "since": v["since"], "sources": v.get("sources", 0)}
+            for k, v in sorted((state or {}).items()) if k.startswith(clusters.PREFIX) and v.get("last") == today.isoformat()]
+    return {
+        "visible": sum(c.get("events", 0) for c in comuni) if docs is not None else None,
+        "comuni_with_events": sum(1 for c in comuni if c.get("events", 0) > 0) if docs is not None else None,
+        "comuni": len(comuni) if docs is not None else None,
+        "sources": len(collected),
+        "sources_error": sum(1 for s in collected.values() if s.get("error") is not None),
+        "sources_parked": sum(1 for s in collected.values() if s.get("parked")),
+        "sources_cluster": sum(1 for s in collected.values() if s.get("cluster")),
+        "sources_connect": sum(1 for s in collected.values() if s.get("connect")),
+        "oldest_ok_days": max(ages) if ages else None,
+        "never_ok": sum(1 for n in collected if not sources.get(n, {}).get("lastOkAt")),
+        "clusters_down": down,
+        "outages": list((health or {}).get("outages", []))[-3:],
+    }
 
 
 def month_bounds(now: datetime) -> tuple[str, int, int]:
@@ -668,7 +761,26 @@ def summary(stats: dict[str, dict], sources: dict) -> str:
     return text
 
 
+def persist_state(state_file: Path, state: dict | None, health_file: Path, health: dict | None, dry_run: bool) -> bool:
+    """Salva lo stato degli host (con le subnet giù) e la salute delle fonti. Nel dry-run no: non deve spostare in avanti
+    né parcheggi né cluster né lastOkAt (ticket #16; nel workflow la cache del dry-run è comunque solo in lettura)."""
+    if dry_run:
+        return False
+    if state is not None:
+        unreachable.save(state_file, state)
+    if health is not None:
+        sourcehealth.save(health_file, health)
+    return True
+
+
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _main(argv)
+    finally:
+        httpfetch.DEFAULT_GATE = None  # lo stato globale non esce dall'import (i test chiamano main più volte)
+
+
+def _main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dry-run", action="store_true", help="stampa gli eventi senza scrivere")
     p.add_argument("--source", action="append", choices=sorted(SOURCES), help="fonte (ripetibile)")
@@ -688,8 +800,14 @@ def main(argv: list[str] | None = None) -> int:
                    help="secondi concessi a ogni fonte dei Comuni (0 = nessun tetto); oltre, la fonte è saltata")
     p.add_argument("--retry-wait", type=float, default=300,
                    help="secondi prima di riprovare, a fine giro, le fonti non raggiungibili (0 = subito, -1 = non riprovare)")
+    p.add_argument("--ip-interval", type=float, default=IP_INTERVAL,
+                   help="secondi minimi tra due richieste allo stesso IP, qualunque sia l'host (0 = nessun limite per IP)")
+    p.add_argument("--subnet-concurrency", type=int, default=SUBNET_CONCURRENCY,
+                   help="richieste in volo al massimo nella stessa subnet /24")
     args = p.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
+    gate = NetGate(ip_interval=args.ip_interval, subnet_concurrency=args.subnet_concurrency)
+    httpfetch.DEFAULT_GATE = gate  # lo usano tutti i Fetcher creati dagli adapter
     logsafe.setup()
 
     now = datetime.now(timezone.utc)
@@ -705,22 +823,27 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=httpx.Timeout(30, connect=CONNECT_TIMEOUT), follow_redirects=True) as client:
         geocoder = Geocoder(client, HERE / "geocache.json", args.max_geocode,
-                            float(os.environ.get("NOMINATIM_INTERVAL", "1")))
+                            float(os.environ.get("NOMINATIM_INTERVAL", "1")), strict=args.dry_run)
         stats: dict[str, dict] = {}
         excluded: list[dict] = []
         state_file = HERE / "unreachable.json"
         state = None if args.source else unreachable.load(state_file)  # con --source (prove a mano) nessun salto né scrittura
+        health_file = HERE / "health.json"
+        health = None if args.source else sourcehealth.load(health_file)
         try:
             events = collect(client, geocoder, names, now, args.horizon_days, stats, excluded,
-                             None if args.retry_wait < 0 else args.retry_wait, state, args.source_budget or None)
+                             None if args.retry_wait < 0 else args.retry_wait, state, args.source_budget or None, health)
             centers = {} if args.dry_run or args.source else find_centers(names, geocoder)
         finally:
             geocoder.save()
-            if state is not None:
-                unreachable.save(state_file, state)
+            persist_state(state_file, state, health_file, health, args.dry_run)
     summary(stats, SOURCES)
     print(excluded_report(excluded))
     log.info("Totale dopo deduplica: %d (richieste Nominatim: %d)", len(events), geocoder.requests)
+    net = gate.stats()
+    busiest = ", ".join(f"{ip} {v['requests']} ric., picco {v['peak60']}/min" for ip, v in list(net["top_ips"].items())[:3])
+    log.info("Rete: %d IP, %.0f s di attesa per i limiti (%d pause di subnet); più colpiti: %s",
+             net["ips"], net["throttle_s"], net["cooldowns"], busiest or "-")
     if geocoder.deferred:
         log.warning("Geocoding: %d richieste rimandate oltre il budget di %d, servono circa %d giorni "
                     "(gli eventi più vicini nel tempo hanno la precedenza)", len(geocoder.deferred), args.max_geocode,
@@ -752,8 +875,10 @@ def main(argv: list[str] | None = None) -> int:
     failed = {n for n, st in collected.items() if st["error"]}
     previous = previous_coverage(db, {slugify(SOURCES[n].region) for n in failed})
     stats["reads"] += len({slugify(SOURCES[n].region) for n in failed})
+    coverage_docs: dict[str, dict] | None = None
     if not args.source:  # con --source il conteggio per comune sarebbe parziale
-        stats["writes"] += write_coverage(db, events, names, centers, int(now.timestamp() * 1000), failed, previous)
+        coverage_docs = {}
+        stats["writes"] += write_coverage(db, events, names, centers, int(now.timestamp() * 1000), failed, previous, coverage_docs)
         reads, writes = write_month_stats(db, events, {slugify(SOURCES[n].region): SOURCES[n].region for n in names
                                                        if not getattr(SOURCES[n], "regional", False)}, now)
         stats["reads"] += reads
@@ -762,7 +887,8 @@ def main(argv: list[str] | None = None) -> int:
         args.stats_out.write_text(json.dumps(stats | {
             "region": "+".join(sorted({slugify(SOURCES[n].region) for n in names})), "events": len(events), "excluded": len(excluded),
             "sources": len(names), "geocode": geocoder.requests, "deferred": len(geocoder.deferred),
-            "skipped_sources": skipped_sources(collected, previous),
+            "skipped_sources": skipped_sources(collected, previous), "net": net,
+            "coverage": coverage_metrics(collected, coverage_docs, state, health, now.date()),
             "retried_ok": sorted(SOURCES[n].city for n, st in collected.items() if st.get("retry") == "ok")}), encoding="utf-8")
     return 0
 
