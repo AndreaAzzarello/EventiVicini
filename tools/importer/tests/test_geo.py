@@ -134,3 +134,32 @@ def test_migrazione_solo_eventi_incompleti(tmp_path):
     assert [u[0] for u in updates] == ["vecchio"]
     assert updates[0][1]["city"] == "Formigine" and updates[0][1]["geohash"] == geohash(44.573, 10.847)
     assert broken == ["rotto"]
+
+
+def test_geocoder_strict_il_budget_vale_anche_per_le_richieste_essenziali(tmp_path):
+    """Dry-run: con budget finito (o 0) nemmeno il centro del comune va a Nominatim."""
+    counter: dict = {}
+    g = Geocoder(fake_client(counter), tmp_path / "c.json", max_requests=0, strict=True)
+    assert g.lookup("Modena, MO", essential=True) is None and counter == {} and g.deferred
+    normale = Geocoder(fake_client(counter), tmp_path / "d.json", max_requests=0)
+    assert normale.lookup("Modena, MO", essential=True) is not None and sum(counter.values()) == 1  # senza strict l'essenziale passa
+
+
+def test_run_main_dry_run_crea_il_geocoder_strict(monkeypatch):
+    import run
+    seen = {}
+    real = run.Geocoder
+
+    class Spia(real):
+        def __init__(self, *a, **kw):
+            seen["strict"] = kw.get("strict")
+            super().__init__(*a, **kw)
+
+    monkeypatch.setattr(run, "Geocoder", Spia)
+    from types import SimpleNamespace
+
+    fonte = SimpleNamespace(region="Veneto", city="Xyz", province="PD", base="https://x.it", viewbox=None, regional=False)
+    monkeypatch.setattr(run, "SOURCES", {"x": fonte})
+    monkeypatch.setattr(run, "collect", lambda *a, **k: [])
+    run.main(["--dry-run", "--regione", "veneto"])
+    assert seen.get("strict") is True

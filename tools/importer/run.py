@@ -823,7 +823,7 @@ def _main(argv: list[str] | None = None) -> int:
         return 1
     with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=httpx.Timeout(30, connect=CONNECT_TIMEOUT), follow_redirects=True) as client:
         geocoder = Geocoder(client, HERE / "geocache.json", args.max_geocode,
-                            float(os.environ.get("NOMINATIM_INTERVAL", "1")))
+                            float(os.environ.get("NOMINATIM_INTERVAL", "1")), strict=args.dry_run)
         stats: dict[str, dict] = {}
         excluded: list[dict] = []
         state_file = HERE / "unreachable.json"
