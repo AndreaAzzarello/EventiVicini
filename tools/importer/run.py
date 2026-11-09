@@ -15,7 +15,7 @@ import sys
 import time
 import uuid
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import urlsplit
@@ -24,6 +24,7 @@ import httpx
 from concurrent.futures import ThreadPoolExecutor
 
 import bundles
+import clusters
 import logsafe
 import unreachable
 import manifest
@@ -82,10 +83,11 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
         a = SOURCES[name]
         return None if unreachable_state is None or getattr(a, "regional", False) else urlsplit(a.base).netloc
 
-    def fetch(name: str) -> Got:
-        """Solo rete (un host per fonte, 1 richiesta/s ciascuno): può girare in parallelo."""
+    def fetch(name: str, force: bool = False) -> Got:
+        """Solo rete (un host per fonte, 1 richiesta/s ciascuno): può girare in parallelo. force: le sentinelle di un cluster
+        si provano anche se il loro host è parcheggiato."""
         host = host_of(name)
-        if host and not unreachable.due(unreachable_state, host, today):
+        if host and not force and not unreachable.due(unreachable_state, host, today):
             h = unreachable_state[host]
             return Got([], f"host irraggiungibile ({h['fails']} tentativi falliti, {h['reason']}): riprovo dal "
                            f"{unreachable.retry_on(unreachable_state, host):%d/%m}", 0.0, 0, "parked")
@@ -106,13 +108,54 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
                  f"errore ({error[:120]})" if error else f"ok, {len(found)} eventi grezzi")  # subito: lo stdout del job si legge mentre gira
         return Got(found, error, seconds, requests, kind)
 
-    def process(batch: list[str]) -> None:
+    def probe_clusters(batch: list[str]) -> dict[str, Got]:
+        """Sentinelle per subnet (vedi clusters.py). Restituisce gli esiti già pronti: le sentinelle e, per le subnet giù, tutte le
+        altre fonti del gruppo, che non si tentano né si parcheggiano. Senza limiti di rete o senza stato degli host non fa nulla."""
+        gate = httpfetch.DEFAULT_GATE
+        if gate is None or unreachable_state is None:
+            return {}
+        cand = [n for n in batch if host_of(n)]
+        subnet = {n: gate.net.subnet(host_of(n)) for n in cand}  # già risolte da process()
+        grouped = clusters.groups(cand, subnet.get)
+        chosen = {s: clusters.pick_canaries(g, host_of, unreachable_state) for s, g in grouped.items()}
+        chosen = {s: c for s, c in chosen.items() if len(c) == clusters.CANARIES}
+        sentinels = [n for c in chosen.values() for n in c]
+        if not sentinels:
+            return {}
+        with ThreadPoolExecutor(WORKERS) as pool:
+            tried = dict(zip(sentinels, pool.map(lambda n: fetch(n, force=True), sentinels)))
+        pre: dict[str, Got] = {}
+        for sub, canaries in chosen.items():
+            group = grouped[sub]
+            if clusters.is_down([tried[n].kind for n in canaries]):
+                since = clusters.mark_down(unreachable_state, sub, today, tried[canaries[0]].error or "", len(group))
+                why = (f"rete del fornitore non raggiungibile ({sub}, {len(canaries)} sentinelle senza risposta, "
+                       f"dal {date.fromisoformat(since):%d/%m}): riprovo al prossimo import")
+                for n in group:
+                    pre[n] = tried[n]._replace(kind="cluster") if n in tried else Got([], why, 0.0, 0, "cluster")
+                log.warning("Rete: %d fonti in %s non tentate (%d sentinelle su %d senza risposta, giù dal %s)",
+                            len(group) - len(canaries), sub, len(canaries), len(canaries), f"{date.fromisoformat(since):%d/%m}")
+            else:
+                for n in canaries:
+                    pre[n] = tried[n]
+                parked = [h for h in clusters.parked_hosts(group, host_of, unreachable_state)]
+                back = clusters.mark_up(unreachable_state, sub)
+                if clusters.should_release(back, parked):
+                    clusters.release(unreachable_state, parked)
+                    log.warning("Rete: %s risponde (%s), azzero i parcheggi di %d host", sub,
+                                f"era giù dal {date.fromisoformat(back):%d/%m}" if back else "molti host erano fermi", len(parked))
+        return pre
+
+    def process(batch: list[str], probe: bool = True) -> None:
+        pre: dict[str, Got] = {}
         with ThreadPoolExecutor(WORKERS) as pool:
             order = batch
             if (gate := httpfetch.DEFAULT_GATE) is not None:  # i worker non si concentrano su un solo hosting
                 gate.net.prefetch(urlsplit(SOURCES[n].base).netloc for n in batch)  # DNS in parallelo, una volta
                 order = interleave(batch, lambda n: gate.net.subnet(urlsplit(SOURCES[n].base).netloc))
-            done = dict(zip(order, pool.map(fetch, order)))
+                pre = probe_clusters(batch) if probe else {}
+            todo = [n for n in order if n not in pre]
+            done = pre | dict(zip(todo, pool.map(fetch, todo)))
             fetched = [done[n] for n in batch]
         # Geocoding (Nominatim, 1 richiesta/s in tutto) in sequenza, dagli eventi più vicini nel tempo: se il budget
         # di richieste del giro finisce, i più lontani restano senza geocoding e lo prendono nei giorni dopo.
@@ -121,9 +164,9 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
             found, error = got.found, got.error
             stats[name] = {"events": 0, "skipped": 0, "excluded": 0, "duplicates": 0, "error": error,
                            "seconds": round(got.seconds, 1), "requests": got.requests}
-            if got.kind:  # "parked" (saltata senza rete), "connect" (connessione fallita) o "budget" (tempo esaurito): niente secondo giro
+            if got.kind:  # "parked" (saltata senza rete), "cluster" (subnet giù), "connect" (connessione fallita) o "budget" (tempo esaurito): niente secondo giro
                 stats[name][got.kind] = True
-            if (host := host_of(name)) and got.kind != "parked":  # lo stato degli host si aggiorna nel thread principale
+            if (host := host_of(name)) and got.kind not in ("parked", "cluster"):  # lo stato degli host si aggiorna nel thread principale
                 if error is None:
                     unreachable.ok(unreachable_state, host)
                 elif got.kind == "connect":
@@ -174,12 +217,12 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
                      stats[name]["skipped"], stats[name]["excluded"], stats[name]["duplicates"])
 
     process(names)
-    failed = [n for n in names if stats[n]["error"] and not any(stats[n].get(k) for k in ("parked", "connect", "budget"))]
+    failed = [n for n in names if stats[n]["error"] and not any(stats[n].get(k) for k in ("parked", "cluster", "connect", "budget"))]
     if failed and retry_wait is not None:
         log.warning("%d fonti non raggiungibili: riprovo tra %d s", len(failed), retry_wait)
         time.sleep(retry_wait)
         first = {n: stats[n]["error"] for n in failed}
-        process(failed)
+        process(failed, probe=False)
         for n in failed:
             stats[n] |= {"retry": "fallito" if stats[n]["error"] else "ok", "first_error": first[n]}
         log.info("Secondo tentativo: %d fonti recuperate su %d", sum(1 for n in failed if not stats[n]["error"]), len(failed))
