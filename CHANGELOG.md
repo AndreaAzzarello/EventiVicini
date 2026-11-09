@@ -17,6 +17,7 @@ Formato ispirato a [Keep a Changelog](https://keepachangelog.com/it/). Le versio
 
 ### Modificato
 - Con `--dry-run` l'importer non scrive più `unreachable.json` né `health.json` (ticket #16, anche per le voci `net:<subnet>`).
+- Dry-run dell'importer: geocoding limitato a 20 richieste nuove per regione, con budget valido anche per le richieste essenziali (`Geocoder(strict=True)`); `health.json` ha una cache separata, così le cache già salvate restano compatibili.
 
 ## [1.0.0] - 2026-10-30
 
