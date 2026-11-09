@@ -8,7 +8,7 @@ Agenda gratuita di eventi pubblici locali (partita da Modena). Dettagli completi
 - `tools/importer/`: importer Python (Plone, WordPress DCI, Design Comuni HTML) lanciato da GitHub Actions.
 
 ## Vincoli
-- Firebase resta sul piano Spark (solo Auth + Firestore; niente Storage, Functions, Hosting). Quote al giorno: 50.000 letture, 20.000 scritture, 20.000 cancellazioni.
+- Firebase resta sul piano Spark (Auth + Firestore; niente Storage, Functions. Hosting solo come redirect 301 verso Pages: `firebase/hosting-redirect` + blocco `hosting` di `firebase/firebase.json`; non disattivarlo, serve a `/__/auth/handler` del login Google). Quote al giorno: 50.000 letture, 20.000 scritture, 20.000 cancellazioni.
 - Scrivi su Firestore solo i documenti cambiati (`contentHash`); l'importer si ferma oltre `--max-writes` (15.000) / `--max-reads` (40.000).
 - Gli import reali vanno a tappe, una regione alla volta (`--regione`), dopo un `--dry-run`.
 - I cron di GitHub funzionano solo in UTC e la chiave `timezone` si è rivelata inaffidabile: scrivili in UTC, dopo il reset della quota Firestore, senza `timezone`. Avvio puntuale 08:17 dal Worker `scheduler/` (Cloudflare Cron Trigger → `workflow_dispatch` con `auto=true`); il cron di GitHub (10:17) è riserva; il job `guard` evita il doppio import.
@@ -23,7 +23,7 @@ Agenda gratuita di eventi pubblici locali (partita da Modena). Dettagli completi
 - Controlli: `npm run check`, `npm run lint`, `npm test`, `npm run build`.
 - E2E: `npm run test:e2e` (usa `emulators:exec`, chiude da solo). Regole: `npm test` in `firebase/`.
 - Importer (`tools/importer/`): `python -m pytest -q tests`, `python run.py --dry-run [--regione X]`.
-- Deploy regole/indici (prima della webapp): `npm run deploy:rules` in `firebase/`.
+- Deploy regole/indici (prima della webapp): `npm run deploy:rules` in `firebase/`. Redirect Hosting: `npm run deploy:hosting` in `firebase/`.
 
 ## Finito quando
 - In `web/` passano `npm run check`, `npm run lint`, `npm test` e `npm run build`. Se tocchi le regole passa anche `npm test` in `firebase/`; se tocchi l'importer, `python -m pytest -q tests`.
