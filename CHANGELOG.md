@@ -11,6 +11,12 @@ Formato ispirato a [Keep a Changelog](https://keepachangelog.com/it/). Le versio
 - Importer: le fonti non raggiungibili si riprovano a fine giro e non azzerano più il comune in copertura (restano i dati di ieri); il riepilogo CI elenca le fonti saltate e avvisa (`::warning`) se superano il 5% o se salta un comune con più di 50 eventi.
 - `scheduler/`: Worker Cloudflare gratuito (Cron Trigger 08:17 UTC) che avvia l'import via `workflow_dispatch`; il cron di GitHub passa alle 10:17 come riserva e il job `guard` (riconosce l'import dagli input nel nome del job, non dal titolo) salta l'avvio se l'import completo di oggi è già partito.
 - Province sarde della riforma (OT, OG, VS) in `provinces.json`.
+- Importer, resilienza di rete: limiti per IP e subnet (1 richiesta al secondo per IP, 2 in volo per /24, pausa di 60 s dopo 3 timeout), fonti scaricate a rotazione per subnet e **cluster di rete** gestiti con due sentinelle senza parcheggiare i singoli host (prima, un fornitore irraggiungibile teneva ferme per giorni decine di fonti). Opzioni `--ip-interval` e `--subnet-concurrency`, input `ip_interval` nel workflow.
+- Importer, metriche di copertura nel riepilogo CI: eventi visibili, comuni con almeno un evento, fonti in errore/parcheggiate/in cluster, età dell'ultimo successo (`health.json`), subnet giù e attesa per i limiti.
+- Test di caratterizzazione di `collect()` e di `unreachable.py` (#26, prima parte).
+
+### Modificato
+- Con `--dry-run` l'importer non scrive più `unreachable.json` né `health.json` (ticket #16, anche per le voci `net:<subnet>`).
 
 ## [1.0.0] - 2026-10-30
 

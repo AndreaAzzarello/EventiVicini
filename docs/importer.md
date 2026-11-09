@@ -100,7 +100,25 @@ Per generare la chiave: Console Firebase → Impostazioni progetto → Account d
 ### Fonti che non rispondono
 - A fine giro le fonti che non hanno risposto (timeout, `robots.txt` non raggiungibile) si **riprovano una volta** dopo 5 minuti (`--retry-wait`, 0 = subito, -1 = mai). L'esito è nella tabella per comune.
 - Una fonte che resta muta **non azzera il comune**: `coverage/{regione}` mantiene i dati di ieri (`coverage_doc(previous, failed)`, una lettura per regione interessata) e i suoi eventi restano in Firestore (non vengono nascosti, vedi `ok_hosts`).
+- **Scala per host** (`unreachable.py`): un host che non si connette si ricorda tra un run e l'altro (`unreachable.json`, nella cache di Actions) e si riprova dopo 1, 3, 7 giorni (poi ogni 7). Il parcheggio si applica solo ai siti dei Comuni, non alle fonti regionali.
+- **Cluster di rete** (`clusters.py`, `netcluster.py`): molti siti dei Comuni stanno sullo stesso hosting e smettono di rispondere insieme (il 7/11/2026 tutte le 91 fonti su 93.56.55.0/24 dal runner, mentre da un PC italiano rispondevano). Per ogni subnet (/24 IPv4, /48 IPv6) con almeno **5 fonti** nel giro si provano **2 sentinelle** su host diversi (si preferiscono host senza fallimenti e con l'ultimo successo più recente). Se nessuna si connette il resto della subnet **non si tenta e non si parcheggia**: la scala dei singoli host non avanza e la voce `net:<subnet>` in `unreachable.json` ricorda da quando è giù. Alla prima sentinella che risponde la voce sparisce e si azzerano i parcheggi degli host del gruppo (anche, per lo stato di prima, se almeno 5 erano fermi); pochi host morti in una subnet sana tengono la loro scala. In `health.json` resta la durata di ogni interruzione.
+- **Limiti per IP e subnet** (`NetGate`, condiviso da tutti i `Fetcher`): al massimo 1 richiesta al secondo per IP (`--ip-interval`, anche con host diversi sullo stesso IP), 2 richieste in volo per subnet (`--subnet-concurrency`) e una pausa di 60 secondi della subnet dopo 3 timeout di connessione consecutivi. Le fonti si scaricano a rotazione per subnet, così i 4 worker non si concentrano su un solo fornitore. Nel workflow l'input `ip_interval` (vuoto = 1,0) permette di confrontare due valori con due dry-run. Il log finale (`Rete: …`) e `--stats-out` riportano l'attesa totale per i limiti e il picco di richieste al minuto per IP.
+- **Salute delle fonti** (`health.json`, nella stessa cache): `lastOkAt`, `lastEventsAt`, serie di fallimenti, ultimo errore e ultime interruzioni di rete. Come `unreachable.json` **non si salva nel dry-run** (ticket #16): il passo di cache del dry-run è solo di ripristino e `run.persist_state` non scrive nulla con `--dry-run`.
 - Il riepilogo del workflow elenca le fonti saltate (comune, regione, eventi di ieri, errore) e il job emette un'annotazione `::warning` se sono **più del 5%** delle fonti o se salta un comune con **più di 50 eventi** (una fonte regionale vale il totale della regione). Il job resta verde: l'avviso compare in cima alla pagina dell'esecuzione.
+
+### Metriche di copertura
+
+Il riepilogo del job `cleanup` ha una sezione **Copertura** per regione (`ci_report.coverage_report`, dati da `run.coverage_metrics`, nessuna lettura Firestore in più):
+
+| metrica | significato |
+|---|---|
+| eventi oggi | estratti in questo import (la colonna «eventi» della prima tabella) |
+| eventi visibili | eventi dei comuni nel documento `coverage`, compresi quelli che le fonti saltate lasciano in Firestore. È una **stima**: il numero di una fonte ferma resta quello dell'ultimo giorno in cui ha risposto |
+| comuni con eventi | comuni del documento `coverage` con almeno un evento, su quelli noti |
+| fonti, in errore, parcheggiate, in cluster | stato delle fonti del giro |
+| ultimo successo più vecchio | età in giorni del `lastOkAt` più vecchio, e quante fonti non sono mai riuscite |
+
+Se una subnet è giù compare anche l'elenco dei cluster non raggiungibili, con la data di inizio. Confrontando due giorni si guarda **eventi visibili**: gli «eventi oggi» calano quando le fonti saltano, anche se i loro eventi restano in Firestore.
 
 ### Pulizia automatica
 
