@@ -14,12 +14,15 @@ from urllib.parse import urljoin, urlsplit
 import httpx
 from protego import Protego
 
+from netcluster import NetGate
 from registry import USER_AGENT
 
 log = logging.getLogger("importer")
 CACHE_DIR = Path(__file__).parent / ".httpcache"
 RETRY_STATUS = {429, 500, 502, 503, 504}
 CONNECT_FAILED = (httpx.ConnectError, httpx.ConnectTimeout)  # l'host non risponde: ritentare subito non serve
+#: limiti per IP e subnet condivisi da tutti i Fetcher (ogni adapter ne crea uno suo); li imposta run.py, i comandi a mano non ne hanno
+DEFAULT_GATE: NetGate | None = None
 
 
 class Blocked(Exception):
@@ -32,7 +35,8 @@ class RobotsUnknown(Exception):
 
 class Fetcher:
     def __init__(self, client: httpx.Client, min_interval: float = 1.0, cache_dir: Path | None = None,
-                 retries: int = 3, backoff: float = 1.0):
+                 retries: int = 3, backoff: float = 1.0, gate: NetGate | None = None):
+        self.gate = gate if gate is not None else DEFAULT_GATE
         self.client, self.min_interval = client, min_interval
         self.cache_dir, self.retries, self.backoff = cache_dir, retries, backoff
         self._robots: dict[str, Protego | None] = {}
@@ -49,6 +53,20 @@ class Fetcher:
         if at > now:
             time.sleep(at - now)
 
+    def _send(self, url: str, **kw) -> httpx.Response:
+        """Una richiesta HTTP, attraverso i limiti per IP e subnet (se ci sono) e con l'esito riportato al gate."""
+        if self.gate is None:
+            return self.client.get(url, **kw)
+        host = urlsplit(url).netloc
+        with self.gate.slot(host):
+            try:
+                res = self.client.get(url, **kw)
+            except CONNECT_FAILED:
+                self.gate.report(host, False)
+                raise
+            self.gate.report(host, True)  # qualunque risposta HTTP: l'host è raggiungibile
+            return res
+
     def _robots_for(self, origin: str) -> Protego | None:
         with self._lock:
             if origin in self._robots:
@@ -58,7 +76,7 @@ class Fetcher:
         for attempt in range(self.retries + 1):  # un errore momentaneo non deve spegnere la fonte per tutto l'import
             try:
                 self._wait(urlsplit(origin).netloc)
-                res = self.client.get(origin + "/robots.txt")
+                res = self._send(origin + "/robots.txt")
             except CONNECT_FAILED as e:
                 why = type(e).__name__
                 break
@@ -128,7 +146,7 @@ class Fetcher:
             self._wait(host)
             self.requests += 1
             try:
-                res = self.client.get(url, headers=headers, **extra)
+                res = self._send(url, headers=headers, **extra)
             except httpx.TransportError as e:
                 if attempt == self.retries or isinstance(e, CONNECT_FAILED):
                     raise

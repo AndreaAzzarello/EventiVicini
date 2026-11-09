@@ -7,8 +7,11 @@ from __future__ import annotations
 import ipaddress
 import socket
 import threading
+import time
+from collections import defaultdict
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 
 Resolver = Callable[[str], str | None]
 PREFIX = {4: 24, 6: 48}
@@ -64,3 +67,81 @@ class Network:
         if todo:
             with ThreadPoolExecutor(min(workers, len(todo))) as pool:
                 list(pool.map(self.ip, todo))
+
+
+class NetGate:
+    """Limiti condivisi da tutti i Fetcher del processo (ogni adapter ne crea uno suo, quindi lo stato sta qui):
+
+    - intervallo minimo tra due richieste allo stesso IP (`ip_interval`), qualunque sia l'host;
+    - al massimo `subnet_concurrency` richieste in volo nella stessa subnet;
+    - pausa di subnet: dopo `cooldown_after` timeout di connessione consecutivi nella subnet, nessuna richiesta per `cooldown` secondi.
+
+    Misura anche quanto tempo si perde ad aspettare e quante richieste per minuto riceve ogni IP (`stats`)."""
+
+    def __init__(self, net: Network | None = None, ip_interval: float = 1.0, subnet_concurrency: int = 2,
+                 cooldown_after: int = 3, cooldown: float = 60.0):
+        self.net = net or Network()
+        self.ip_interval, self.subnet_concurrency = max(0.0, ip_interval), max(1, subnet_concurrency)
+        self.cooldown_after, self.cooldown = cooldown_after, cooldown
+        self._lock = threading.Lock()
+        self._next_ip: dict[str, float] = {}
+        self._sem: dict[str, threading.BoundedSemaphore] = {}
+        self._fails: dict[str, int] = {}
+        self._until: dict[str, float] = {}
+        self._stamps: dict[str, list[float]] = defaultdict(list)
+        self.throttle_s = 0.0
+        self.cooldowns = 0
+
+    @contextmanager
+    def slot(self, netloc: str):
+        """Da usare attorno a ogni richiesta HTTP: aspetta il proprio turno e tiene un posto nella subnet finché dura."""
+        ip, sub = self.net.ip(netloc), self.net.subnet(netloc)
+        with self._lock:
+            t0 = time.monotonic()
+            at = max(t0, self._next_ip.get(ip, 0.0), self._until.get(sub, 0.0))
+            self._next_ip[ip] = at + self.ip_interval
+            sem = self._sem.setdefault(sub, threading.BoundedSemaphore(self.subnet_concurrency))
+        if at > t0:
+            time.sleep(at - t0)
+        sem.acquire()
+        try:
+            with self._lock:
+                pause = self._until.get(sub, 0.0) - time.monotonic()  # una pausa scattata mentre si aspettava il posto
+            if pause > 0:
+                time.sleep(pause)
+            with self._lock:
+                now = time.monotonic()
+                self.throttle_s += now - t0
+                self._stamps[ip].append(now)
+            yield
+        finally:
+            sem.release()
+
+    def report(self, netloc: str, ok: bool) -> None:
+        """Esito di una richiesta: una risposta HTTP qualsiasi azzera i timeout consecutivi, un timeout di connessione li conta."""
+        sub = self.net.subnet(netloc)
+        with self._lock:
+            if ok:
+                self._fails[sub] = 0
+                return
+            n = self._fails.get(sub, 0) + 1
+            if n >= self.cooldown_after:
+                self._until[sub] = time.monotonic() + self.cooldown
+                self.cooldowns += 1
+                n = 0
+            self._fails[sub] = n
+
+    def stats(self, top: int = 10) -> dict:
+        """Attese e richieste per IP (picco in 60 s), per il riepilogo e per --stats-out."""
+        with self._lock:
+            ips = {}
+            for ip, stamps in self._stamps.items():
+                ts, start, peak = sorted(stamps), 0, 0
+                for i, t in enumerate(ts):
+                    while t - ts[start] >= 60:
+                        start += 1
+                    peak = max(peak, i - start + 1)
+                ips[ip] = {"requests": len(ts), "peak60": peak}
+            busiest = sorted(ips.items(), key=lambda kv: (-kv[1]["requests"], kv[0]))[:top]
+            return {"throttle_s": round(self.throttle_s, 1), "cooldowns": self.cooldowns, "ip_interval": self.ip_interval,
+                    "subnet_concurrency": self.subnet_concurrency, "ips": len(ips), "top_ips": dict(busiest)}

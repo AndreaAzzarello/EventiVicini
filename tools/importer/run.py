@@ -29,8 +29,10 @@ import unreachable
 import manifest
 from adapters import SOURCES, Adapter, fallback_place
 from geo import PROVINCES, enrich, in_viewbox, slugify
+import fetch as httpfetch  # `fetch` è anche una funzione locale di collect()
 from fetch import CONNECT_FAILED
 from geocode import Geocoder
+from netcluster import NetGate
 from meter import BudgetExceeded, SourceMeter
 from mapping import ROME, content_hash, dedupe_key, html_to_text, is_long_running, one_line
 from registry import USER_AGENT, read_rows
@@ -41,6 +43,8 @@ WORKERS = 4  # fonti scaricate in parallelo
 METER = SourceMeter()
 # 5 s tagliava host che col vecchio timeout di 30 s funzionavano (dry-run del 3/11: Veroli, Casorate Sempione...); i morti ora costano 15 s, una volta
 CONNECT_TIMEOUT = 15
+IP_INTERVAL = 1.0  # secondi tra due richieste allo stesso IP (host diversi sullo stesso hosting contano insieme)
+SUBNET_CONCURRENCY = 2  # richieste in volo nella stessa subnet (/24): i 4 worker non si concentrano su un fornitore
 SOURCE_BUDGET = 600  # secondi per fonte: una fonte sana ha impiegato da 41 a 223 s (Albiano d'Ivrea, prova del 3/11); da tarare sul riepilogo "Fonti più lente"
 log = logging.getLogger("importer")
 
@@ -669,6 +673,13 @@ def summary(stats: dict[str, dict], sources: dict) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _main(argv)
+    finally:
+        httpfetch.DEFAULT_GATE = None  # lo stato globale non esce dall'import (i test chiamano main più volte)
+
+
+def _main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--dry-run", action="store_true", help="stampa gli eventi senza scrivere")
     p.add_argument("--source", action="append", choices=sorted(SOURCES), help="fonte (ripetibile)")
@@ -688,8 +699,14 @@ def main(argv: list[str] | None = None) -> int:
                    help="secondi concessi a ogni fonte dei Comuni (0 = nessun tetto); oltre, la fonte è saltata")
     p.add_argument("--retry-wait", type=float, default=300,
                    help="secondi prima di riprovare, a fine giro, le fonti non raggiungibili (0 = subito, -1 = non riprovare)")
+    p.add_argument("--ip-interval", type=float, default=IP_INTERVAL,
+                   help="secondi minimi tra due richieste allo stesso IP, qualunque sia l'host (0 = nessun limite per IP)")
+    p.add_argument("--subnet-concurrency", type=int, default=SUBNET_CONCURRENCY,
+                   help="richieste in volo al massimo nella stessa subnet /24")
     args = p.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
+    gate = NetGate(ip_interval=args.ip_interval, subnet_concurrency=args.subnet_concurrency)
+    httpfetch.DEFAULT_GATE = gate  # lo usano tutti i Fetcher creati dagli adapter
     logsafe.setup()
 
     now = datetime.now(timezone.utc)
@@ -721,6 +738,10 @@ def main(argv: list[str] | None = None) -> int:
     summary(stats, SOURCES)
     print(excluded_report(excluded))
     log.info("Totale dopo deduplica: %d (richieste Nominatim: %d)", len(events), geocoder.requests)
+    net = gate.stats()
+    busiest = ", ".join(f"{ip} {v['requests']} ric., picco {v['peak60']}/min" for ip, v in list(net["top_ips"].items())[:3])
+    log.info("Rete: %d IP, %.0f s di attesa per i limiti (%d pause di subnet); più colpiti: %s",
+             net["ips"], net["throttle_s"], net["cooldowns"], busiest or "-")
     if geocoder.deferred:
         log.warning("Geocoding: %d richieste rimandate oltre il budget di %d, servono circa %d giorni "
                     "(gli eventi più vicini nel tempo hanno la precedenza)", len(geocoder.deferred), args.max_geocode,
@@ -762,7 +783,7 @@ def main(argv: list[str] | None = None) -> int:
         args.stats_out.write_text(json.dumps(stats | {
             "region": "+".join(sorted({slugify(SOURCES[n].region) for n in names})), "events": len(events), "excluded": len(excluded),
             "sources": len(names), "geocode": geocoder.requests, "deferred": len(geocoder.deferred),
-            "skipped_sources": skipped_sources(collected, previous),
+            "skipped_sources": skipped_sources(collected, previous), "net": net,
             "retried_ok": sorted(SOURCES[n].city for n, st in collected.items() if st.get("retry") == "ok")}), encoding="utf-8")
     return 0
 
