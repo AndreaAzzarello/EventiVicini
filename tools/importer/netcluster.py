@@ -145,3 +145,13 @@ class NetGate:
             busiest = sorted(ips.items(), key=lambda kv: (-kv[1]["requests"], kv[0]))[:top]
             return {"throttle_s": round(self.throttle_s, 1), "cooldowns": self.cooldowns, "ip_interval": self.ip_interval,
                     "subnet_concurrency": self.subnet_concurrency, "ips": len(ips), "top_ips": dict(busiest)}
+
+
+def interleave(items: list[str], key: Callable[[str], str]) -> list[str]:
+    """Riordina gli elementi spargendo ogni gruppo (stessa chiave, per esempio la subnet) lungo tutta la lista, in proporzione
+    alla sua taglia: un cluster di 90 siti non occupa tutti i worker uno dopo l'altro. Stabile: dentro il gruppo l'ordine resta."""
+    groups: dict[str, list[str]] = {}
+    for it in items:
+        groups.setdefault(key(it), []).append(it)
+    ranked = [((i + 0.5) / len(g), n, it) for n, g in enumerate(groups.values()) for i, it in enumerate(g)]
+    return [it for _, _, it in sorted(ranked)]

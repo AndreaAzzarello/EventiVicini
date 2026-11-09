@@ -32,7 +32,7 @@ from geo import PROVINCES, enrich, in_viewbox, slugify
 import fetch as httpfetch  # `fetch` è anche una funzione locale di collect()
 from fetch import CONNECT_FAILED
 from geocode import Geocoder
-from netcluster import NetGate
+from netcluster import NetGate, interleave
 from meter import BudgetExceeded, SourceMeter
 from mapping import ROME, content_hash, dedupe_key, html_to_text, is_long_running, one_line
 from registry import USER_AGENT, read_rows
@@ -108,7 +108,12 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
 
     def process(batch: list[str]) -> None:
         with ThreadPoolExecutor(WORKERS) as pool:
-            fetched = list(pool.map(fetch, batch))
+            order = batch
+            if (gate := httpfetch.DEFAULT_GATE) is not None:  # i worker non si concentrano su un solo hosting
+                gate.net.prefetch(urlsplit(SOURCES[n].base).netloc for n in batch)  # DNS in parallelo, una volta
+                order = interleave(batch, lambda n: gate.net.subnet(urlsplit(SOURCES[n].base).netloc))
+            done = dict(zip(order, pool.map(fetch, order)))
+            fetched = [done[n] for n in batch]
         # Geocoding (Nominatim, 1 richiesta/s in tutto) in sequenza, dagli eventi più vicini nel tempo: se il budget
         # di richieste del giro finisce, i più lontani restano senza geocoding e lo prendono nei giorni dopo.
         pending = []
