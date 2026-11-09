@@ -4,9 +4,60 @@
     "indexes": "firestore.indexes.json"
   },
   "emulators": {
-    "auth": { "port": 9099 },
-    "firestore": { "port": 8080 },
-    "ui": { "enabled": true, "port": 4000 },
-    "singleProjectMode": true
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    },
+    "singleProjectMode": true,
+    "hosting": {
+      "port": 5005
+    }
+  },
+  "hosting": {
+    "public": "hosting-redirect",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "**/flutter_service_worker.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "regex": "^/admin/?$",
+        "destination": "https://eventi-vicini.pages.dev/admin",
+        "type": 301
+      },
+      {
+        "regex": "^/admin/events/new/?$",
+        "destination": "https://eventi-vicini.pages.dev/admin/eventi/nuovo",
+        "type": 301
+      },
+      {
+        "regex": "^/admin/events/([^/]+)/?$",
+        "destination": "https://eventi-vicini.pages.dev/admin/eventi/:1",
+        "type": 301
+      },
+      {
+        "regex": "^/(?:[^f].*|f[^l].*|fl[^u].*|flu[^t].*|flut[^t].*|flutt[^e].*|flutte[^r].*|flutter[^_].*|flutter_[^s].*|flutter_s[^e].*|flutter_se[^r].*|flutter_ser[^v].*|flutter_serv[^i].*|flutter_servi[^c].*|flutter_servic[^e].*|flutter_service[^_].*|flutter_service_[^w].*|flutter_service_w[^o].*|flutter_service_wo[^r].*|flutter_service_wor[^k].*|flutter_service_work[^e].*|flutter_service_worke[^r].*|flutter_service_worker[^\\.].*|flutter_service_worker\\.[^j].*|flutter_service_worker\\.j[^s].*|flutter_service_worker\\.js.+|f|fl|flu|flut|flutt|flutte|flutter|flutter_|flutter_s|flutter_se|flutter_ser|flutter_serv|flutter_servi|flutter_servic|flutter_service|flutter_service_|flutter_service_w|flutter_service_wo|flutter_service_wor|flutter_service_work|flutter_service_worke|flutter_service_worker|flutter_service_worker.|flutter_service_worker.j)?$",
+        "destination": "https://eventi-vicini.pages.dev/",
+        "type": 301
+      }
+    ]
   }
 }

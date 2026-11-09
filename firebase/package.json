@@ -7,6 +7,7 @@
   },
   "scripts": {
     "test": "firebase emulators:exec --only firestore --project demo-eventi \"vitest run\"",
+    "deploy:hosting": "firebase deploy --only hosting --project appeventi-1e860",
     "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes --project appeventi-1e860"
   },
   "devDependencies": {
