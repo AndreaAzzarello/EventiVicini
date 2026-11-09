@@ -125,7 +125,9 @@ jobs:
       # Cache per regione: meno richieste a Nominatim e ai siti dei Comuni (le pagine invariate rispondono 304).
       # Il dry-run la legge soltanto: salvarla sposterebbe in avanti la più recente (con manifest e host irraggiungibili
       # dell'ultimo import vero) e il run vero successivo la ripristinerebbe al posto di quella giusta (ticket #16).
-      # Vale anche per unreachable.json (host parcheggiati e subnet giù, chiavi net:<subnet>) e health.json (lastOkAt, interruzioni).
+      # Vale anche per unreachable.json (host parcheggiati e subnet giù, chiavi net:<subnet>).
+      # NON aggiungere altri percorsi a questo elenco: la versione di una cache dipende dai percorsi, e con un elenco diverso
+      # le cache già salvate (anche quelle di main) non si ripristinano più. I file nuovi vanno in un passo a parte (health.json qui sotto).
       - uses: actions/cache/restore@v5
         if: ${{ inputs.dry_run }}
         with:
@@ -133,7 +135,6 @@ jobs:
             tools/importer/geocache.json
             tools/importer/.httpcache
             tools/importer/unreachable.json
-            tools/importer/health.json
             tools/importer/manifests
           key: importer-${{ matrix.region }}-${{ github.run_id }}
           restore-keys: importer-${{ matrix.region }}-
@@ -144,10 +145,23 @@ jobs:
             tools/importer/geocache.json
             tools/importer/.httpcache
             tools/importer/unreachable.json
-            tools/importer/health.json
             tools/importer/manifests
           key: importer-${{ matrix.region }}-${{ github.run_id }}
           restore-keys: importer-${{ matrix.region }}-
+      # Salute delle fonti (lastOkAt, interruzioni): cache a parte, così la cache sopra resta compatibile con quelle già salvate.
+      # Stessa regola del dry-run: solo ripristino (ticket #16).
+      - uses: actions/cache/restore@v5
+        if: ${{ inputs.dry_run }}
+        with:
+          path: tools/importer/health.json
+          key: importer-health-${{ matrix.region }}-${{ github.run_id }}
+          restore-keys: importer-health-${{ matrix.region }}-
+      - uses: actions/cache@v5
+        if: ${{ !inputs.dry_run }}
+        with:
+          path: tools/importer/health.json
+          key: importer-health-${{ matrix.region }}-${{ github.run_id }}
+          restore-keys: importer-health-${{ matrix.region }}-
       - name: Importer
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -158,7 +172,7 @@ jobs:
         run: >
           python run.py --regione ${{ matrix.region }}
           --max-reads ${{ matrix.reads }} --max-writes ${{ needs.plan.outputs.writes }}
-          --max-geocode ${{ needs.plan.outputs.geocode }}
+          --max-geocode ${{ inputs.dry_run && 20 || needs.plan.outputs.geocode }}
           --stats-out stats-${{ matrix.region }}.json
           ${{ inputs.dry_run && '--dry-run' || '' }}
           ${{ (inputs.reconcile || matrix.reconcile) && '--reconcile' || '' }}
