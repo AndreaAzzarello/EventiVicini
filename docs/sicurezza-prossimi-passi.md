@@ -8,7 +8,7 @@ Dall'audit di sicurezza del 30 ottobre 2026 (run-1). Le correzioni a basso costo
 **Stato (3 novembre 2026).**
 1. Il Worker sa leggere con un account di servizio (`web/src/lib/server/gauth.ts`, ticket #10): fatto nel codice. Senza il segreto `FIREBASE_READER_SA` ripiega sulla chiave web, quindi si può pubblicare prima di configurarlo.
 2. Le regole chiudono la lettura pubblica di `events`, `bundles`, `coverage`, `stats` (ticket #11): pubblicate e **verificate in produzione il 3 novembre 2026**: REST anonimo su `events`, `bundles`, `coverage`, `stats` (con e senza chiave web) → HTTP 403 `PERMISSION_DENIED`; 19 pagine `/citta/` (una per regione, tutte in sitemap) → 200 con eventi; dettaglio evento → 200. Il Molise non ha città in sitemap (la sitemap è limitata a 500 eventi): non verificato, la pagina `/regione/molise` risponde 200. Rollback: `git revert` del commit delle regole e di nuovo `npm run deploy:rules`.
-3. App Check sulle scritture del browser (ticket #12): attivo in produzione dal 3 novembre 2026 (commit `8746cef`, `PUBLIC_TURNSTILE_SITEKEY` in `wrangler.toml`), in sola osservazione (vedi sotto). L'enforcement (ticket #13) viene dopo 7 giorni di metriche. Da solo non protegge le letture REST del Worker, per questo il punto 1 viene prima.
+3. App Check sulle scritture del browser (ticket #12): attivo in produzione dal 3 novembre 2026 (commit `8746cef`, `PUBLIC_TURNSTILE_SITEKEY` in `wrangler.toml`), in osservazione dal 3 al 10 novembre 2026. **Enforcement su Firestore attivo dal 10 novembre 2026, ore 10:20** (ticket #13, vedi «Enforcement (T6)» sotto); Auth non applicato per scelta. Da solo non protegge le letture REST del Worker, per questo il punto 1 viene prima.
 
 **Ordine.** Worker con il segreto → verifica delle letture in produzione → regole con lettura chiusa (`npm run deploy:rules` in `firebase/`) → App Check in monitoraggio → enforcement. Se si pubblicano le regole prima del Worker con il token, il sito smette di leggere.
 
@@ -33,9 +33,21 @@ Dall'audit di sicurezza del 30 ottobre 2026 (run-1). Le correzioni a basso costo
 3. Google Cloud → IAM → ruolo personalizzato con il solo permesso `firebaseappcheck.tokens.mint` (confermato dalla [documentazione dei permessi Firebase](https://firebase.google.com/docs/projects/iam/permissions)), assegnato a `eventi-vicini-reader`. Abilitare l'API *Firebase App Check* sul progetto. Un account dedicato non serve: la chiave starebbe comunque nei segreti dello stesso Worker.
 4. Console Firebase → App Check → app web → *Provider personalizzato* (nessuna chiave da inserire: i token sono firmati dall'account di servizio).
 5. Push. Monitoraggio per 7 giorni in console App Check → Firestore: richieste verificate / non verificate / obsolete. **Inizio monitoraggio: 3 novembre 2026 · fine: 10 novembre 2026. Enforcement NON attivo.** Verificato il 3 novembre: `POST /api/appcheck` con token finto → 403, senza corpo → 400, GET → 405; deploy `8afde540` (`80d372c`) attivo con `console.warn('appcheck:')` nel chunk servito. **T5 attivo e verificato il 3 novembre 2026** per deploy, rotta, widget Turnstile e scambio `exchangeCustomToken`: in produzione (browser dell'utente, incognito, dopo il login) `firebase-app-check-database` → `firebase-app-check-store` contiene la voce con chiave dell'app web e `value` con token ed `expireTimeMillis`; l'SDK salva il token solo dopo una risposta 200 di `/api/appcheck`. Resta da confermare solo la crescita delle metriche «verificate» (App Check → API → Cloud Firestore), che l'utente controlla nei giorni del monitoraggio.
-6. Enforcement (ticket #13) solo se le non verificate sono quasi zero. Rollback: «Unenforce» in console (propagazione fino a circa 15 minuti). Per disattivare tutto: svuotare `PUBLIC_TURNSTILE_SITEKEY` e ripubblicare.
+6. Enforcement (ticket #13) solo se le non verificate sono quasi zero: attivato il 10 novembre 2026 (vedi sotto). Rollback: «Unenforce» in console (propagazione fino a circa 15 minuti, tempo documentato per l'attivazione; per la disattivazione è una stima prudente). Per disattivare tutto: svuotare `PUBLIC_TURNSTILE_SITEKEY` e ripubblicare.
 
-**Firebase Auth.** Il supporto di App Check per Auth è in anteprima e potrebbe richiedere l'upgrade a Identity Platform (irreversibile, con limiti diversi dallo Spark): non attivarlo senza decisione esplicita.
+### Enforcement (T6, ticket #13) — fatto il 10 novembre 2026
+**Stato.** Enforcement di App Check attivo su **Cloud Firestore** dalle 10:20 del 10 novembre 2026. **Auth non applicato, per scelta** (anteprima, possibile upgrade a Identity Platform irreversibile: nessuna modifica senza decisione esplicita).
+
+**Verifiche dopo 15 minuti.**
+- Worker: eventi visibili sul sito. Il Worker legge via REST con il token OAuth dell'account di servizio, senza token App Check.
+- Browser: preferito salvato da utente loggato (scrittura con token App Check).
+- Importer: dry-run `molise` riuscito (run 42793698879). **Non è una prova per Firestore**: nel dry-run `run.py` stampa gli eventi e termina prima di `_write` (nessuna connessione a Firestore, nessuna credenziale usata). Nel log non ci sono né «confronto» né letture.
+
+**Cosa non è dimostrato.** La documentazione ufficiale dice solo che «some services» accettano le credenziali dell'account di servizio senza token App Check ([EnforcementMode](https://firebase.google.com/docs/reference/appcheck/rest/v1/EnforcementMode)); non nomina Firestore. Per il Worker la prova è l'esito sopra (con il dubbio della cache del Worker, che può servire pagine già lette prima dell'enforcement). Per l'importer (firebase-admin, account `FIREBASE_SERVICE_ACCOUNT`) la **prova definitiva è l'import automatico del 11 novembre 2026 (08:17 UTC)**: nel riepilogo devono comparire letture e scritture diverse da zero e nessun errore `PERMISSION_DENIED`.
+
+**Se l'import fallisce con `PERMISSION_DENIED`.** Console Firebase → Security → App Check → Cloud Firestore → togliere l'enforcement (fino a circa 15 minuti), poi rilanciare l'import. Non aprire Firestore ad altre scritture nel frattempo.
+
+**Firebase Auth.** Il supporto di App Check per Auth è in anteprima e potrebbe richiedere l'upgrade a Identity Platform (irreversibile, con limiti diversi dallo Spark): **non applicato per scelta** (10 novembre 2026); non attivarlo senza decisione esplicita.
 
 **Vincoli.** Tutto gratis, nessuna carta. Se la console impedisce di creare la chiave (criterio dell'organizzazione `iam.disableServiceAccountKeyCreation`), fermarsi e chiedere: non esistono alternative gratuite equivalenti senza cambiare approccio.
 
