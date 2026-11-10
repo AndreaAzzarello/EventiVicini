@@ -41,11 +41,15 @@ Dall'audit di sicurezza del 30 ottobre 2026 (run-1). Le correzioni a basso costo
 **Verifiche dopo 15 minuti.**
 - Worker: eventi visibili sul sito. Il Worker legge via REST con il token OAuth dell'account di servizio, senza token App Check.
 - Browser: preferito salvato da utente loggato (scrittura con token App Check).
-- Importer: dry-run `molise` riuscito (run 42793698879). **Non è una prova per Firestore**: nel dry-run `run.py` stampa gli eventi e termina prima di `_write` (nessuna connessione a Firestore, nessuna credenziale usata). Nel log non ci sono né «confronto» né letture.
+- Pagina città senza cache (`/citta/ancona?v=2`): eventi visibili. Esclude che la lettura del Worker venisse da una cache precedente all'enforcement.
+- Importer, dry-run `molise` (run 42793698879): **non prova nulla su Firestore**, perché `run.py` stampa gli eventi e termina prima di `_write` (nessuna connessione al database).
+- Importer, **import reale** `molise` dopo l'enforcement (run 42794673840, 09:54 UTC): success in tutti i job; 10 letture, 2 scritture, 0 cancellazioni (confronto `manifest`); nessun `PERMISSION_DENIED` nel log. Il client firebase-admin con `FIREBASE_SERVICE_ACCOUNT` funziona quindi con l'enforcement attivo.
 
-**Cosa non è dimostrato.** La documentazione ufficiale dice solo che «some services» accettano le credenziali dell'account di servizio senza token App Check ([EnforcementMode](https://firebase.google.com/docs/reference/appcheck/rest/v1/EnforcementMode)); non nomina Firestore. Per il Worker la prova è l'esito sopra (con il dubbio della cache del Worker, che può servire pagine già lette prima dell'enforcement). Per l'importer (firebase-admin, account `FIREBASE_SERVICE_ACCOUNT`) la **prova definitiva è l'import automatico del 11 novembre 2026 (08:17 UTC)**: nel riepilogo devono comparire letture e scritture diverse da zero e nessun errore `PERMISSION_DENIED`.
+**Metriche prima dell'enforcement** (console App Check, Firestore): 15 richieste su 15 verificate (100%), 0 non verificate. Il campione è piccolo (poco traffico in produzione).
 
-**Se l'import fallisce con `PERMISSION_DENIED`.** Console Firebase → Security → App Check → Cloud Firestore → togliere l'enforcement (fino a circa 15 minuti), poi rilanciare l'import. Non aprire Firestore ad altre scritture nel frattempo.
+**Nota sulla documentazione.** Quella ufficiale dice solo che «some services» accettano le credenziali dell'account di servizio senza token App Check ([EnforcementMode](https://firebase.google.com/docs/reference/appcheck/rest/v1/EnforcementMode)) e non nomina Firestore: l'esenzione per Worker (REST con token OAuth) e importer è confermata dai fatti sopra, non dal testo ufficiale. Il primo import completo con l'enforcement è quello automatico dell'11 novembre 2026 (08:17 UTC): controllare che il riepilogo non riporti errori Firestore.
+
+**Se un import fallisce con `PERMISSION_DENIED`.** Console Firebase → Security → App Check → Cloud Firestore → togliere l'enforcement (fino a circa 15 minuti), poi rilanciare l'import. Non aprire Firestore ad altre scritture nel frattempo.
 
 **Firebase Auth.** Il supporto di App Check per Auth è in anteprima e potrebbe richiedere l'upgrade a Identity Platform (irreversibile, con limiti diversi dallo Spark): **non applicato per scelta** (10 novembre 2026); non attivarlo senza decisione esplicita.
 
