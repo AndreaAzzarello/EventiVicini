@@ -51,6 +51,15 @@ export interface EventInput {
 	region: string;
 }
 
+// Record<keyof EventInput, true>: un campo aggiunto a EventInput e non qui (o viceversa) rompe `npm run check`.
+// Deve coincidere con eventKeys() in firestore.rules e con docs/schema/parity.json (schema-parity.test.ts).
+const EVENT_KEY_MAP: Record<keyof EventInput, true> = {
+	title: true, shortDescription: true, category: true, priceType: true, startTime: true, endTime: true,
+	venueName: true, address: true, lat: true, lng: true, imageUrl: true, ticketUrl: true, tags: true,
+	geohash: true, city: true, citySlug: true, province: true, region: true
+};
+export const EVENT_KEYS = Object.keys(EVENT_KEY_MAP) as (keyof EventInput)[];
+
 export interface Event extends EventInput {
 	id: string;
 	source: 'manual' | 'scraper' | 'user';

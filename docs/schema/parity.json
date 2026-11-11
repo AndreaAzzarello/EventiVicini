@@ -1,0 +1,191 @@
+{
+  "_nota": "Fonte condivisa dei test di parità dello schema evento (#18). Vedi docs/importer.md, sezione «Schema evento: file di parità».",
+  "categories": [
+    "music",
+    "food",
+    "sport",
+    "culture",
+    "kids",
+    "market",
+    "other"
+  ],
+  "priceTypes": [
+    "free",
+    "low",
+    "premium",
+    "unknown"
+  ],
+  "sources": [
+    "manual",
+    "scraper",
+    "user"
+  ],
+  "eventKeys": [
+    "title",
+    "shortDescription",
+    "category",
+    "priceType",
+    "startTime",
+    "endTime",
+    "venueName",
+    "address",
+    "lat",
+    "lng",
+    "imageUrl",
+    "ticketUrl",
+    "tags",
+    "geohash",
+    "city",
+    "citySlug",
+    "province",
+    "region"
+  ],
+  "eventOptionalKeys": [
+    "source",
+    "sourceUrl",
+    "approxLocation",
+    "locality",
+    "longRunning",
+    "createdAt",
+    "updatedAt",
+    "contentHash",
+    "importRegion",
+    "missingRuns",
+    "removedAt"
+  ],
+  "importerOnlyKeys": [
+    "cityAlt"
+  ],
+  "_importerOnlyNota": "Scritte dall'importer (Admin SDK) ma non ammesse da hasOnly delle regole: da risolvere in #46.",
+  "hashSkip": [
+    "id",
+    "createdAt",
+    "updatedAt",
+    "contentHash",
+    "missingRuns",
+    "removedAt",
+    "importRegion"
+  ],
+  "kidsTags": [
+    "kids",
+    "family"
+  ],
+  "slugify": [
+    {
+      "in": "Modena",
+      "out": "modena"
+    },
+    {
+      "in": "Reggio nell'Emilia",
+      "out": "reggio-nell-emilia"
+    },
+    {
+      "in": "Sant'Agostino",
+      "out": "sant-agostino"
+    },
+    {
+      "in": "Bolzano / Bozen",
+      "out": "bolzano-bozen"
+    },
+    {
+      "in": "Brixen/Bressanone",
+      "out": "brixen-bressanone"
+    },
+    {
+      "in": "Aosta / Aoste",
+      "out": "aosta-aoste"
+    },
+    {
+      "in": "San Giovanni in Persiceto",
+      "out": "san-giovanni-in-persiceto"
+    },
+    {
+      "in": "CASTELFRANCO EMILIA",
+      "out": "castelfranco-emilia"
+    },
+    {
+      "in": "Forlì-Cesena",
+      "out": "forli-cesena"
+    },
+    {
+      "in": "Città di Castello",
+      "out": "citta-di-castello"
+    },
+    {
+      "in": "Bad Ischl",
+      "out": "bad-ischl"
+    },
+    {
+      "in": "Müllheim",
+      "out": "mullheim"
+    },
+    {
+      "in": "Straße",
+      "out": "stra-e"
+    },
+    {
+      "in": "Saint-Vincent",
+      "out": "saint-vincent"
+    },
+    {
+      "in": "L'Aquila",
+      "out": "l-aquila"
+    },
+    {
+      "in": "Cortina d'Ampezzo (BL)",
+      "out": "cortina-d-ampezzo-bl"
+    },
+    {
+      "in": "  spazi  ai bordi  ",
+      "out": "spazi-ai-bordi"
+    },
+    {
+      "in": "---trattini---",
+      "out": "trattini"
+    },
+    {
+      "in": "a--b",
+      "out": "a-b"
+    },
+    {
+      "in": "Concerto: «Jazz» & Blues!",
+      "out": "concerto-jazz-blues"
+    },
+    {
+      "in": "Èvento  è  già  così",
+      "out": "evento-e-gia-cosi"
+    },
+    {
+      "in": "100% gratis",
+      "out": "100-gratis"
+    },
+    {
+      "in": "",
+      "out": ""
+    },
+    {
+      "in": "!!!",
+      "out": ""
+    },
+    {
+      "in": "Ñandú",
+      "out": "nandu"
+    },
+    {
+      "in": "Œuvre française",
+      "out": "uvre-francaise"
+    },
+    {
+      "in": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-yyy",
+      "out": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "in": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbb",
+      "out": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "in": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa b",
+      "out": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}
