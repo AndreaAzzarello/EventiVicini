@@ -17,7 +17,7 @@
 	import X from '@lucide/svelte/icons/x';
 	import { favorites, session } from '$lib/session.svelte';
 	import { KEYS, readJson, writeJson } from '$lib/storage';
-	import { dismiss, toasts } from '$lib/toast.svelte';
+	import { dismiss, pause, resume, toasts } from '$lib/toast.svelte';
 
 	let { children } = $props();
 	let theme = $state<'light' | 'dark' | null>(null);
@@ -119,7 +119,15 @@
 
 <div class="toasts" aria-live="polite" aria-atomic="false">
 	{#each toasts as t (t.id)}
-		<div class="toast" role="status">
+		<!-- Mouse sopra o focus dentro: il conto alla rovescia si ferma, così c'è tempo di leggere e di premere il link. -->
+		<div
+			class="toast"
+			role="status"
+			onmouseenter={() => pause(t.id, 'mouse')}
+			onmouseleave={() => resume(t.id, 'mouse')}
+			onfocusin={() => pause(t.id, 'focus')}
+			onfocusout={() => resume(t.id, 'focus')}
+		>
 			<span>{t.text}</span>
 			{#if t.action}<a class="btn btn-primary btn-sm" href={t.action.href} onclick={() => dismiss(t.id)}>{t.action.label}</a>{/if}
 			<button class="btn btn-ghost btn-sm close" onclick={() => dismiss(t.id)} aria-label="Chiudi avviso"><X size={16} aria-hidden="true" /></button>
