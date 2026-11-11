@@ -216,6 +216,12 @@ describe('stima veloce della distanza dal comune con eventi più vicino', () => 
 });
 
 describe('memoizzazione per identità della copertura', () => {
+	it('nearestEventsKm: stesso valore alla seconda chiamata e con copertura diversa ricalcola', () => {
+		const p = { lat: 44.33, lng: 10.84 };
+		const a = nearestEventsKm(p, REGIONS);
+		expect(nearestEventsKm(p, REGIONS)).toBe(a);
+		expect(nearestEventsKm(p, [])).toBeNull();
+	});
 	it('popularPlaces restituisce lo stesso risultato senza rifare il lavoro, e uno nuovo se cambia l’array', () => {
 		const a = popularPlaces(REGIONS, 3);
 		expect(popularPlaces(REGIONS, 3)).toBe(a);

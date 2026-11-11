@@ -1,11 +1,15 @@
 import { redirect } from '@sveltejs/kit';
 import { HTML_CACHE } from '$lib/server/cache';
 import { comuneBySlug } from '$lib/server/comuneSlug';
-import { filterFromParams } from '$lib/filters';
+import { applyFilter, filterFromParams } from '$lib/filters';
 import { DEFAULT_PLACE, type ChosenPlace } from '$lib/geo';
 import { autoRadius, nearestWithEvents, placeFromEvents, placeFromParams, popularPlaces, regionsWithEvents } from '$lib/places';
+import { sections } from '$lib/sections';
 import { coverage, eventsAround, eventsInCity } from '$lib/server/firestore';
 import type { PageServerLoad } from './$types';
+
+/** Card nell'HTML del server: oltre, il resto arriva da /api/events dopo l'idratazione (render di centinaia di card = CPU del Worker, #51). */
+const SSR_CARDS = 12;
 
 // SSR sul luogo dell'URL (?luogo=slug oppure ?nome=&lat=&lng=). I filtri si applicano nel browser; la posizione salvata
 // dall'utente (solo nel suo localStorage) riporta qui con un link al luogo.
@@ -14,7 +18,8 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url, setHeaders }) => {
 	setHeaders({ 'cache-control': HTML_CACHE });
-	const radiusKm = filterFromParams(url.searchParams).radiusKm;
+	const filter = filterFromParams(url.searchParams);
+	const radiusKm = filter.radiusKm;
 	const wanted = url.searchParams.has('luogo') || url.searchParams.has('lat');
 	const regions = await coverage().catch(() => []);
 	const slug = url.searchParams.get('luogo') ?? '';
@@ -44,14 +49,23 @@ export const load: PageServerLoad = async ({ url, setHeaders }) => {
 				.map((h) => ({ slug: h.place.slug!, name: h.place.label, events: h.events }))
 		};
 		// km: 0 → mai "coperto": il browser scarica gli eventi solo dopo aver saputo il luogo
-		return { ...base, events: [], fetched: { lat: place.lat, lng: place.lng, km: 0 }, error: '', popular: wanted ? null : popular };
+		return { ...base, events: [], fetched: { lat: place.lat, lng: place.lng, km: 0 }, error: '', popular: wanted ? null : popular, partial: false, total: 0, sectionCounts: null };
 	}
 
 	try {
-		return { ...base, ...(await eventsAround(place, radiusKm)), error: '', popular: null };
+		const around = await eventsAround(place, radiusKm);
+		// Con i filtri dell'URL le card sono già quelle che il browser mostrerebbe: le prime SSR_CARDS vanno nell'HTML, con i conteggi
+		// dell'elenco intero (titoli di sezione e riepilogo senza salti). `fetched.km = 0` fa scaricare la lista completa dopo l'idratazione.
+		const now = Date.now();
+		const groups = sections(applyFilter(around.events, filter, now, place), now);
+		const total = groups.reduce((n, g) => n + g.events.length, 0);
+		if (total <= SSR_CARDS) return { ...base, ...around, error: '', popular: null, partial: false, total, sectionCounts: null };
+		const sectionCounts = Object.fromEntries(groups.map((g) => [g.key, g.events.length]));
+		const first = groups.flatMap((g) => g.events).slice(0, SSR_CARDS);
+		return { ...base, events: first, fetched: { lat: place.lat, lng: place.lng, km: 0 }, error: '', popular: null, partial: true, total, sectionCounts };
 	} catch (e) {
 		console.error(e);
 		// L'area risulta "coperta": il browser non riprova da solo mentre Firestore è in difficoltà.
-		return { ...base, events: [], fetched: { lat: place.lat, lng: place.lng, km: radiusKm }, error: 'Non riesco a caricare gli eventi in questo momento. Riprova tra poco.', popular: null };
+		return { ...base, events: [], fetched: { lat: place.lat, lng: place.lng, km: radiusKm }, error: 'Non riesco a caricare gli eventi in questo momento. Riprova tra poco.', popular: null, partial: false, total: 0, sectionCounts: null };
 	}
 };

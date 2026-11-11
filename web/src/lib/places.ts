@@ -183,7 +183,22 @@ export function nearestWithEvents(p: LatLng, regions: CoverageRegion[], n = 3): 
  * senza trigonometria su ciascuno: una stima equirettangolare sceglie i candidati (errore ben sotto il 3% a queste distanze), la
  * distanza esatta di geofire si calcola solo su di loro. Stesso risultato di `nearestWithEvents(p, regions, 1)[0]?.km`.
  */
+const nearestCache = new WeakMap<CoverageRegion[], Map<string, number | null>>();
+
 export function nearestEventsKm(p: LatLng, regions: CoverageRegion[]): number | null {
+	// Memoizzata per copertura e punto: i luoghi scelti sono pochi (comuni), la scansione di ~870 comuni si paga una volta per isolate.
+	let memo = nearestCache.get(regions);
+	if (!memo) nearestCache.set(regions, (memo = new Map()));
+	const key = `${p.lat},${p.lng}`;
+	const hit = memo.get(key);
+	if (hit !== undefined) return hit;
+	const km = scanNearestEventsKm(p, regions);
+	if (memo.size >= 500) memo.clear(); // tetto: il punto può venire anche da ?lat=&lng= liberi
+	memo.set(key, km);
+	return km;
+}
+
+function scanNearestEventsKm(p: LatLng, regions: CoverageRegion[]): number | null {
 	const kx = Math.cos((p.lat * Math.PI) / 180) * 111.195;
 	const ky = 111.195;
 	let best = Infinity;
