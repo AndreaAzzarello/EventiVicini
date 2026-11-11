@@ -6,6 +6,7 @@ import {
 	homeUrl,
 	nearCovered,
 	nearestComune,
+	nearestEventsKm,
 	nearestWithEvents,
 	placeFromEvents,
 	placeFromParams,
@@ -13,6 +14,7 @@ import {
 	popularPlaces,
 	rankPlaces,
 	regionCenter,
+	regionsWithEvents,
 	strongPlace,
 	type CoverageRegion
 } from './places';
@@ -188,5 +190,55 @@ describe('raggio automatico', () => {
 	});
 	it('senza copertura non inventa nulla', () => {
 		expect(autoRadius(modena, [])).toEqual({ radiusKm: 25, quiet: false });
+	});
+});
+
+describe('stima veloce della distanza dal comune con eventi più vicino', () => {
+	it('dà lo stesso numero di nearestWithEvents su una griglia di punti in tutta Italia', () => {
+		// copertura sintetica ma sparsa come quella reale: ~700 comuni con eventi, altri senza
+		const comuni = Array.from({ length: 1100 }, (_, i) => ({
+			name: `C${i}`,
+			slug: `c${i}`,
+			province: 'XX',
+			lat: 36.6 + ((i * 7919) % 1000) / 1000 * 10.4,
+			lng: 6.7 + ((i * 104729) % 1000) / 1000 * 11.8,
+			events: i % 3 ? i % 7 : 0
+		}));
+		const regions: CoverageRegion[] = [{ slug: 'x', name: 'X', comuni }];
+		for (let lat = 36.5; lat <= 47.2; lat += 0.7)
+			for (let lng = 6.5; lng <= 18.6; lng += 0.9) {
+				const slow = nearestWithEvents({ lat, lng }, regions, 1)[0]?.km ?? null;
+				expect(nearestEventsKm({ lat, lng }, regions), `${lat},${lng}`).toBe(slow);
+			}
+		expect(nearestEventsKm({ lat: 44, lng: 11 }, [])).toBeNull();
+		expect(nearestEventsKm({ lat: 44, lng: 11 }, [{ slug: 'x', name: 'X', comuni: comuni.map((c) => ({ ...c, events: 0 })) }])).toBeNull();
+	});
+});
+
+describe('memoizzazione per identità della copertura', () => {
+	it('nearestEventsKm: stesso valore alla seconda chiamata e con copertura diversa ricalcola', () => {
+		const p = { lat: 44.33, lng: 10.84 };
+		const a = nearestEventsKm(p, REGIONS);
+		expect(nearestEventsKm(p, REGIONS)).toBe(a);
+		expect(nearestEventsKm(p, [])).toBeNull();
+	});
+	it('popularPlaces restituisce lo stesso risultato senza rifare il lavoro, e uno nuovo se cambia l’array', () => {
+		const a = popularPlaces(REGIONS, 3);
+		expect(popularPlaces(REGIONS, 3)).toBe(a);
+		expect(popularPlaces(REGIONS, 2)).not.toBe(a);
+		expect(a.map((h) => h.place.label)).toEqual(['Modena', 'Bologna', "Reggio nell'Emilia"]);
+		expect(popularPlaces([...REGIONS], 3)).not.toBe(a);
+	});
+	it('con pochi comuni con eventi completa l’elenco come prima (anche quelli a zero, per nome)', () => {
+		const out = popularPlaces(REGIONS, 6).map((h) => [h.place.label, h.events]);
+		expect(out).toEqual([['Modena', 30], ['Bologna', 10], ["Reggio nell'Emilia", 5], ['Bolzano', 4], ['Forlì', 0], ['Trento', 0]]);
+	});
+	it('regionsWithEvents: totali, ordine e solo regioni con eventi', () => {
+		const r = regionsWithEvents(REGIONS);
+		expect(r).toEqual([
+			{ slug: 'emilia-romagna', name: 'Emilia-Romagna', events: 45 },
+			{ slug: 'trentino-alto-adige', name: 'Trentino-Alto Adige', events: 4 }
+		]);
+		expect(regionsWithEvents(REGIONS)).toBe(r);
 	});
 });

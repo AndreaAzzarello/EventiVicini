@@ -124,10 +124,20 @@ export function rankPlaces(text: string, regions: CoverageRegion[], limit = 6, c
 export const strongPlace = (text: string, regions: CoverageRegion[], comuni: Comune[] = []) =>
 	rankPlaces(text, regions, 1, comuni).find((h) => h.score <= 1) ?? null;
 
+// Risultati memoizzati per identità dell'array di copertura: il Worker tiene lo stesso oggetto in memoria finché la cache non scade,
+// quindi ordinare ~1.100 comuni (con localeCompare) si paga una volta per isolate invece che a ogni richiesta (#51).
+const popularCache = new WeakMap<CoverageRegion[], Map<number, PlaceHit[]>>();
+
 /** Comuni con più eventi: i suggerimenti quando si apre la ricerca dei luoghi senza scrivere. */
 export function popularPlaces(regions: CoverageRegion[], limit = 6): PlaceHit[] {
-	return regions
-		.flatMap((r) => r.comuni.map((c) => ({ c, r })))
+	let byLimit = popularCache.get(regions);
+	if (!byLimit) popularCache.set(regions, (byLimit = new Map()));
+	const hit = byLimit.get(limit);
+	if (hit) return hit;
+	const all = regions.flatMap((r) => r.comuni.map((c) => ({ c, r })));
+	// Ordinare solo chi ha eventi, se bastano a riempire l'elenco: lo spareggio per nome non tocca gli altri.
+	const withEvents = all.filter(({ c }) => c.events > 0);
+	const out = (withEvents.length >= limit ? withEvents : all)
 		.sort((a, b) => b.c.events - a.c.events || a.c.name.localeCompare(b.c.name, 'it'))
 		.slice(0, limit)
 		.map(({ c, r }) => ({
@@ -137,6 +147,23 @@ export function popularPlaces(regions: CoverageRegion[], limit = 6): PlaceHit[] 
 			events: c.events,
 			score: 0
 		}));
+	byLimit.set(limit, out);
+	return out;
+}
+
+const regionTotalsCache = new WeakMap<CoverageRegion[], { slug: string; name: string; events: number }[]>();
+
+/** Regioni con almeno un evento, dalla più ricca (totali per regione memoizzati come `popularPlaces`). */
+export function regionsWithEvents(regions: CoverageRegion[]): { slug: string; name: string; events: number }[] {
+	let out = regionTotalsCache.get(regions);
+	if (!out) {
+		out = regions
+			.map((r) => ({ slug: r.slug, name: r.name, events: r.comuni.reduce((n, c) => n + c.events, 0) }))
+			.filter((r) => r.events > 0)
+			.sort((a, b) => b.events - a.events || a.name.localeCompare(b.name, 'it'));
+		regionTotalsCache.set(regions, out);
+	}
+	return out;
 }
 
 /** Vero se un comune con eventi dista meno di `km` dal punto: altrimenti "Pochi eventi in questa zona". */
@@ -152,14 +179,59 @@ export function nearestWithEvents(p: LatLng, regions: CoverageRegion[], n = 3): 
 }
 
 /**
+ * Distanza (km, arrotondata come `nearestWithEvents`) dal comune con eventi più vicino, o null. Senza allocare un oggetto per comune e
+ * senza trigonometria su ciascuno: una stima equirettangolare sceglie i candidati (errore ben sotto il 3% a queste distanze), la
+ * distanza esatta di geofire si calcola solo su di loro. Stesso risultato di `nearestWithEvents(p, regions, 1)[0]?.km`.
+ */
+const nearestCache = new WeakMap<CoverageRegion[], Map<string, number | null>>();
+
+export function nearestEventsKm(p: LatLng, regions: CoverageRegion[]): number | null {
+	// Memoizzata per copertura e punto: i luoghi scelti sono pochi (comuni), la scansione di ~870 comuni si paga una volta per isolate.
+	let memo = nearestCache.get(regions);
+	if (!memo) nearestCache.set(regions, (memo = new Map()));
+	const key = `${p.lat},${p.lng}`;
+	const hit = memo.get(key);
+	if (hit !== undefined) return hit;
+	const km = scanNearestEventsKm(p, regions);
+	if (memo.size >= 500) memo.clear(); // tetto: il punto può venire anche da ?lat=&lng= liberi
+	memo.set(key, km);
+	return km;
+}
+
+function scanNearestEventsKm(p: LatLng, regions: CoverageRegion[]): number | null {
+	const kx = Math.cos((p.lat * Math.PI) / 180) * 111.195;
+	const ky = 111.195;
+	let best = Infinity;
+	for (const r of regions)
+		for (const c of r.comuni) {
+			if (c.events <= 0) continue;
+			const dx = (c.lng - p.lng) * kx;
+			const dy = (c.lat - p.lat) * ky;
+			const d = dx * dx + dy * dy;
+			if (d < best) best = d;
+		}
+	if (best === Infinity) return null;
+	const limit = (Math.sqrt(best) * 1.03 + 1) ** 2;
+	let exact = Infinity;
+	for (const r of regions)
+		for (const c of r.comuni) {
+			if (c.events <= 0) continue;
+			const dx = (c.lng - p.lng) * kx;
+			const dy = (c.lat - p.lat) * ky;
+			if (dx * dx + dy * dy <= limit) exact = Math.min(exact, distanceKm(p, c));
+		}
+	return Math.round(exact);
+}
+
+/**
  * Raggio con cui mostrare un luogo scelto senza raggio nell'URL: quello predefinito se entro lì ci sono eventi, altrimenti il più piccolo
  * dei raggi disponibili che arriva al comune con eventi più vicino (con 2 km di margine: gli eventi non sono al centro del comune).
  * `quiet` = nessun evento entro il raggio predefinito; senza eventi nemmeno al raggio massimo il raggio resta quello predefinito.
  */
 export function autoRadius(p: LatLng, regions: CoverageRegion[]): { radiusKm: number; quiet: boolean } {
-	const [near] = nearestWithEvents(p, regions, 1);
-	if (!near || near.km <= DEFAULT_RADIUS_KM) return { radiusKm: DEFAULT_RADIUS_KM, quiet: !near && regions.length > 0 };
-	return { radiusKm: RADII_KM.find((r) => r >= near.km + 2) ?? DEFAULT_RADIUS_KM, quiet: true };
+	const near = nearestEventsKm(p, regions);
+	if (near === null || near <= DEFAULT_RADIUS_KM) return { radiusKm: DEFAULT_RADIUS_KM, quiet: near === null && regions.length > 0 };
+	return { radiusKm: RADII_KM.find((r) => r >= near + 2) ?? DEFAULT_RADIUS_KM, quiet: true };
 }
 
 /** Raggio entro cui la posizione del dispositivo si "aggancia" a un comune coperto (l'unico dato che esce dal browser). */

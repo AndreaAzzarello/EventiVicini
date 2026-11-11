@@ -313,11 +313,14 @@ const coverageBundle = (): Promise<Coverage[] | null> =>
 		return json ? (JSON.parse(json) as Coverage[]) : null;
 	});
 
-/** Regioni coperte e loro comuni (scritto ogni giorno dall'importer): una lettura per regione, in cache 5 minuti. */
-export function coverage(): Promise<Coverage[]> {
+/**
+ * Regioni coperte e loro comuni (scritto ogni giorno dall'importer). Con il bundle una sola voce in cache (niente copia sotto un'altra
+ * chiave: ogni voce costa una lettura dalla Cache API e un parse da ~110 KB a ogni avvio a freddo, #51); senza, una lettura per regione.
+ */
+export async function coverage(): Promise<Coverage[]> {
+	const bundle = await coverageBundle();
+	if (bundle) return bundle;
 	return cached('coverage', async () => {
-		const bundle = await coverageBundle();
-		if (bundle) return bundle;
 		const res = await call<{ documents?: Doc[] }>('/coverage?pageSize=50');
 		const docs = res?.documents ?? [];
 		readCount += Math.max(docs.length, 1);

@@ -6,6 +6,9 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, statSync } from 'node:fs';
 import { build } from 'esbuild';
 
+// Dati «da bench»: 114 eventi a Modena e copertura di tutta Italia (vedi seed-emulator.mjs).
+execFileSync(process.execPath, ['scripts/seed-emulator.mjs'], { stdio: 'inherit', env: { ...process.env, SEED_BENCH: '1' } });
+
 const OUT = '.svelte-kit/bench';
 const ASSETS = '.svelte-kit/cloudflare';
 const COLD_RUNS = 5;
