@@ -6,7 +6,6 @@ const lazy = <T>(make: () => T): (() => T) => {
 	let v: T | undefined;
 	return () => (v ??= make());
 };
-const it = (o: Intl.DateTimeFormatOptions) => lazy(() => new Intl.DateTimeFormat('it-IT', { timeZone: TZ, ...o }));
 
 const partsFmt = lazy(
 	() =>
@@ -25,8 +24,40 @@ const partsFmt = lazy(
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// Ora legale europea (dal 1996): da ultima domenica di marzo a ultima domenica di ottobre, alle 01:00 UTC. Europe/Rome = UTC+1 / UTC+2.
+// Calcolata per aritmetica: Intl.DateTimeFormat costa ~10× di più per chiamata, e una lista di centinaia di card ne fa migliaia (#51).
+const HOUR = 3_600_000;
+const dstCache = new Map<number, [number, number]>();
+function lastSundayUtc(year: number, month: number): number {
+	const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+	return last - new Date(Date.UTC(year, month, last)).getUTCDay();
+}
+function dstRange(year: number): [number, number] {
+	let r = dstCache.get(year);
+	if (!r) dstCache.set(year, (r = [Date.UTC(year, 2, lastSundayUtc(year, 2), 1), Date.UTC(year, 9, lastSundayUtc(year, 9), 1)]));
+	return r;
+}
+/** Anni in cui le regole UE valgono come qui; fuori (date inventate in un URL) si ricorre a Intl. */
+const inEuRules = (ms: number) => ms >= Date.UTC(2000, 0, 1) && ms < Date.UTC(2100, 0, 1);
+
 /** Componenti della data in ora italiana. weekday: 0 = domenica. */
 export function romeParts(ms: number) {
+	if (!inEuRules(ms)) return romePartsIntl(ms);
+	const [start, end] = dstRange(new Date(ms).getUTCFullYear());
+	const d = new Date(ms + (ms >= start && ms < end ? 2 * HOUR : HOUR));
+	return {
+		year: d.getUTCFullYear(),
+		month: d.getUTCMonth() + 1,
+		day: d.getUTCDate(),
+		hour: d.getUTCHours(),
+		minute: d.getUTCMinutes(),
+		second: d.getUTCSeconds(),
+		weekday: d.getUTCDay()
+	};
+}
+
+/** Riferimento con Intl (e ripiego per gli anni fuori dalle regole UE note): i test confrontano `romeParts` con questa. */
+export function romePartsIntl(ms: number) {
 	const p = Object.fromEntries(partsFmt().formatToParts(ms).map((x) => [x.type, x.value]));
 	return {
 		year: +p.year,
@@ -93,12 +124,25 @@ export function windowRange(w: DateWindow, now: number, from = '', to = ''): [nu
 	return [romeTime(p.year, p.month, p.day + toSat), romeTime(p.year, p.month, p.day + toSat + 2)];
 }
 
-const dayFmt = it({ weekday: 'long', day: 'numeric', month: 'long' });
-const dayYearFmt = it({ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-const shortDayFmt = it({ day: 'numeric', month: 'short' });
+// Testi it-IT (stesso risultato di Intl.DateTimeFormat('it-IT'), verificato dai test) da tabelle: niente ICU nel percorso caldo (#51).
+const MONTHS_SHORT = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+const MONTHS_LONG = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+const WEEKDAYS_SHORT = ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'];
+const WEEKDAYS_LONG = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
+
 /** "12 nov". */
-export const shortDate = (ms: number) => shortDayFmt().format(ms);
-const timeFmt = it({ hour: '2-digit', minute: '2-digit' });
+export const shortDate = (ms: number) => {
+	const p = romeParts(ms);
+	return `${p.day} ${MONTHS_SHORT[p.month - 1]}`;
+};
+const longDay = (ms: number, withYear: boolean) => {
+	const p = romeParts(ms);
+	return `${WEEKDAYS_LONG[p.weekday]} ${p.day} ${MONTHS_LONG[p.month - 1]}${withYear ? ` ${p.year}` : ''}`;
+};
+const clock = (ms: number) => {
+	const p = romeParts(ms);
+	return `${z2(p.hour)}:${z2(p.minute)}`;
+};
 
 const sameDay = (a: number, b: number) => {
 	const x = romeParts(a);
@@ -113,10 +157,10 @@ export const allDay = (start: number, end: number) => {
 
 /** "sabato 14 novembre · 21:00–23:30", "dal 12 nov al 15 nov". Anno solo se diverso da quello corrente. */
 export function formatWhen(start: number, end: number, now = Date.now()): string {
-	if (!sameDay(start, end)) return `dal ${shortDayFmt().format(start)} al ${shortDayFmt().format(end)}`;
-	const day = (romeParts(start).year === romeParts(now).year ? dayFmt : dayYearFmt)().format(start);
+	if (!sameDay(start, end)) return `dal ${shortDate(start)} al ${shortDate(end)}`;
+	const day = longDay(start, romeParts(start).year !== romeParts(now).year);
 	if (allDay(start, end)) return `${day} · tutto il giorno`;
-	const hours = end > start ? `${timeFmt().format(start)}–${timeFmt().format(end)}` : timeFmt().format(start);
+	const hours = end > start ? `${clock(start)}–${clock(end)}` : clock(start);
 	return `${day} · ${hours}`;
 }
 
@@ -127,14 +171,14 @@ export function shortDay(start: number, now = Date.now()): string {
 	const tomorrow = romeTime(p.year, p.month, p.day + 1);
 	if (sameDay(start0, now)) return 'Oggi';
 	if (start0 >= tomorrow && start0 < romeTime(p.year, p.month, p.day + 2)) return 'Domani';
-	return cardDayFmt().format(start0);
+	const c = romeParts(start0);
+	return `${WEEKDAYS_SHORT[c.weekday]} ${c.day} ${MONTHS_SHORT[c.month - 1]}`;
 }
-const cardDayFmt = it({ weekday: 'short', day: 'numeric', month: 'short' });
 
 /** Prima lettera maiuscola: "lun 3 nov" -> "Lun 3 nov". */
 export const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export const formatTime = (ms: number) => timeFmt().format(ms);
+export const formatTime = clock;
 
 /** Valore per <input type="datetime-local"> in ora italiana, e ritorno. */
 export function toLocalInput(ms: number): string {
