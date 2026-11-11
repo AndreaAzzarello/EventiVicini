@@ -793,6 +793,8 @@ def _main(argv: list[str] | None = None) -> int:
     p.add_argument("--reconcile", action="store_true",
                    help="ignora il manifest locale e rilegge da Firestore (riconciliazione completa)")
     p.add_argument("--stats-out", type=Path, help="scrive qui le statistiche dell'import (JSON)")
+    p.add_argument("--sitemap-out", type=Path,
+                   help="scrive qui gli eventi della regione per la sitemap (il job cleanup li unisce: sitemap.py)")
     p.add_argument("--max-geocode", type=int, default=MAX_GEOCODE,
                    help="richieste nuove a Nominatim per giro (le altre, dagli eventi più lontani, nei giorni dopo)")
     p.add_argument("--horizon-days", type=int, default=60, help="importa eventi che iniziano entro N giorni")
@@ -883,6 +885,11 @@ def _main(argv: list[str] | None = None) -> int:
                                                        if not getattr(SOURCES[n], "regional", False)}, now)
         stats["reads"] += reads
         stats["writes"] += writes
+    if args.sitemap_out and not args.source:  # con --source l'elenco sarebbe parziale
+        import sitemap
+
+        sitemap.write_part(args.sitemap_out, "+".join(sorted({slugify(SOURCES[n].region) for n in names})), sitemap.part_rows(events, int(now.timestamp() * 1000)),
+                           int(now.timestamp() * 1000))
     if args.stats_out:
         args.stats_out.write_text(json.dumps(stats | {
             "region": "+".join(sorted({slugify(SOURCES[n].region) for n in names})), "events": len(events), "excluded": len(excluded),

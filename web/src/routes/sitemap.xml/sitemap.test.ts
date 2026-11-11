@@ -5,7 +5,9 @@ vi.mock('$env/dynamic/public', () => ({ env: { PUBLIC_SITE_URL: 'https://example
 
 const ev = (id: string, locality: string) =>
 	fromData(id, { title: 'T ' + id, city: 'Terre del Reno', citySlug: 'terre-del-reno', locality, startTime: 1 });
+// sm_index assente (prima del primo import che lo scrive): il generatore di ripiego
 vi.mock('$lib/server/firestore', () => ({
+	sitemapDoc: async () => null,
 	upcomingEvents: async () => [ev('a', "Sant'Agostino"), ev('b', 'Mirabello')],
 	coverage: async () => [
 		{ slug: 'emilia-romagna', name: 'Emilia-Romagna', comuni: [{ slug: 'x' }] },
