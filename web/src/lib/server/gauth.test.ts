@@ -102,3 +102,82 @@ describe('firestoreAuthHeader', () => {
 		await expect(firestoreAuthHeader()).rejects.toThrow(/non è un JSON/);
 	});
 });
+
+// Cache API del data center simulata in memoria (in Node `caches` non esiste: gli altri test girano senza).
+function stubEdgeCache() {
+	const store = new Map<string, { body: string; headers: Headers }>();
+	const cache = {
+		match: vi.fn(async (req: Request) => {
+			const hit = store.get(req.url);
+			return hit ? new Response(hit.body, { headers: hit.headers }) : undefined;
+		}),
+		put: vi.fn(async (req: Request, res: Response) => {
+			store.set(req.url, { body: await res.text(), headers: new Headers(res.headers) });
+		})
+	};
+	vi.stubGlobal('caches', { default: cache });
+	return { store, cache };
+}
+
+describe('token nella Cache API', () => {
+	it('un isolate freddo lo prende dalla cache senza firmare né chiamare Google', async () => {
+		const { store } = stubEdgeCache();
+		expect(await firestoreAuthHeader()).toBe('Bearer ya29.test');
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(store.size).toBe(1);
+		resetAuthCache(); // nuovo isolate: memoria vuota
+		expect(await firestoreAuthHeader()).toBe('Bearer ya29.test');
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('in cache il token è cifrato: né nel nome né nel corpo, la voce vive fino al margine di rinnovo', async () => {
+		const { store } = stubEdgeCache();
+		await firestoreAuthHeader();
+		const [[url, entry]] = [...store];
+		expect(url).toMatch(/^https:\/\/gauth\.invalid\/v1\/[A-Za-z0-9_-]{43}$/);
+		for (const text of [url, entry.body, JSON.stringify([...entry.headers])]) {
+			expect(text).not.toContain('ya29');
+			expect(text).not.toContain(EMAIL);
+			expect(text).not.toContain('PRIVATE KEY');
+		}
+		expect(entry.headers.get('cache-control')).toBe('public, max-age=3300'); // 3600 s meno i 5 minuti di margine
+	});
+
+	it('voce con il token ormai nel margine di rinnovo: si rifà il token', async () => {
+		stubEdgeCache();
+		fetchMock.mockResolvedValueOnce(tokenResponse('vecchio', 3600)).mockResolvedValueOnce(tokenResponse('nuovo', 3600));
+		await firestoreAuthHeader();
+		resetAuthCache();
+		vi.setSystemTime(new Date('2026-11-03T10:56:00Z')); // mancano 4 minuti
+		expect(await firestoreAuthHeader()).toBe('Bearer nuovo');
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('segreto cambiato: la voce non si decifra e si firma di nuovo', async () => {
+		stubEdgeCache();
+		await firestoreAuthHeader();
+		resetAuthCache();
+		const pair = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
+		const der = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey));
+		const other = `-----BEGIN PRIVATE KEY-----\n${btoa(String.fromCharCode(...der)).match(/.{1,64}/g)!.join('\n')}\n-----END PRIVATE KEY-----\n`;
+		cfg.env = { FIREBASE_READER_SA: JSON.stringify({ type: 'service_account', client_email: EMAIL, private_key: other }) };
+		fetchMock.mockResolvedValueOnce(tokenResponse('con-chiave-nuova'));
+		expect(await firestoreAuthHeader()).toBe('Bearer con-chiave-nuova');
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('voce corrotta o cache che va in errore: nessun errore verso l’alto, si rifà il token', async () => {
+		const { store, cache } = stubEdgeCache();
+		await firestoreAuthHeader();
+		resetAuthCache();
+		const [key] = [...store.keys()];
+		store.set(key, { body: 'xx.yy', headers: new Headers() });
+		fetchMock.mockResolvedValueOnce(tokenResponse('rifatto'));
+		expect(await firestoreAuthHeader()).toBe('Bearer rifatto');
+		resetAuthCache();
+		cache.match.mockRejectedValueOnce(new Error('cache giù'));
+		cache.put.mockRejectedValueOnce(new Error('cache giù'));
+		fetchMock.mockResolvedValueOnce(tokenResponse('ancora'));
+		expect(await firestoreAuthHeader()).toBe('Bearer ancora');
+	});
+});

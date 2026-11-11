@@ -17,7 +17,8 @@
     "test:reads": "node ../firebase/node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --config ../firebase/firebase.json --project demo-eventi --only firestore \"vitest run src/lib/server/reads.emulator.test.ts --reporter verbose\"",
     "test:e2e": "node ../firebase/node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --config ../firebase/firebase.json --project demo-eventi --only auth,firestore \"playwright test\"",
     "emulators": "node ../firebase/node_modules/firebase-tools/lib/bin/firebase.js emulators:start --config ../firebase/firebase.json --project demo-eventi --only auth,firestore",
-    "seed": "node scripts/seed-emulator.mjs"
+    "seed": "node scripts/seed-emulator.mjs",
+    "bench:cpu": "node ../firebase/node_modules/firebase-tools/lib/bin/firebase.js emulators:exec --config ../firebase/firebase.json --project demo-eventi --only auth,firestore \"node scripts/seed-emulator.mjs && node scripts/cpu-bench.mjs\""
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

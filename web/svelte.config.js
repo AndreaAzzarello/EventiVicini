@@ -3,6 +3,11 @@ import { readFileSync } from 'node:fs';
 import adapter from '@sveltejs/adapter-cloudflare';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { loadEnv } from 'vite';
+import { fillFromWrangler } from './wrangler-vars.js';
+
+// Le pagine prerenderizzate leggono l'ambiente di build: Cloudflare Pages non gli passa i [vars] di wrangler.toml, quindi li si riporta qui
+// (solo per le chiavi non già impostate dal processo o da .env, che resta la fonte in locale).
+fillFromWrangler(new URL('./wrangler.toml', import.meta.url), process.env, loadEnv('', process.cwd(), ''));
 
 // Le porte degli emulatori entrano nella CSP solo se .env (o l'ambiente) li attiva: la build di produzione su Cloudflare non ha .env.
 const emulators = loadEnv('', process.cwd(), 'PUBLIC_').PUBLIC_USE_EMULATORS === 'true';

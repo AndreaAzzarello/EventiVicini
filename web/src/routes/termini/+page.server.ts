@@ -1,1 +1,1 @@
-export { load } from '../privacy/+page.server';
+export { load, prerender } from '../privacy/+page.server';

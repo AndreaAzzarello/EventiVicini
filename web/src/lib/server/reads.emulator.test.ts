@@ -13,6 +13,13 @@ vi.mock('$env/dynamic/public', () => ({
 	env: { PUBLIC_FIREBASE_PROJECT_ID: 'demo-eventi', PUBLIC_FIREBASE_API_KEY: 'k', PUBLIC_SITE_URL: 'https://example.test' }
 }));
 
+// Gli indici dei comuni (comuneSlug.ts) sono asset statici letti con read() dell'adapter: qui vengono dal disco, senza Firestore.
+vi.mock('$app/server', async () => {
+	const { readFile } = await import('node:fs/promises');
+	const { join } = await import('node:path');
+	return { read: (url: string) => ({ json: async () => JSON.parse(await readFile(join(process.cwd(), url), 'utf8')) }) };
+});
+
 type Stats = { reads: number; requests: number; worst: number };
 let stats: Stats = { reads: 0, requests: 0, worst: 0 };
 
