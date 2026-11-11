@@ -1,6 +1,7 @@
 import { siteUrl } from '$lib/config';
 import { cityPath, eventPath } from '$lib/event';
-import { coverage, upcomingEvents } from '$lib/server/firestore';
+import { coverage, sitemapDoc, upcomingEvents } from '$lib/server/firestore';
+import { xmlResponse } from '$lib/server/sitemap';
 import type { RequestHandler } from './$types';
 
 // Ogni evento in elenco costa una lettura Firestore a ogni rigenerazione: 500 bastano a far scoprire le pagine città/regione,
@@ -9,7 +10,11 @@ const MAX_EVENTS = 500;
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+// Con l'importer che scrive bundles/sm_* (tools/importer/sitemap.py) il Worker serve l'indice già pronto: nessun calcolo.
+// Finché non esiste (prima del primo import che lo crea) si genera come prima: 500 eventi, rollout senza interruzioni.
 export const GET: RequestHandler = async () => {
+	const ready = await sitemapDoc('sm_index').catch(() => null);
+	if (ready) return xmlResponse(ready);
 	const base = siteUrl();
 	const [events, regions] = await Promise.all([upcomingEvents(MAX_EVENTS), coverage().catch(() => [])]);
 	const cities = [...new Set(events.map((e) => e.citySlug).filter(Boolean))];

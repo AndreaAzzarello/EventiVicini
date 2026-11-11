@@ -336,6 +336,23 @@ export function regionCoverage(slug: string): Promise<Coverage | null> {
 	});
 }
 
+/**
+ * Una pagina della sitemap già pronta (bundles/sm_*, scritta dall'importer, XML con il segnaposto {{BASE}}): una lettura ogni 12 ore.
+ * Null se non c'è ancora (prima dell'import che la crea): chi chiama ripiega sul generatore.
+ */
+export function sitemapDoc(name: 'sm_index' | 'sm_luoghi' | `sm_eventi_${number}`): Promise<string | null> {
+	return cached(
+		`sitemap-doc:${name}`,
+		async () => {
+			readCount++;
+			const doc = await call<Doc>(`/bundles/${name}`);
+			const xml = doc && (decodeFields(doc.fields) as { json?: string }).json;
+			return typeof xml === 'string' && xml ? xml : null;
+		},
+		FRESH.sitemap
+	);
+}
+
 export function getEvent(id: string): Promise<Event | null> {
 	if (!/^[A-Za-z0-9_]{1,64}$/.test(id)) return Promise.resolve(null);
 	return cached(`event:${id}`, async () => {

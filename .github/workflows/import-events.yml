@@ -174,6 +174,7 @@ jobs:
           --max-reads ${{ matrix.reads }} --max-writes ${{ needs.plan.outputs.writes }}
           --max-geocode ${{ inputs.dry_run && 20 || needs.plan.outputs.geocode }}
           --stats-out stats-${{ matrix.region }}.json
+          --sitemap-out sitemap-${{ matrix.region }}.json
           ${{ inputs.dry_run && '--dry-run' || '' }}
           ${{ (inputs.reconcile || matrix.reconcile) && '--reconcile' || '' }}
           ${IP_INTERVAL:+--ip-interval "$IP_INTERVAL"}
@@ -182,6 +183,13 @@ jobs:
         with:
           name: stats-${{ matrix.region }}
           path: tools/importer/stats-${{ matrix.region }}.json
+          if-no-files-found: ignore
+      # Eventi della regione per la sitemap (id, titolo in slug, città, fine): il job cleanup li unisce, senza leggere i bundle (#20).
+      - uses: actions/upload-artifact@v6
+        if: ${{ !inputs.dry_run }}
+        with:
+          name: sitemap-${{ matrix.region }}
+          path: tools/importer/sitemap-${{ matrix.region }}.json
           if-no-files-found: ignore
 
   cleanup:
@@ -216,3 +224,21 @@ jobs:
           key: importer-sizes-${{ github.run_id }}
           restore-keys: importer-sizes-
       - run: python ci_report.py sizes stats sizes.json
+      # Sitemap (#20): le parti delle regioni appena importate sostituiscono quelle della cache (le altre restano), poi un solo
+      # job scrive i documenti bundles/sm_* se sono cambiati. Una lettura per la copertura e una per documento: ~10 letture.
+      # La cache si salva a fine job; senza parti nuove (import falliti) il passo non scrive nulla.
+      - uses: actions/cache@v5
+        with:
+          path: tools/importer/sitemap-parts
+          key: importer-sitemap-parts-${{ github.run_id }}
+          restore-keys: importer-sitemap-parts-
+      - uses: actions/download-artifact@v7
+        continue-on-error: true  # nessuna regione importata: valgono le parti della cache
+        with:
+          pattern: sitemap-*
+          path: tools/importer/sitemap-parts
+          merge-multiple: true
+      - name: Sitemap
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python sitemap.py build sitemap-parts
