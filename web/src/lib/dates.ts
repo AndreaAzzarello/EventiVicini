@@ -1,23 +1,33 @@
 // Date sempre in ora italiana, anche quando il server (Worker) gira in UTC.
 export const TZ = 'Europe/Rome';
 
-const partsFmt = new Intl.DateTimeFormat('en-US', {
-	timeZone: TZ,
-	year: 'numeric',
-	month: 'numeric',
-	day: 'numeric',
-	hour: 'numeric',
-	minute: 'numeric',
-	second: 'numeric',
-	hourCycle: 'h23',
-	weekday: 'short'
-});
+/** Formatter creati alla prima chiamata, non all'import: l'inizializzazione di ICU costa a ogni avvio a freddo del Worker (#51). */
+const lazy = <T>(make: () => T): (() => T) => {
+	let v: T | undefined;
+	return () => (v ??= make());
+};
+const it = (o: Intl.DateTimeFormatOptions) => lazy(() => new Intl.DateTimeFormat('it-IT', { timeZone: TZ, ...o }));
+
+const partsFmt = lazy(
+	() =>
+		new Intl.DateTimeFormat('en-US', {
+			timeZone: TZ,
+			year: 'numeric',
+			month: 'numeric',
+			day: 'numeric',
+			hour: 'numeric',
+			minute: 'numeric',
+			second: 'numeric',
+			hourCycle: 'h23',
+			weekday: 'short'
+		})
+);
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /** Componenti della data in ora italiana. weekday: 0 = domenica. */
 export function romeParts(ms: number) {
-	const p = Object.fromEntries(partsFmt.formatToParts(ms).map((x) => [x.type, x.value]));
+	const p = Object.fromEntries(partsFmt().formatToParts(ms).map((x) => [x.type, x.value]));
 	return {
 		year: +p.year,
 		month: +p.month,
@@ -83,18 +93,12 @@ export function windowRange(w: DateWindow, now: number, from = '', to = ''): [nu
 	return [romeTime(p.year, p.month, p.day + toSat), romeTime(p.year, p.month, p.day + toSat + 2)];
 }
 
-const dayFmt = new Intl.DateTimeFormat('it-IT', { timeZone: TZ, weekday: 'long', day: 'numeric', month: 'long' });
-const dayYearFmt = new Intl.DateTimeFormat('it-IT', {
-	timeZone: TZ,
-	weekday: 'long',
-	day: 'numeric',
-	month: 'long',
-	year: 'numeric'
-});
-const shortDayFmt = new Intl.DateTimeFormat('it-IT', { timeZone: TZ, day: 'numeric', month: 'short' });
+const dayFmt = it({ weekday: 'long', day: 'numeric', month: 'long' });
+const dayYearFmt = it({ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const shortDayFmt = it({ day: 'numeric', month: 'short' });
 /** "12 nov". */
-export const shortDate = (ms: number) => shortDayFmt.format(ms);
-const timeFmt = new Intl.DateTimeFormat('it-IT', { timeZone: TZ, hour: '2-digit', minute: '2-digit' });
+export const shortDate = (ms: number) => shortDayFmt().format(ms);
+const timeFmt = it({ hour: '2-digit', minute: '2-digit' });
 
 const sameDay = (a: number, b: number) => {
 	const x = romeParts(a);
@@ -109,10 +113,10 @@ export const allDay = (start: number, end: number) => {
 
 /** "sabato 14 novembre · 21:00–23:30", "dal 12 nov al 15 nov". Anno solo se diverso da quello corrente. */
 export function formatWhen(start: number, end: number, now = Date.now()): string {
-	if (!sameDay(start, end)) return `dal ${shortDayFmt.format(start)} al ${shortDayFmt.format(end)}`;
-	const day = (romeParts(start).year === romeParts(now).year ? dayFmt : dayYearFmt).format(start);
+	if (!sameDay(start, end)) return `dal ${shortDayFmt().format(start)} al ${shortDayFmt().format(end)}`;
+	const day = (romeParts(start).year === romeParts(now).year ? dayFmt : dayYearFmt)().format(start);
 	if (allDay(start, end)) return `${day} · tutto il giorno`;
-	const hours = end > start ? `${timeFmt.format(start)}–${timeFmt.format(end)}` : timeFmt.format(start);
+	const hours = end > start ? `${timeFmt().format(start)}–${timeFmt().format(end)}` : timeFmt().format(start);
 	return `${day} · ${hours}`;
 }
 
@@ -123,14 +127,14 @@ export function shortDay(start: number, now = Date.now()): string {
 	const tomorrow = romeTime(p.year, p.month, p.day + 1);
 	if (sameDay(start0, now)) return 'Oggi';
 	if (start0 >= tomorrow && start0 < romeTime(p.year, p.month, p.day + 2)) return 'Domani';
-	return cardDayFmt.format(start0);
+	return cardDayFmt().format(start0);
 }
-const cardDayFmt = new Intl.DateTimeFormat('it-IT', { timeZone: TZ, weekday: 'short', day: 'numeric', month: 'short' });
+const cardDayFmt = it({ weekday: 'short', day: 'numeric', month: 'short' });
 
 /** Prima lettera maiuscola: "lun 3 nov" -> "Lun 3 nov". */
 export const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export const formatTime = (ms: number) => timeFmt.format(ms);
+export const formatTime = (ms: number) => timeFmt().format(ms);
 
 /** Valore per <input type="datetime-local"> in ora italiana, e ritorno. */
 export function toLocalInput(ms: number): string {
