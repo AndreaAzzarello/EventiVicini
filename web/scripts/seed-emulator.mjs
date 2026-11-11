@@ -161,6 +161,30 @@ const enc = (v) => {
 	return { nullValue: null };
 };
 
+// Dati «grandi», solo su richiesta (additivi: i test e2e di base non li vedono).
+//   SEED_BIG=1    60 eventi a Torino (oltre 100 km da Modena, fuori dal raggio massimo): per gli e2e sulle liste lunghe.
+//   SEED_BENCH=1  103 eventi in più attorno a Modena (114 in tutto, come in produzione) e una copertura sintetica di tutta Italia:
+//                 serve a npm run bench:cpu / bench:workerd, non ai test.
+places.torino = { city: 'Torino', citySlug: 'torino', province: 'TO', region: 'Piemonte', lat: 45.0703, lng: 7.6869 };
+const CATS = ['music', 'food', 'art', 'sport', 'family', 'theatre', 'market', 'other'];
+const bigEvent = (prefix, place, i) =>
+	ev(`${prefix}${i}`, place, {
+		title: `Evento di prova numero ${i} con un titolo abbastanza lungo da occupare spazio`,
+		shortDescription: 'Descrizione breve di esempio per riempire la scheda con un testo realistico di circa centocinquanta caratteri, come negli eventi veri.',
+		category: CATS[i % CATS.length],
+		priceType: i % 3 ? 'free' : 'paid',
+		startTime: at(i % 7, 10 + (i % 8)),
+		endTime: at(i % 7, 12 + (i % 8)),
+		venueName: `Luogo ${i}`,
+		address: `Via di prova ${i}, ${places[place].city}`,
+		imageUrl: `https://example.org/img/${i}.jpg`,
+		tags: i % 4 ? [] : ['kids'],
+		source: 'scraper',
+		sourceUrl: `https://example.org/eventi/${i}`
+	});
+if (process.env.SEED_BIG) for (let i = 0; i < 60; i++) events.push(bigEvent('torino', 'torino', i));
+if (process.env.SEED_BENCH) for (let i = 0; i < 103; i++) events.push(bigEvent('big', 'modena', i));
+
 for (const { id, data } of events) {
 	const res = await fetch(`${BASE}/events/${id}`, {
 		method: 'PATCH',
@@ -205,6 +229,30 @@ const coverage = {
 		]
 	}
 };
+if (process.env.SEED_BIG)
+	coverage.piemonte = { name: 'Piemonte', updatedAt: now, comuni: [{ name: 'Torino', slug: 'torino', province: 'TO', lat: 45.0703, lng: 7.6869, events: 60 }] };
+if (process.env.SEED_BENCH) {
+	// Copertura sintetica di tutta Italia dall'elenco ISTAT già nel repo (~1.100 comuni, ~80% con eventi), come in produzione.
+	const { readFileSync } = await import('node:fs');
+	const raw = JSON.parse(readFileSync(new URL('../src/lib/data/comuni.json', import.meta.url), 'utf8'));
+	const slug = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 70).replace(/-+$/, '');
+	const synthetic = {};
+	let k = 0;
+	for (const [name, alt, province, r, lat, lng, , s] of raw.c) {
+		if (++k % 8 > 4) continue; // ~una ogni 1,6 comuni: ~1.100 su ~7.900, con regioni piene come nella copertura reale
+		const regionName = raw.regioni[r];
+		const rid = slug(regionName);
+		(synthetic[rid] ??= { name: regionName, updatedAt: now, comuni: [] }).comuni.push({ name, slug: s || slug(name), province, lat, lng, events: k % 5, ...(alt ? { alt } : {}) });
+	}
+	// i luoghi veri del seed restano come sono (Modena ha 114 eventi)
+	for (const [rid, data] of Object.entries(coverage)) {
+		const target = (synthetic[rid] ??= { name: data.name, updatedAt: now, comuni: [] });
+		target.comuni = target.comuni.filter((c) => !data.comuni.some((d) => d.slug === c.slug)).concat(data.comuni);
+	}
+	for (const c of synthetic['emilia-romagna'].comuni) if (c.slug === 'modena') c.events = 114;
+	for (const key2 of Object.keys(coverage)) delete coverage[key2];
+	Object.assign(coverage, synthetic);
+}
 for (const [id, data] of Object.entries(coverage)) {
 	const res = await fetch(`${BASE}/coverage/${id}`, {
 		method: 'PATCH',
