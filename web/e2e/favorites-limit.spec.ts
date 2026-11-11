@@ -109,3 +109,48 @@ for (const theme of ['light', 'dark']) {
 		});
 	});
 }
+
+test.describe('durata, pausa e chiusura dei messaggi', () => {
+	// Orologio finto installato dopo l'accesso: solo i timer dei messaggi dipendono da lui, senza aspettare i secondi veri.
+	async function openLimitToast(page: Page, email: string) {
+		await signInByEmail(page, email, '/');
+		const uid = await uidOf(page);
+		await setLimits(uid, 5, 100);
+		await page.goto(MERCATO);
+		await expect(page.getByRole('link', { name: 'Account' })).toBeVisible();
+		await page.waitForLoadState('networkidle');
+		await page.clock.install({ time: Date.now() });
+		await page.getByRole('button', { name: 'Salva', exact: true }).click();
+		const toast = page.getByRole('status').filter({ hasText: 'limite di 100 modifiche ai preferiti, si sincronizzerà' });
+		await expect(toast).toBeVisible();
+		return toast;
+	}
+
+	test('dura più di 6 s perché il testo è lungo, e sparisce da solo', async ({ page }) => {
+		const toast = await openLimitToast(page, 'durata@example.org');
+		await page.clock.runFor(8000); // 6 s sarebbero già passati: 19 parole = 8,25 s
+		await expect(toast).toBeVisible();
+		await page.clock.runFor(1000);
+		await expect(toast).toBeHidden();
+	});
+
+	test('con il mouse sopra non sparisce, quando esce riprende', async ({ page }) => {
+		const toast = await openLimitToast(page, 'mouse@example.org');
+		await toast.hover();
+		await page.clock.runFor(60_000);
+		await expect(toast).toBeVisible();
+		await page.mouse.move(180, 100); // fuori dal messaggio
+		await page.clock.runFor(10_000);
+		await expect(toast).toBeHidden();
+	});
+
+	test('con il focus dentro non sparisce, e il pulsante lo chiude', async ({ page }) => {
+		const toast = await openLimitToast(page, 'focus@example.org');
+		const close = toast.getByRole('button', { name: 'Chiudi avviso' });
+		await close.focus();
+		await page.clock.runFor(60_000);
+		await expect(toast).toBeVisible();
+		await close.click();
+		await expect(toast).toBeHidden();
+	});
+});
