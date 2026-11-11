@@ -44,3 +44,69 @@ test('a11y: home con SSR parziale', async ({ page }) => {
 	const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).disableRules(['color-contrast']).analyze();
 	expect(violations.filter((v) => v.impact === 'serious' || v.impact === 'critical').map((v) => v.id)).toEqual([]);
 });
+
+// --- /citta/<slug>: una pagina di 24 card nell'HTML, «Mostra altri» da /api/citta, paginazione anche senza JavaScript ---
+
+test('/citta/torino: 24 card nell’HTML, conteggio intero, link alle altre pagine', async ({ request }) => {
+	const html = await (await request.get('/citta/torino')).text();
+	expect(html.match(/<article/g)?.length).toBe(24);
+	expect(html).toContain('60 eventi in programma');
+	expect(html).toContain('/citta/torino?pagina=2');
+	expect(html).toContain('<link rel="canonical" href="http://localhost:');
+	expect(html).toMatch(/rel="canonical" href="[^"]*\/citta\/torino"/);
+});
+
+test('?pagina=3 ha le ultime 12 card e canonical su se stessa; oltre l’ultima porta all’ultima; non valida vale 1', async ({ request }) => {
+	const p3 = await (await request.get('/citta/torino?pagina=3')).text();
+	expect(p3.match(/<article/g)?.length).toBe(12);
+	expect(p3).toMatch(/rel="canonical" href="[^"]*\/citta\/torino\?pagina=3"/);
+	expect(p3).toContain('pagina 3');
+	const over = await request.get('/citta/torino?pagina=9', { maxRedirects: 0 });
+	expect(over.status()).toBe(302);
+	expect(over.headers().location).toBe('/citta/torino?pagina=3');
+	const bad = await (await request.get('/citta/torino?pagina=abc')).text();
+	expect(bad.match(/<article/g)?.length).toBe(24);
+});
+
+test('/citta/torino senza JavaScript: pagina 2 raggiungibile dal link', async ({ browser }) => {
+	const ctx = await browser.newContext({ javaScriptEnabled: false });
+	const page = await ctx.newPage();
+	await page.goto('/citta/torino');
+	await page.getByRole('link', { name: 'Pagina successiva' }).click();
+	await expect(page).toHaveURL(/pagina=2/);
+	await expect(page.locator('article')).toHaveCount(24);
+	await ctx.close();
+});
+
+test('/citta/torino con JavaScript: Mostra altri aggiunge card e a fine lista sparisce', async ({ page }) => {
+	await page.goto('/citta/torino');
+	await expect(page.locator('article')).toHaveCount(24);
+	await page.getByRole('button', { name: /Mostra altri/ }).click();
+	await expect(page.locator('article')).toHaveCount(48);
+	await page.getByRole('button', { name: /Mostra altri/ }).click();
+	await expect(page.locator('article')).toHaveCount(60);
+	await expect(page.getByRole('button', { name: /Mostra altri/ })).toHaveCount(0);
+});
+
+test('/citta/torino: un filtro riparte dall’inizio della lista filtrata (lista completa scaricata)', async ({ page }) => {
+	await page.goto('/citta/torino?gratis=1');
+	const free = await page.locator('article').count();
+	expect(free).toBeLessThanOrEqual(24);
+	await page.goto('/citta/torino');
+	await page.getByRole('button', { name: /Mostra altri/ }).click();
+	await expect(page.locator('article')).toHaveCount(48);
+});
+
+test('/api/citta/torino dà tutti gli eventi; slug non valido 404', async ({ request }) => {
+	const res = await request.get('/api/citta/torino');
+	expect(res.status()).toBe(200);
+	expect((await res.json()).length).toBe(60);
+	expect((await request.get('/api/citta/Torino')).status()).toBe(404);
+});
+
+test('a11y: /citta/torino paginata', async ({ page }) => {
+	await page.goto('/citta/torino');
+	await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+	const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).disableRules(['color-contrast']).analyze();
+	expect(violations.filter((v) => v.impact === 'serious' || v.impact === 'critical').map((v) => v.id)).toEqual([]);
+});

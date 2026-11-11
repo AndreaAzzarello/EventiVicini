@@ -105,6 +105,11 @@ const ROUTES: { label: string; run: Run; maxReads: number; maxRequests: number; 
 		maxReads: 3, maxRequests: 3, maxWorst: 3
 	},
 	{
+		label: '/api/citta/modena',
+		run: async () => (await import('../../routes/api/citta/[slug]/+server')).GET({ ...ev('/api/citta/modena'), params: { slug: 'modena' } } as never),
+		maxReads: 3, maxRequests: 3, maxWorst: 3
+	},
+	{
 		label: '/citta/zzz (404)',
 		run: async () => (await import('../../routes/citta/[slug]/+page.server')).load({ ...ev('/citta/zzz'), params: { slug: 'zzz' } } as never),
 		maxReads: 3, maxRequests: 3, maxWorst: 3, threw: true
