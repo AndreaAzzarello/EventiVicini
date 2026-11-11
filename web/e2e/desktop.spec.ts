@@ -1,8 +1,6 @@
 import { expect, test } from '@playwright/test';
 
 test('mappa: i pin vicini fanno un cluster numerato e il tocco apre l’anteprima dell’evento', async ({ page }) => {
-	// Instabile (popup senza link dopo un draw() in più): in CI saltato per non rendere rosse le PR a caso. In locale gira. Vedi #15.
-	test.fixme(!!process.env.CI, 'instabile, vedi #15');
 	await page.goto('/?luogo=modena');
 	const map = page.getByRole('region', { name: 'Mappa degli eventi' });
 	await expect(map.locator('.ev-pin, .ev-cluster').first()).toBeVisible();
