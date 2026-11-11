@@ -17,6 +17,7 @@
 		highlighted = null,
 		onhover,
 		onretry,
+		counts = null,
 		empty
 	}: {
 		events: Event[];
@@ -27,6 +28,8 @@
 		highlighted?: string | null;
 		onhover?: (id: string | null) => void;
 		onretry?: () => void;
+		/** Conteggi dell'elenco intero per sezione, quando `events` ne mostra solo l'inizio (SSR parziale). */
+		counts?: Record<string, number> | null;
 		empty?: Snippet;
 	} = $props();
 </script>
@@ -60,7 +63,7 @@
 {:else}
 	{#each sections(events, now) as section (section.key)}
 		<section class="sect" aria-labelledby="sez-{section.key}">
-			<h2 id="sez-{section.key}">{section.title} <span class="count">{fmtNum(section.events.length)}</span></h2>
+			<h2 id="sez-{section.key}">{section.title} <span class="count">{fmtNum(counts?.[section.key] ?? section.events.length)}</span></h2>
 			<ul class="list">
 				{#each section.events as event (event.id)}
 					<li><EventCard {event} {now} {origin} highlighted={highlighted === event.id} compact={section.key === 'running'} {onhover} /></li>

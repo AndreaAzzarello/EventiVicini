@@ -1,6 +1,6 @@
 /** Numeri all'italiana: 1.234 (anche da quattro cifre, dove it-IT di default non mette il punto). */
-const nf = new Intl.NumberFormat('it-IT', { useGrouping: 'always' });
-export const fmtNum = (n: number): string => nf.format(n);
+let nf: Intl.NumberFormat | undefined; // creato alla prima chiamata (costo di avvio a freddo, #51)
+export const fmtNum = (n: number): string => (nf ??= new Intl.NumberFormat('it-IT', { useGrouping: 'always' })).format(n);
 
 /** Meta description: spazi e a capo normalizzati, al massimo `max` caratteri, tagliata su un confine di parola con "…". */
 export function metaDescription(text: string, max = 155): string {

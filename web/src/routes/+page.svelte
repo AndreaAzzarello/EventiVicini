@@ -50,6 +50,13 @@
 	let locating = $state(false);
 	let locateMsg = $state('');
 
+	// SSR parziale: l'HTML ha solo le prime card, la lista completa arriva da /api/events. Finché `events` è ancora quella del server
+	// (e i filtri sono quelli dell'URL) niente scheletro: le card ci sono già, il riepilogo e i titoli usano i conteggi del server.
+	const ssrFilterKey = $derived.by(() => {
+		void data;
+		return untrack(() => JSON.stringify(filter));
+	});
+	const partial = $derived(data.partial && events === data.events && JSON.stringify(filter) === ssrFilterKey);
 	const visible = $derived(applyFilter(events, filter, now, place));
 	const covered = $derived(distanceKm(place, fetched) + filter.radiusKm <= fetched.km);
 	const eventMatches = (text: string) => applyFilter(events, { ...filter, q: text }, now, place);
@@ -208,7 +215,8 @@
 
 	/** Nessun evento vicino al luogo scelto: il raggio è stato allargato fino a trovarne (vedi autoRadius). */
 	const widened = $derived(data.quiet && data.fromUrl && filter.radiusKm > DEFAULT_RADIUS_KM && !loading && !error && !pending && !filter.q.trim() && visible.length > 0);
-	const count = $derived(visible.length === 1 ? '1 evento' : `${fmtNum(visible.length)} eventi`);
+	const shown = $derived(partial ? data.total : visible.length);
+	const count = $derived(shown === 1 ? '1 evento' : `${fmtNum(shown)} eventi`);
 </script>
 
 <!-- Il canonical resta "/" (Seo con path="/"); il titolo segue il luogo dell'URL, deciso dal server. -->
@@ -220,7 +228,7 @@
 		{#if !needsPlace}
 			<div class="where">
 				<p class="summary" aria-live="polite">
-					{#if loading || pending}Cerco eventi…{:else}<!-- a capo solo tra i gruppi: «vicino a» resta con il luogo -->
+					{#if (loading && !partial) || pending}Cerco eventi…{:else}<!-- a capo solo tra i gruppi: «vicino a» resta con il luogo -->
 						{#if error}<span class="nowrap">Elenco non disponibile</span>{:else}<span class="nowrap">{count}</span>{/if}
 						<span class="nowrap">{error ? 'per' : 'vicino a'}
 							<button type="button" class="place-link" onclick={() => search?.openPlaces()} aria-haspopup="listbox">
@@ -300,8 +308,9 @@
 					events={visible}
 					{now}
 					origin={place}
-					loading={loading || pending}
-					{error}
+					loading={(loading && !partial) || pending}
+					error={partial ? '' : error}
+					counts={partial ? data.sectionCounts : null}
 					{highlighted}
 					onhover={(id) => (highlighted = id)}
 					onretry={load}
@@ -352,6 +361,18 @@
 						{/if}
 					{/snippet}
 				</EventList>
+				{#if partial}
+					{#if error}
+						<p class="more" role="status">
+							Non riesco a caricare gli altri eventi. <button type="button" class="btn btn-sm" onclick={load}>Riprova</button>
+						</p>
+					{:else}
+						<p class="more" role="status">Carico gli altri eventi…</p>
+					{/if}
+					{#if data.place.slug}
+						<noscript><p class="more"><a href="/citta/{data.place.slug}">Vedi tutti gli eventi a {data.place.label}</a></p></noscript>
+					{/if}
+				{/if}
 			</div>
 			<div id="panel-map" class="map-pane" role="tabpanel" aria-labelledby="tab-map">
 				{#if wide || view === 'map'}
@@ -369,6 +390,11 @@
 </div>
 
 <style>
+	.more {
+		margin: var(--space-4) 0 0;
+		color: var(--muted);
+		font-size: var(--text-sm);
+	}
 	/* Uno schermo intero in ogni stato: il passaggio lista → prima visita non sposta il footer (CLS). */
 	.home {
 		min-height: 100svh;
