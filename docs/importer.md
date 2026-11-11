@@ -225,6 +225,24 @@ Molti comuni sono respinti con "nessun evento futuro valido" solo perché in que
 3. Nel CSV imposta `stato` a `attivo` e compila le note con la verifica fatta.
 4. Prova con `python run.py --dry-run --source <slug>`. Lo slug è il nome del comune in minuscolo con trattini (es. `modena`).
 
+### Schema evento: file di parità
+
+Lo schema dell'evento è scritto a mano in tre posti: l'importer (`mapping.py`, `geo.py`, adapter), il web (`web/src/lib/event.ts`) e le regole (`firebase/firestore.rules`). Il file `docs/schema/parity.json` li tiene allineati: elenca categorie, tipi di prezzo, valori di `source`, campi comuni (`eventKeys`), campi opzionali (`eventOptionalKeys`), campi scritti solo dall'importer (`importerOnlyKeys`), `HASH_SKIP`, tag «bambini» e una tabella di casi per `slugify` (almeno 20, identici in Python e TypeScript). Non è letto dal codice dell'app: lo leggono solo tre test, che falliscono se uno dei tre posti cambia e gli altri no.
+
+| Test | Comando | Cosa confronta |
+|---|---|---|
+| `tools/importer/tests/test_schema_parity.py` | `python -m pytest -q tests` (da `tools/importer/`) | categorie e prezzi che l'importer può produrre, campi di un evento reale (fixture Plone + `enrich`), `HASH_SKIP`, `slugify` |
+| `web/src/lib/schema-parity.test.ts` | `npm test` (da `web/`) | `CATEGORIES`, `PRICE_TYPES`, `EVENT_KEYS`, campi di `fromData`, `slugify`, `isForKids` |
+| `firebase/test/parity.test.js` | `npm test` (da `firebase/`, Java 21) | testo di `firestore.rules` (`eventKeys()`, categorie, prezzi, `source`, `hasOnly`) e comportamento sull'emulatore |
+
+Come aggiornarlo:
+1. **Nuova categoria o tipo di prezzo**: aggiungila nello stesso commit a `parity.json`, `CATEGORIES`/`PRICE_TYPES` in `event.ts` (con l'etichetta), alle liste `d.category in [...]` / `d.priceType in [...]` di `firestore.rules` e al punto dell'importer che la produce (`CATEGORY_BY_TYPE`, `KEYWORDS`, adapter). Poi i tre comandi della tabella.
+2. **Nuovo campo dell'evento**: `parity.json` (`eventKeys`, oppure `eventOptionalKeys` se facoltativo), `EventInput` e `EVENT_KEY_MAP` in `event.ts` (`npm run check` ricorda di tenerli uguali), `eventKeys()` o `hasOnly(...)` in `firestore.rules`, l'adapter o `run.py` che lo scrive. Se il campo cambia a ogni giro e non fa parte del contenuto, aggiungilo anche a `HASH_SKIP` e a `hashSkip`.
+3. **Campo scritto solo dall'importer** (Admin SDK, senza passare dalle regole): mettilo in `importerOnlyKeys`. Oggi c'è `cityAlt` (vedi #46): l'admin non lo riscrive e le regole non lo ammettono.
+4. **Nuovo caso di `slugify`**: aggiungi `{ "in": ..., "out": ... }` calcolando `out` con `geo.slugify` (Python); se TypeScript dà un risultato diverso, il test web fallisce e va allineata l'implementazione.
+
+I test delle regole estraggono le liste dal testo con espressioni regolari: se riscrivi la forma di `eventKeys()` o dei controlli `in [...]` e un'espressione non trova più nulla, il test fallisce con un messaggio esplicito (aggiornala), non passa in silenzio.
+
 ### Aggiungere un adapter per un nuovo CMS
 
 L'interfaccia è in `adapters/base.py`, un `Protocol` con gli attributi `name`, `city`, `province`, `region`, `viewbox` e il metodo `events(client, now, horizon_days)`. Il metodo restituisce dict nel modello dell'app, con almeno: `id`, `title`, `shortDescription`, `category`, `priceType`, `startTime`, `endTime` (ms), `venueName`, `address`, `lat`, `lng` (`None` se da geocodificare), `imageUrl`, `ticketUrl`, `tags`, `source` (`"scraper"`), `sourceUrl` e `_geocode` (indirizzi da provare con Nominatim, in ordine).

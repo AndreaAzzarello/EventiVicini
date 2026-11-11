@@ -1,5 +1,5 @@
 // Operazioni dell'admin. Le regole Firestore le ricontrollano tutte (email admin verificata).
-import { LONG_RUNNING_DAYS, fromData, type Event, type EventInput } from './event';
+import { EVENT_KEYS, LONG_RUNNING_DAYS, fromData, type Event, type EventInput } from './event';
 import { session } from './session.svelte';
 import { reportFromSnap, type Report } from './reports';
 import { fromSnap, type Submission } from './submissions';
@@ -59,11 +59,6 @@ export async function pendingSubmissions(): Promise<Submission[]> {
 	);
 	return snap.docs.map((d) => fromSnap(d.id, d.data()));
 }
-
-const EVENT_KEYS = [
-	'title', 'shortDescription', 'category', 'priceType', 'startTime', 'endTime', 'venueName', 'address',
-	'lat', 'lng', 'imageUrl', 'ticketUrl', 'tags', 'geohash', 'city', 'citySlug', 'province', 'region'
-] as const;
 
 /** Approva: copia in events (source "user", senza l'autore: l'uid resta solo nella proposta), chiude la proposta, libera il posto dell'autore. */
 export async function approve(s: Submission): Promise<string> {
