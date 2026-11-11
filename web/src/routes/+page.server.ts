@@ -3,7 +3,7 @@ import { HTML_CACHE } from '$lib/server/cache';
 import { comuneBySlug } from '$lib/server/comuneSlug';
 import { filterFromParams } from '$lib/filters';
 import { DEFAULT_PLACE, type ChosenPlace } from '$lib/geo';
-import { autoRadius, nearestWithEvents, placeFromEvents, placeFromParams, popularPlaces } from '$lib/places';
+import { autoRadius, nearestWithEvents, placeFromEvents, placeFromParams, popularPlaces, regionsWithEvents } from '$lib/places';
 import { coverage, eventsAround, eventsInCity } from '$lib/server/firestore';
 import type { PageServerLoad } from './$types';
 
@@ -37,12 +37,8 @@ export const load: PageServerLoad = async ({ url, setHeaders }) => {
 
 	if (!wanted || !fromUrl) {
 		// Senza luogo (o con un luogo che non conosciamo) niente eventi: si sceglie il luogo, non si ripiega su Modena.
-		const sum = (r: (typeof regions)[number]) => r.comuni.reduce((n, c) => n + c.events, 0);
 		const popular = {
-			regions: regions
-				.map((r) => ({ slug: r.slug, name: r.name, events: sum(r) }))
-				.filter((r) => r.events > 0)
-				.sort((a, b) => b.events - a.events || a.name.localeCompare(b.name, 'it')),
+			regions: regionsWithEvents(regions),
 			cities: popularPlaces(regions, 12)
 				.filter((h) => h.events > 0)
 				.map((h) => ({ slug: h.place.slug!, name: h.place.label, events: h.events }))
