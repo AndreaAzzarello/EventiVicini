@@ -363,6 +363,26 @@ def stale_updates(docs: dict[str, dict], seen_ids: set[str], ok_hosts: set[str],
     return out
 
 
+def stale_preview(docs: dict[str, dict], seen_ids: set[str], sources: dict, ok_names: list[str], now_ms: int,
+                  horizon_ms: int) -> dict:
+    """Anteprima di sola lettura della pulizia (dry-run): eventi del manifest che questo giro non ha più visto.
+
+    Restituisce {"total": n, "only_new_rule": [(id, sourceUrl)], "by_source": {nome: n}}; `only_new_rule` sono quelli che prima
+    di #56 non sarebbero stati considerati (host dell'evento diverso da quello del sito)."""
+    ok_hosts = set().union(*(source_hosts(sources[n]) for n in ok_names)) if ok_names else set()
+    stale = stale_updates(docs, seen_ids, ok_hosts, now_ms, horizon_ms)
+    old_hosts = {urlsplit(sources[n].base).netloc for n in ok_names}
+    by_source: dict[str, int] = {}
+    only_new = []
+    for doc_id in stale:
+        url = docs[doc_id].get("sourceUrl") or ""
+        if urlsplit(url).netloc not in old_hosts:
+            only_new.append((doc_id, url))
+        owner = next((n for n in ok_names if host_key(url) in {host_key(h) for h in source_hosts(sources[n])}), "?")
+        by_source[owner] = by_source.get(owner, 0) + 1
+    return {"total": len(stale), "only_new_rule": only_new, "by_source": by_source}
+
+
 def plan_writes(events: list[dict], existing: dict[str, dict], ok_hosts: set[str], now_ms: int,
                 horizon_ms: int, excluded: set[str] = frozenset()) -> dict:
     """Cosa scrivere: solo gli eventi nuovi o con hash diverso (o da ripristinare), più gli spariti dalla fonte.
@@ -861,6 +881,22 @@ def _main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.dry_run:
+        now_ms = int(now.timestamp() * 1000)
+        regions = {slugify(SOURCES[n].region) for n in names}
+        mans = {r: manifest.load(HERE / "manifests", r, now_ms) for r in regions}
+        if all(mans.values()):
+            docs = {i: d for m in mans.values() for i, d in manifest.prune(m["docs"], now_ms).items()}
+            ok_names = [n for n, st in stats.items() if st["error"] is None]
+            pv = stale_preview(docs, {ev["id"] for ev in events} | {x["id"] for x in excluded}, SOURCES, ok_names, now_ms,
+                               args.horizon_days * 86_400_000)
+            log.info("Anteprima pulizia: %d eventi non più pubblicati (nascosti al 2° giro consecutivo); %d solo con la regola di #56; "
+                     "per fonte: %s", pv["total"], len(pv["only_new_rule"]),
+                     ", ".join(f"{n} {c}" for n, c in sorted(pv["by_source"].items())) or "-")
+            for doc_id, url in pv["only_new_rule"][:30]:
+                log.info("  #56: %s  %s", doc_id, url)
+        else:
+            log.info("Anteprima pulizia: manifest assente o vecchio per %s, niente confronto",
+                     ", ".join(r for r, m in mans.items() if not m))
         if args.dump:
             args.dump.write_text(json.dumps(events, ensure_ascii=False, indent=1), encoding="utf-8")
         for ev in sorted(events, key=lambda e: e["startTime"]):
