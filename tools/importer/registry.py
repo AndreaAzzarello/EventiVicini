@@ -58,3 +58,9 @@ def base_url(sito: str) -> str:
         sito = "https://" + sito
     p = urlsplit(sito)
     return f"{p.scheme}://{p.netloc.lower()}"
+
+
+def host_key(url_or_host: str) -> str:
+    """Host in minuscolo senza «www.»: www e non-www sono lo stesso sito. Accetta un URL o un host (netloc)."""
+    host = (urlsplit(url_or_host).netloc if "://" in url_or_host else url_or_host).lower()
+    return host[4:] if host.startswith("www.") else host

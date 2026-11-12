@@ -37,7 +37,7 @@ from geocode import Geocoder
 from netcluster import NetGate, interleave
 from meter import BudgetExceeded, SourceMeter
 from mapping import ROME, content_hash, dedupe_key, html_to_text, is_long_running, one_line
-from registry import USER_AGENT, read_rows
+from registry import USER_AGENT, host_key, read_rows
 from relevance import exclusion_reason
 
 HERE = Path(__file__).parent
@@ -338,6 +338,12 @@ class QuotaExceeded(Exception):
     pass
 
 
+def source_hosts(source) -> set[str]:
+    """Host da cui una fonte può pubblicare eventi: quello del sito e quello della pagina eventi, se diverso (#56)."""
+    urls = [source.base, getattr(source, "url_eventi", "")]
+    return {urlsplit(u).netloc for u in urls if u}
+
+
 def stale_updates(docs: dict[str, dict], seen_ids: set[str], ok_hosts: set[str], now_ms: int,
                   horizon_ms: int) -> dict[str, dict]:
     """Aggiornamenti per gli eventi scraper non ancora finiti che la loro fonte non pubblica più.
@@ -350,7 +356,7 @@ def stale_updates(docs: dict[str, dict], seen_ids: set[str], ok_hosts: set[str],
     for doc_id, d in docs.items():
         if doc_id in seen_ids or d.get("source") != "scraper" or d.get("removedAt") or (d.get("endTime") or 0) < now_ms:
             continue
-        if urlsplit(d.get("sourceUrl") or "").netloc not in ok_hosts or (d.get("startTime") or 0) > now_ms + horizon_ms:
+        if host_key(d.get("sourceUrl") or "") not in {host_key(h) for h in ok_hosts} or (d.get("startTime") or 0) > now_ms + horizon_ms:
             continue
         missing = (d.get("missingRuns") or 0) + 1
         out[doc_id] = {"missingRuns": missing} | ({"removedAt": now_ms} if missing >= MISSING_RUNS_TO_REMOVE else {})
@@ -862,7 +868,7 @@ def _main(argv: list[str] | None = None) -> int:
             print(f"{start:%d/%m %H:%M}  {ev['category']:<8} {ev['priceType']:<7} "
                   f"{ev['title'][:55]:<55}  {ev['city'][:18]:<18} {ev['province']:<2} {ev['geohash']}")
         return 0
-    ok_hosts = {urlsplit(SOURCES[n].base).netloc for n, st in stats.items() if st["error"] is None}
+    ok_hosts = set().union(*(source_hosts(SOURCES[n]) for n, st in stats.items() if st["error"] is None))
     collected = stats  # `write` restituisce le sue statistiche con lo stesso nome
     try:
         stats = write(events, now, ok_hosts, args.horizon_days, {slugify(SOURCES[n].region) for n in names},
