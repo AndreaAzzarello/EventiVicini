@@ -14,6 +14,7 @@ from registry import base_url, read_rows
 from .base import Adapter, fallback_place
 from .design_comuni_html import DesignComuniHtmlAdapter
 from .ert import BASE as ERT_BASE, REGION as ERT_REGION, ErtAdapter
+from .filesource import FileSourceAdapter
 from .opendatahub import OpenDataHubAdapter
 from .plone import PloneAdapter
 from .ticketmaster import BASE as TICKETMASTER_BASE, TicketmasterAdapter
@@ -53,6 +54,16 @@ def with_code_sources(out: dict[str, Adapter]) -> dict[str, Adapter]:
     if any(slugify(a.region) == slugify(ERT_REGION) for a in out.values()):
         # provincia del capoluogo regionale: serve solo come ripiego, ogni evento porta il suo comune e la sua provincia
         out["ert-emilia-romagna"] = ErtAdapter("ert-emilia-romagna", ERT_BASE, "Emilia Romagna Turismo", "BO", ERT_REGION)
+    return out
+
+
+def with_file_sources(out: dict[str, Adapter], directory, names: list[str]) -> dict[str, Adapter]:
+    """Le fonti dell'elenco del Mac (`names`) leggono i file scaricati dal Mac in `directory` invece della rete (#54).
+    Una fonte che non è tra le attive, o è regionale, resta com'è."""
+    for n in names:
+        a = out.get(n)
+        if a is not None and not getattr(a, "regional", False):
+            out[n] = FileSourceAdapter(n, a.base, a.city, a.province, a.region, a.viewbox, directory, getattr(a, "url_eventi", ""))
     return out
 
 
