@@ -34,6 +34,7 @@ from geo import PROVINCES, enrich, in_viewbox, slugify
 import fetch as httpfetch  # `fetch` è anche una funzione locale di collect()
 from fetch import CONNECT_FAILED
 from geocode import Geocoder
+from liveness import LiveChecker
 from netcluster import NetGate, interleave
 from meter import BudgetExceeded, SourceMeter
 from mapping import ROME, content_hash, dedupe_key, html_to_text, is_long_running, one_line
@@ -345,18 +346,22 @@ def source_hosts(source) -> set[str]:
 
 
 def stale_updates(docs: dict[str, dict], seen_ids: set[str], ok_hosts: set[str], now_ms: int,
-                  horizon_ms: int) -> dict[str, dict]:
+                  horizon_ms: int, still_online=None) -> dict[str, dict]:
     """Aggiornamenti per gli eventi scraper non ancora finiti che la loro fonte non pubblica più.
 
     docs: id → campi (source, sourceUrl, startTime, endTime, missingRuns, removedAt). Solo le fonti che in
     questo giro hanno risposto (ok_hosts) contano, e solo gli eventi che iniziano entro l'orizzonte (gli altri
     non erano nella lista letta). Al 2° import consecutivo senza l'evento: removedAt (nascosto, non cancellato).
+    still_online (opzionale, vedi liveness.py): url → True se la pagina dell'evento risponde ancora; chiamata per ultima, solo
+    per gli eventi che altrimenti si segnerebbero, e in quel caso l'evento resta com'è.
     """
     out: dict[str, dict] = {}
     for doc_id, d in docs.items():
         if doc_id in seen_ids or d.get("source") != "scraper" or d.get("removedAt") or (d.get("endTime") or 0) < now_ms:
             continue
         if host_key(d.get("sourceUrl") or "") not in {host_key(h) for h in ok_hosts} or (d.get("startTime") or 0) > now_ms + horizon_ms:
+            continue
+        if still_online is not None and still_online(d.get("sourceUrl") or ""):
             continue
         missing = (d.get("missingRuns") or 0) + 1
         out[doc_id] = {"missingRuns": missing} | ({"removedAt": now_ms} if missing >= MISSING_RUNS_TO_REMOVE else {})
@@ -384,7 +389,7 @@ def stale_preview(docs: dict[str, dict], seen_ids: set[str], sources: dict, ok_n
 
 
 def plan_writes(events: list[dict], existing: dict[str, dict], ok_hosts: set[str], now_ms: int,
-                horizon_ms: int, excluded: set[str] = frozenset()) -> dict:
+                horizon_ms: int, excluded: set[str] = frozenset(), still_online=None) -> dict:
     """Cosa scrivere: solo gli eventi nuovi o con hash diverso (o da ripristinare), più gli spariti dalla fonte.
 
     existing: id → campi del documento già nel database (PROJECTION). Gli eventi con `source == manual`
@@ -402,7 +407,7 @@ def plan_writes(events: list[dict], existing: dict[str, dict], ok_hosts: set[str
             unchanged += 1
         else:
             write.append(ev)
-    stale = stale_updates(existing, {ev["id"] for ev in events} | excluded, ok_hosts, now_ms, horizon_ms)
+    stale = stale_updates(existing, {ev["id"] for ev in events} | excluded, ok_hosts, now_ms, horizon_ms, still_online)
     for doc_id in excluded:
         d = existing.get(doc_id)
         if d and d.get("source") == "scraper" and not d.get("removedAt"):
@@ -451,14 +456,14 @@ def from_manifest(db, coll, regions: set[str], now_ms: int, directory: Path):
 def write(events: list[dict], now: datetime, ok_hosts: set[str] | None = None, horizon_days: int = 60,
           regions: set[str] | None = None, db=None, max_writes: int = MAX_WRITES, max_reads: int = MAX_READS,
           excluded: set[str] = frozenset(), manifest_dir: Path | None = None, reconcile: bool = False,
-          with_bundles: bool = False) -> dict:
+          with_bundles: bool = False, still_online=None) -> dict:
     """Upsert incrementale. Il confronto parte dal manifest locale (manifest_dir) o, se manca/è vecchio/non coerente
     o con reconcile=True, da una lettura di proiezione degli eventi scraper delle regioni; poi si scrive solo ciò che è
     cambiato. Si ferma prima di scrivere se le quote stimate superano max_writes/max_reads.
     Restituisce le statistiche (letti, scritti, invariati, nascosti, fonte del confronto)."""
     kw = dict(events=events, now=now, ok_hosts=ok_hosts, horizon_days=horizon_days, regions=regions, db=db,
               max_writes=max_writes, max_reads=max_reads, excluded=excluded, manifest_dir=manifest_dir,
-              with_bundles=with_bundles)
+              with_bundles=with_bundles, still_online=still_online)
     try:
         return _write(**kw, reconcile=reconcile)
     except Retry as r:
@@ -469,7 +474,7 @@ def write(events: list[dict], now: datetime, ok_hosts: set[str] | None = None, h
 
 
 def _write(events, now, ok_hosts, horizon_days, regions, db, max_writes, max_reads, excluded, manifest_dir,
-           reconcile, with_bundles) -> dict:
+           reconcile, with_bundles, still_online=None) -> dict:
     from google.api_core.exceptions import NotFound
     from google.cloud.firestore_v1.base_query import FieldFilter
 
@@ -502,7 +507,7 @@ def _write(events, now, ok_hosts, horizon_days, regions, db, max_writes, max_rea
                  if d.exists}
     reads += len(missing)
     known = existing | elsewhere
-    plan = plan_writes(events, known, ok_hosts or set(), now_ms, horizon_days * 86_400_000, excluded)
+    plan = plan_writes(events, known, ok_hosts or set(), now_ms, horizon_days * 86_400_000, excluded, still_online)
     # protocollo importState: segnaposto prima, token nuovo dopo; senza modifiche e col manifest valido non si scrive nulla
     track = bool(manifest_dir) and (compare == "firestore" or bool(plan["write"] or plan["stale"]))
     n_writes = len(plan["write"]) + len(plan["stale"]) + (2 * len(regions) if track else 0)
@@ -821,6 +826,8 @@ def _main(argv: list[str] | None = None) -> int:
     p.add_argument("--stats-out", type=Path, help="scrive qui le statistiche dell'import (JSON)")
     p.add_argument("--sitemap-out", type=Path,
                    help="scrive qui gli eventi della regione per la sitemap (il job cleanup li unisce: sitemap.py)")
+    p.add_argument("--no-liveness", action="store_true",
+                   help="non controllare se la pagina di un evento non più in lista risponde ancora (interruttore di emergenza)")
     p.add_argument("--max-geocode", type=int, default=MAX_GEOCODE,
                    help="richieste nuove a Nominatim per giro (le altre, dagli eventi più lontani, nei giorni dopo)")
     p.add_argument("--horizon-days", type=int, default=60, help="importa eventi che iniziano entro N giorni")
@@ -906,13 +913,20 @@ def _main(argv: list[str] | None = None) -> int:
         return 0
     ok_hosts = set().union(*(source_hosts(SOURCES[n]) for n, st in stats.items() if st["error"] is None))
     collected = stats  # `write` restituisce le sue statistiche con lo stesso nome
+    checker = None
     try:
-        stats = write(events, now, ok_hosts, args.horizon_days, {slugify(SOURCES[n].region) for n in names},
-                      max_writes=args.max_writes, max_reads=args.max_reads, excluded={x["id"] for x in excluded},
-                      manifest_dir=HERE / "manifests", reconcile=args.reconcile, with_bundles=True)
+        with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=httpx.Timeout(30, connect=CONNECT_TIMEOUT),
+                          follow_redirects=True) as live_client:
+            if not args.no_liveness:  # controllo di pagina prima di segnare un evento come sparito (#56)
+                checker = LiveChecker(live_client, {ev["sourceUrl"] for ev in events if ev.get("sourceUrl")}, HERE / ".httpcache")
+            stats = write(events, now, ok_hosts, args.horizon_days, {slugify(SOURCES[n].region) for n in names},
+                          max_writes=args.max_writes, max_reads=args.max_reads, excluded={x["id"] for x in excluded},
+                          manifest_dir=HERE / "manifests", reconcile=args.reconcile, with_bundles=True, still_online=checker)
     except QuotaExceeded as e:
         log.error("%s", e)
         return 2
+    if checker is not None:
+        log.info("Controllo pagine degli eventi non più in lista: %s", ", ".join(f"{k} {v}" for k, v in checker.stats.items()))
     from db import client as firestore_client
 
     db = firestore_client()
