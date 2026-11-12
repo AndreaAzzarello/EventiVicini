@@ -13,6 +13,7 @@ from registry import base_url, read_rows
 
 from .base import Adapter, fallback_place
 from .design_comuni_html import DesignComuniHtmlAdapter
+from .ert import BASE as ERT_BASE, REGION as ERT_REGION, ErtAdapter
 from .opendatahub import OpenDataHubAdapter
 from .plone import PloneAdapter
 from .ticketmaster import BASE as TICKETMASTER_BASE, TicketmasterAdapter
@@ -46,6 +47,15 @@ def load_sources(rows: list[dict] | None = None) -> dict[str, Adapter]:
     return out
 
 
-SOURCES = load_sources()
+def with_code_sources(out: dict[str, Adapter]) -> dict[str, Adapter]:
+    """Fonti regionali definite nel codice, non nel registro: l'API di Emilia-Romagna Turismo, se la regione ha fonti attive.
+    Fuori da load_sources() perché quella legge solo le righe che le si passano."""
+    if any(slugify(a.region) == slugify(ERT_REGION) for a in out.values()):
+        # provincia del capoluogo regionale: serve solo come ripiego, ogni evento porta il suo comune e la sua provincia
+        out["ert-emilia-romagna"] = ErtAdapter("ert-emilia-romagna", ERT_BASE, "Emilia Romagna Turismo", "BO", ERT_REGION)
+    return out
 
-__all__ = ["Adapter", "SOURCES", "fallback_place", "load_sources"]
+
+SOURCES = with_code_sources(load_sources())
+
+__all__ = ["Adapter", "SOURCES", "fallback_place", "load_sources", "with_code_sources"]
