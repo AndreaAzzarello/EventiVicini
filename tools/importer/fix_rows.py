@@ -23,15 +23,9 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from registry import SOURCES_DIR, USER_AGENT, read_rows, write_rows
+from registry import SOURCES_DIR, USER_AGENT, host_key, read_rows, write_rows
 
 FIELDS = ("sito", "url_eventi")
-
-
-def host_key(url: str) -> str:
-    """Host in minuscolo senza «www.»: www e non-www sono lo stesso sito."""
-    host = urlsplit(url).netloc.lower()
-    return host[4:] if host.startswith("www.") else host
 
 
 def http_fetch(url: str) -> tuple[int, str]:
