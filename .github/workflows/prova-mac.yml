@@ -17,8 +17,6 @@ jobs:
         run: |
           whoami; id -Gn; uname -m; sw_vers -productVersion; date
           echo "variabili con FIREBASE/TOKEN/SECRET: $(env | grep -ciE 'firebase|token|secret' || true)"
-      - name: IP in uscita
-        run: curl -sS -m 10 https://ifconfig.me; echo
       - name: Richieste ai siti bloccati dal runner GitHub (1 al secondo, stesso user-agent dell'importer)
         run: |
           UA="EventiVicini-importer/1.0 (+https://github.com/AndreaAzzarello/EventiVicini)"
