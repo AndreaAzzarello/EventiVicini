@@ -104,6 +104,10 @@ jobs:
     # job meno; i 150+ min di Piemonte e Veneto erano host irraggiungibili (ora 15 s di connessione e ricordati tra i run) e ogni
     # fonte ha un tetto di 10 minuti (--source-budget). 90 minuti sono la rete di sicurezza. Nominatim: 0,25 richieste/s per job.
     timeout-minutes: 90
+    # actions: read solo qui, per scaricare l'artifact del Mac (#54); il resto dei job resta con il solo contents: read
+    permissions:
+      contents: read
+      actions: read
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -162,8 +166,17 @@ jobs:
           path: tools/importer/health.json
           key: importer-health-${{ matrix.region }}-${{ github.run_id }}
           restore-keys: importer-health-${{ matrix.region }}-
+      # Dati scaricati dal Mac mini (#54): artifact dell'ultimo scarica-fonti riuscito su main. Passo senza segreti; se manca o
+      # fallisce, le fonti del Mac restano saltate come prima. I file sono dati non fidati: l'importer li rivalida (filesource.py).
+      - name: Dati del Mac mini
+        id: mac
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python ci_report.py mac-artifact fonti-mac
       - name: Importer
         env:
+          MAC_DIR: ${{ steps.mac.outputs.dir }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           # solo in questo step (non nel job): Ticketmaster Discovery API; il log passa da logsafe (apikey=***)
           TICKETMASTER_API_KEY: ${{ secrets.TICKETMASTER_API_KEY }}
@@ -178,6 +191,7 @@ jobs:
           ${{ inputs.dry_run && '--dry-run' || '' }}
           ${{ (inputs.reconcile || matrix.reconcile) && '--reconcile' || '' }}
           ${IP_INTERVAL:+--ip-interval "$IP_INTERVAL"}
+          ${MAC_DIR:+--fonti-mac "$MAC_DIR"}
       - uses: actions/upload-artifact@v6
         if: ${{ !inputs.dry_run }}
         with:
