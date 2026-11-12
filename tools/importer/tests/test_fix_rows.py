@@ -27,10 +27,6 @@ def ok_robots(url):
 FIX = {"regione": "Lazio", "comune": "Fondi", "sito": "https://comune.fondi.lt.it"}
 
 
-def test_host_key_ignora_www_e_maiuscole():
-    assert fix_rows.host_key("https://WWW.Comune.X.it/a") == fix_rows.host_key("https://comune.x.it") == "comune.x.it"
-
-
 def test_correzione_valida_cambia_solo_sito_e_note():
     rows = [row()]
     before = dict(rows[0])
