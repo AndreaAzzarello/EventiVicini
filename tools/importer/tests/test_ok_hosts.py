@@ -43,3 +43,14 @@ def test_www_e_non_www_sono_lo_stesso_host():
 def test_host_non_risposto_resta_intatto():
     docs = {"a": doc("https://altro.example/e/1")}
     assert stale_updates(docs, set(), {"comune.x.it"}, NOW, 60 * DAY) == {}
+
+
+def test_anteprima_pulizia_separa_i_casi_nuovi_di_56():
+    from run import stale_preview
+    src = {"fondi": SimpleNamespace(base="https://www.comunedifondi.it", url_eventi="https://comune.fondi.lt.it/e/"),
+           "x": SimpleNamespace(base="https://comune.x.it")}
+    docs = {"a": doc("https://comune.fondi.lt.it/e/1"), "b": doc("https://www.comunedifondi.it/e/2"),
+            "c": doc("https://comune.x.it/e/3"), "d": doc("https://altro.example/e/4")}
+    out = stale_preview(docs, {"c"}, src, ["fondi", "x"], NOW, 60 * DAY)
+    assert out["total"] == 2 and out["only_new_rule"] == [("a", "https://comune.fondi.lt.it/e/1")]
+    assert out["by_source"] == {"fondi": 2}
