@@ -12,3 +12,4 @@ Termini del dominio, come li usano codice, interfaccia e documenti. Usa questi, 
 - **Parcheggio**: attesa di 1, 3 o 7 giorni per un host che non si connette (`unreachable.py`).
 - **Eventi visibili**: stima degli eventi presenti sul sito per una regione: quelli estratti oggi più quelli che le fonti saltate lasciano in Firestore.
 - **Punto di contatto**: l'indirizzo email pubblico per privacy, segnalazioni, autorità e sicurezza (DSA, artt. 11-12).
+- **Fonte regionale**: API unica che copre più comuni (Open Data Hub Alto Adige, Emilia Romagna Turismo). Non è un comune: non ha scheda nella copertura e, nella deduplica su titolo, giorno e comune, vince la fonte comunale. Le immagini di Emilia Romagna Turismo non si importano finché l'ente non conferma le licenze (#37).
