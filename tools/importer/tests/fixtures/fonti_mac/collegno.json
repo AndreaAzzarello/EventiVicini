@@ -1,0 +1,83 @@
+{
+ "version": 1,
+ "source": "collegno",
+ "host": "www.comune.collegno.to.it",
+ "fetchedAt": "2026-11-12T18:49:57.419103+00:00",
+ "horizonDays": 60,
+ "ok": true,
+ "error": null,
+ "events": [
+  {
+   "id": "5f721a98cc3ada502423",
+   "title": "Book Brigade",
+   "shortDescription": "Incontro con il gruppo di lettura Brook Brigade: incontro con il gruppo di lettura per ragazze/i 10-14 anni",
+   "category": "culture",
+   "priceType": "free",
+   "startTime": 1794585600000,
+   "endTime": 1794592800000,
+   "venueName": "Biblioteca Civica",
+   "address": "Corso Francia 275",
+   "lat": null,
+   "lng": null,
+   "imageUrl": "https://static-www.comune.collegno.to.it/wp-content/uploads/2024/11/copertina.png",
+   "ticketUrl": "",
+   "tags": [],
+   "source": "scraper",
+   "sourceUrl": "https://www.comune.collegno.to.it/vivere-il-comune/eventi/book-brigade-4/",
+   "approxLocation": false,
+   "_geocode": [
+    "Corso Francia 275, Collegno",
+    "Biblioteca Civica, Collegno"
+   ]
+  },
+  {
+   "id": "2f990b0eb840e63f7662",
+   "title": "Gnu Quartet – Paganini the rock album",
+   "shortDescription": "Evento musicale alla Lavanderia a Vapore Il GnuQuartet è un ensemble musicale eclettico e innovativo, noto per la sua capacità di spaziare tra i gener",
+   "category": "music",
+   "priceType": "low",
+   "startTime": 1794600000000,
+   "endTime": 1794607200000,
+   "venueName": "Lavanderia a Vapore",
+   "address": "Corso Pastrengo, 51 -",
+   "lat": null,
+   "lng": null,
+   "imageUrl": "https://static-www.comune.collegno.to.it/wp-content/uploads/2026/10/gnu_quartet_piccola.jpg",
+   "ticketUrl": "",
+   "tags": [],
+   "source": "scraper",
+   "sourceUrl": "https://www.comune.collegno.to.it/vivere-il-comune/eventi/gnu-quartet-paganini-the-rock-album/",
+   "approxLocation": false,
+   "_geocode": [
+    "Corso Pastrengo, 51 -, Collegno",
+    "Corso Pastrengo, Collegno",
+    "Lavanderia a Vapore, Collegno"
+   ]
+  },
+  {
+   "id": "8ae50bffb20310f067b8",
+   "title": "Se dei bambini fosse il mondo",
+   "shortDescription": "L'ora della fiaba - Letture e laboratorio a cura di Haider BucarSe dei bambini fosse il mondo. Letture e laboratorio a cura di Haider Bucar Età",
+   "category": "kids",
+   "priceType": "free",
+   "startTime": 1794648600000,
+   "endTime": 1794654000000,
+   "venueName": "Biblioteca Civica",
+   "address": "Corso Francia 275",
+   "lat": null,
+   "lng": null,
+   "imageUrl": "https://static-www.comune.collegno.to.it/wp-content/uploads/2024/11/copertina.png",
+   "ticketUrl": "",
+   "tags": [
+    "kids"
+   ],
+   "source": "scraper",
+   "sourceUrl": "https://www.comune.collegno.to.it/vivere-il-comune/eventi/se-dei-bambini-fosse-il-mondo/",
+   "approxLocation": false,
+   "_geocode": [
+    "Corso Francia 275, Collegno",
+    "Biblioteca Civica, Collegno"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,51 @@
+{
+ "version": 1,
+ "source": "santa-marinella",
+ "host": "www.comune.santamarinella.rm.it",
+ "fetchedAt": "2026-11-12T18:49:57.419103+00:00",
+ "horizonDays": 60,
+ "ok": true,
+ "error": null,
+ "events": [
+  {
+   "id": "2f290a8ab6e4ae3b790a",
+   "title": "Modifiche alla viabilità | Via Aurelia Vecchia",
+   "shortDescription": "Cos'è\n\n🚧 AVVISO ALLA CITTADINANZA\n\n​Modifiche alla viabilità in Via Aurelia Vecchia per lavori RFI\n\n​Il Comune di Santa Marinella informa che, per consentire l'esecuzione di interventi di messa in sicurezza e manutenzione straordinaria del sottovia ferroviario al km 69+242 (Linea Roma-Pisa) a cura…",
+   "category": "other",
+   "priceType": "low",
+   "startTime": 1794178800000,
+   "endTime": 1797634800000,
+   "venueName": "",
+   "address": "Santa Marinella",
+   "lat": null,
+   "lng": null,
+   "imageUrl": "",
+   "ticketUrl": "",
+   "tags": [],
+   "source": "scraper",
+   "sourceUrl": "https://comune.santamarinella.rm.it/vivere-il-comune/eventi/modifiche-alla-viabilita-via-aurelia-vecchia/",
+   "approxLocation": false,
+   "_geocode": []
+  },
+  {
+   "id": "ee784e34f5c68df9ad20",
+   "title": "Farmacia comunale Baia di Ponente – Elettrocardiogramma gratuito",
+   "shortDescription": "Cos'è\n\nSOLD OUT! TUTTO ESAURITO!\n\nIL TUO CUORE CI STA A CUORE! ❤️\n\nLe tre giornate dedicate alla prevenzione cardiovascolare, con elettrocardiogramma gratuito, presso la Farmacia Comunale Baia di Ponente, hanno registrato il tutto esaurito.\n\nUn risultato che testimonia la crescente sensibilità dei…",
+   "category": "other",
+   "priceType": "free",
+   "startTime": 1794556800000,
+   "endTime": 1794591000000,
+   "venueName": "",
+   "address": "Santa Marinella",
+   "lat": null,
+   "lng": null,
+   "imageUrl": "https://comune.santamarinella.rm.it/wp-content/uploads/2026/10/cuore-soldout.jpeg",
+   "ticketUrl": "",
+   "tags": [],
+   "source": "scraper",
+   "sourceUrl": "https://comune.santamarinella.rm.it/vivere-il-comune/eventi/farmacia-comunale-baia-di-ponente-elettrocardiogramma-gratuito-2/",
+   "approxLocation": false,
+   "_geocode": []
+  }
+ ]
+}

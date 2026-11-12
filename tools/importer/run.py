@@ -29,7 +29,7 @@ import logsafe
 import sourcehealth
 import unreachable
 import manifest
-from adapters import SOURCES, Adapter, fallback_place
+from adapters import SOURCES, Adapter, fallback_place, with_file_sources
 from geo import PROVINCES, enrich, in_viewbox, slugify
 import fetch as httpfetch  # `fetch` è anche una funzione locale di collect()
 from fetch import CONNECT_FAILED
@@ -84,7 +84,7 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
     def host_of(name: str) -> str | None:
         """Host da ricordare: solo i siti dei Comuni (le fonti regionali sono API uniche, non si parcheggiano)."""
         a = SOURCES[name]
-        return None if unreachable_state is None or getattr(a, "regional", False) else urlsplit(a.base).netloc
+        return None if unreachable_state is None or getattr(a, "regional", False) or getattr(a, "from_file", False) else urlsplit(a.base).netloc
 
     def fetch(name: str, force: bool = False) -> Got:
         """Solo rete (un host per fonte, 1 richiesta/s ciascuno): può girare in parallelo. force: le sentinelle di un cluster
@@ -826,6 +826,8 @@ def _main(argv: list[str] | None = None) -> int:
     p.add_argument("--stats-out", type=Path, help="scrive qui le statistiche dell'import (JSON)")
     p.add_argument("--sitemap-out", type=Path,
                    help="scrive qui gli eventi della regione per la sitemap (il job cleanup li unisce: sitemap.py)")
+    p.add_argument("--fonti-mac", type=Path,
+                   help="cartella con i file scaricati dal Mac mini (scarica.py): le fonti di sources/mac-mini.txt li leggono invece della rete")
     p.add_argument("--no-liveness", action="store_true",
                    help="non controllare se la pagina di un evento non più in lista risponde ancora (interruttore di emergenza)")
     p.add_argument("--max-geocode", type=int, default=MAX_GEOCODE,
@@ -852,6 +854,12 @@ def _main(argv: list[str] | None = None) -> int:
         if not args.source:
             log.error("Nessuna fonte Ticketmaster: imposta TICKETMASTER_API_KEY")
             return 1
+    if args.fonti_mac:
+        if args.fonti_mac.is_dir():
+            from scarica import read_list
+            with_file_sources(SOURCES, args.fonti_mac, read_list())
+        else:
+            log.warning("Cartella dei dati del Mac assente (%s): le sue fonti restano sulla rete", args.fonti_mac)
     names = args.source or [n for n, a in SOURCES.items() if not args.regione or slugify(a.region) in args.regione]
     if not names:
         log.error("Nessuna fonte attiva per questa selezione")
