@@ -143,8 +143,18 @@ describe('ticketLabel', () => {
 describe('eventSource', () => {
 	it('cita Open Data Hub col suo nome e la licenza dei dati', () => {
 		expect(eventSource({ source: 'scraper', sourceUrl: 'https://tourism.opendatahub.com/v1/Event/ABC' })).toEqual({
-			text: 'Open Data Hub Alto Adige / Südtirol (dati CC0)',
-			href: 'https://opendatahub.com/'
+			text: 'Open Data Hub Alto Adige / Südtirol',
+			href: 'https://opendatahub.com/',
+			license: { text: 'CC0', href: 'https://creativecommons.org/publicdomain/zero/1.0/deed.it' }
+		});
+	});
+
+	it('cita Emilia Romagna Turismo col nome, il link all’evento e la licenza CC BY 4.0', () => {
+		const url = 'https://emiliaromagnaturismo.it/it/eventi/cento-sagra-del-tartufo';
+		expect(eventSource({ source: 'scraper', sourceUrl: url })).toEqual({
+			text: 'Emilia Romagna Turismo',
+			href: url,
+			license: { text: 'CC BY 4.0', href: 'https://creativecommons.org/licenses/by/4.0/deed.it' }
 		});
 	});
 

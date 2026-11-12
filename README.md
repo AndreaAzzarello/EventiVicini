@@ -57,7 +57,7 @@ flowchart LR
   T["Tile OpenStreetMap"] --> E
 ```
 
-1. L'**importer** (`tools/importer/`) legge ogni giorno le fonti attive con un adapter per CMS (Plone, WordPress e HTML Design Comuni Italia, Open Data Hub Alto Adige; con la chiave `TICKETMASTER_API_KEY` anche Ticketmaster), normalizza, geocodifica, deduplica e scrive su Firestore **solo i documenti cambiati** (`contentHash`).
+1. L'**importer** (`tools/importer/`) legge ogni giorno le fonti attive con un adapter per CMS (Plone, WordPress e HTML Design Comuni Italia, Open Data Hub Alto Adige, Emilia-Romagna Turismo; con la chiave `TICKETMASTER_API_KEY` anche Ticketmaster), normalizza, geocodifica, deduplica e scrive su Firestore **solo i documenti cambiati** (`contentHash`).
 2. A fine import scrive i **bundle**: liste precalcolate per cella geografica e per città, così la webapp legge poche decine di documenti invece di fare una query per visita.
 3. La **webapp** (`web/`) fa SSR su un Worker Cloudflare, legge Firestore via REST (niente Admin SDK) e usa cache a due livelli. Il Firebase SDK nel browser si carica solo per login, preferiti e proposte.
 
@@ -145,7 +145,7 @@ Le regole Firestore sono testate (`firebase/test/`): `events`, `coverage`, `bund
 <a id="crediti"></a>
 ## Crediti
 
-- Dati degli eventi: siti istituzionali dei comuni, [Open Data Hub Alto Adige](https://opendatahub.com/) e, per concerti e spettacoli, la [Discovery API di Ticketmaster](https://developer.ticketmaster.com/) (senza affiliazione); elenco dei comuni [ISTAT](https://www.istat.it/note-legali/) (CC BY 4.0), coordinate e popolazione dei comuni da [Wikidata](https://www.wikidata.org/) (CC0) e siti da [IndicePA](https://indicepa.gov.it/) (CC-BY 4.0).
+- Dati degli eventi: siti istituzionali dei comuni, [Open Data Hub Alto Adige](https://opendatahub.com/) (CC0), [Emilia Romagna Turismo](https://emiliaromagnaturismo.it/it/open-data) (CC BY 4.0, senza le sue immagini, che hanno licenze proprie) e, per concerti e spettacoli, la [Discovery API di Ticketmaster](https://developer.ticketmaster.com/) (senza affiliazione); elenco dei comuni [ISTAT](https://www.istat.it/note-legali/) (CC BY 4.0), coordinate e popolazione dei comuni da [Wikidata](https://www.wikidata.org/) (CC0) e siti da [IndicePA](https://indicepa.gov.it/) (CC-BY 4.0).
 - Mappe e geocoding: © collaboratori di [OpenStreetMap](https://www.openstreetmap.org/copyright) (ODbL), [Leaflet](https://leafletjs.com/), [Nominatim](https://nominatim.org/).
 - Icone: [Lucide](https://lucide.dev/) (ISC). Titoli: [Fraunces](https://github.com/undercasetype/Fraunces) (SIL OFL).
 - Cronologia delle versioni: [CHANGELOG.md](CHANGELOG.md).

@@ -153,13 +153,20 @@ export const eventPath = (e: Pick<Event, 'id' | 'title'>) =>
 export const idFromSlug = (slug: string) => slug.slice(slug.lastIndexOf('-') + 1);
 export const cityPath = (citySlug: string) => `/citta/${citySlug}`;
 
-/** Fonte da mostrare nel dettaglio: la fonte regionale Open Data Hub è citata col suo nome e la licenza dei dati (CC0). */
-export function eventSource(e: Pick<Event, 'source' | 'sourceUrl'>): { text: string; href?: string } {
+export type SourceInfo = { text: string; href?: string; license?: { text: string; href: string } };
+
+const CC_BY_4 = { text: 'CC BY 4.0', href: 'https://creativecommons.org/licenses/by/4.0/deed.it' };
+const CC0 = { text: 'CC0', href: 'https://creativecommons.org/publicdomain/zero/1.0/deed.it' };
+
+/** Fonte da mostrare nel dettaglio. Le fonti regionali sono citate col loro nome e la licenza dei dati: Open Data Hub (CC0) ed
+ * Emilia Romagna Turismo (CC BY 4.0, con nome della fonte e URL dell'evento). */
+export function eventSource(e: Pick<Event, 'source' | 'sourceUrl'>): SourceInfo {
 	if (e.source === 'user') return { text: 'Segnalato da un utente e verificato dalla redazione' };
 	if (!e.sourceUrl) return { text: 'Redazione di Eventi Vicini' };
 	const host = new URL(e.sourceUrl).hostname.replace(/^www\./, '');
 	if (host === 'app.ticketmaster.com') return { text: 'Ticketmaster', href: 'https://www.ticketmaster.it/' };
-	if (host === 'tourism.opendatahub.com') return { text: 'Open Data Hub Alto Adige / Südtirol (dati CC0)', href: 'https://opendatahub.com/' };
+	if (host === 'tourism.opendatahub.com') return { text: 'Open Data Hub Alto Adige / Südtirol', href: 'https://opendatahub.com/', license: CC0 };
+	if (host === 'emiliaromagnaturismo.it') return { text: 'Emilia Romagna Turismo', href: e.sourceUrl, license: CC_BY_4 };
 	const m = /^comune\.([a-z-]+)\./.exec(host);
 	const name = m ? `Comune di ${m[1].split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')}` : host;
 	return { text: name, href: e.sourceUrl };
