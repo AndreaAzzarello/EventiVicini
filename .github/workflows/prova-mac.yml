@@ -1,0 +1,35 @@
+name: Prova runner Mac (sola lettura)
+
+# Verifica che il runner self-hosted del Mac mini parta e raggiunga i siti bloccati dal runner GitHub (#54).
+# Solo avvio manuale, solo da main, nessun checkout, nessun segreto, nessun permesso sul repo.
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  prova:
+    if: ${{ github.repository == 'AndreaAzzarello/EventiVicini' && github.ref == 'refs/heads/main' }}
+    runs-on: [self-hosted, macOS, ARM64, mac-eventi]
+    timeout-minutes: 10
+    steps:
+      - name: Macchina e utente
+        run: |
+          whoami; id -Gn; uname -m; sw_vers -productVersion; date
+          echo "variabili con FIREBASE/TOKEN/SECRET: $(env | grep -ciE 'firebase|token|secret' || true)"
+      - name: IP in uscita
+        run: curl -sS -m 10 https://ifconfig.me; echo
+      - name: Richieste ai siti bloccati dal runner GitHub (1 al secondo, stesso user-agent dell'importer)
+        run: |
+          UA="EventiVicini-importer/1.0 (+https://github.com/AndreaAzzarello/EventiVicini)"
+          for u in \
+            https://www.comune.collegno.to.it/vivere-il-comune/eventi/ \
+            https://www.comune.grosseto.it/vivere-il-comune/eventi/ \
+            https://www.comune.jesolo.ve.it/vivere-il-comune/eventi/ \
+            https://comune.rieti.it/vivere-il-comune/eventi/ \
+            https://www.comune.catania.it/vivere-il-comune/eventi/ \
+            https://www.comune.modena.it/vivere-modena/eventi \
+            https://comune.fondi.lt.it/vivere-il-comune/eventi/ ; do
+            echo "$(curl -sS -m 15 -L -o /dev/null -A "$UA" -w '%{http_code} %{time_total}s' "$u" 2>&1 | tail -1) $u"
+            sleep 1
+          done
