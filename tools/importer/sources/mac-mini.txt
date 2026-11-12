@@ -1,0 +1,34 @@
+# Fonti che il runner GitHub non raggiunge (blocco per IP del datacenter) e che non hanno alternative con licenza aperta:
+# le scarica il Mac mini (scarica-fonti.yml), l'importer le rilegge dall'artifact (#54). Un nome per riga, come in SOURCES
+# (nome del comune senza accenti, con trattini). Dati misurati il 12/11/2026 (run 43181740395 e prova dal runner).
+# Non metterci fonti raggiungibili dal runner: sul Mac passerebbero per un percorso in più senza motivo.
+bagno-di-romagna
+baschi
+catania
+champdepraz
+collegno
+collesalvetti
+courmayeur
+donnas
+ficulle
+fondi
+godrano
+grosseto
+jesolo
+lissone
+mercato-saraceno
+modena
+montiano
+napoli
+orbetello
+pescia
+pont-saint-martin
+rieti
+saint-marcel
+santa-marinella
+sarsina
+soriano-nel-cimino
+torre-del-greco
+verghereto
+villeneuve
+volterra

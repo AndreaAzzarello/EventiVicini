@@ -1,0 +1,48 @@
+name: Scarica fonti dal Mac mini
+
+# Scarica gli eventi grezzi delle fonti che il runner GitHub non raggiunge (#54), con il runner self-hosted del Mac mini.
+# Nessun segreto, nessun accesso a Firestore: pubblica solo l'artifact `fonti-mac`, che l'importer rilegge e rivalida.
+# Solo `schedule` e `workflow_dispatch`, solo da main. 06:45 UTC = 07:45 CET / 08:45 CEST, prima dell'import (08:17 UTC);
+# il Mac si sveglia alle 07:15 ora locale (pmset), la finestra copre ora solare e legale.
+on:
+  schedule:
+    - cron: "45 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scarica-fonti
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: tools/importer
+
+jobs:
+  scarica:
+    if: ${{ github.repository == 'AndreaAzzarello/EventiVicini' && github.ref == 'refs/heads/main' }}
+    runs-on: [self-hosted, macOS, ARM64, mac-eventi]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Python 3.11 o più recente
+        run: |
+          PY=$(command -v python3.13 || command -v python3.12 || command -v python3.11 || true)
+          [ -n "$PY" ] || { echo "::error::serve Python 3.11+ per l'utente runner-eventi (vedi #54: brew install python@3.12, poi aggiorna .path del runner)"; exit 1; }
+          "$PY" --version
+          "$PY" -m venv .venv
+          .venv/bin/pip install --quiet -r requirements.txt
+      - name: Scarica
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: .venv/bin/python scarica.py --list sources/mac-mini.txt --out fonti-mac
+      - uses: actions/upload-artifact@v6
+        with:
+          name: fonti-mac
+          path: tools/importer/fonti-mac
+          retention-days: 3
+          if-no-files-found: error
