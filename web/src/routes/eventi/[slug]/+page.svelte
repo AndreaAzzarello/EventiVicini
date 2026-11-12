@@ -151,7 +151,8 @@
 			{/if}
 			<div>
 				<dt><Link2 size={20} aria-hidden="true" /> Fonte</dt>
-				<dd>{#if source.href}<a href={source.href} target="_blank" rel="noopener noreferrer">{source.text}</a>{:else}{source.text}{/if}</dd>
+				<dd>{#if source.href}<a href={source.href} target="_blank" rel="noopener noreferrer">{source.text}</a>{:else}{source.text}{/if}{#if source.license}
+						· dati <a href={source.license.href} target="_blank" rel="license noopener noreferrer">{source.license.text}</a>{/if}</dd>
 			</div>
 		</dl>
 	</section>
