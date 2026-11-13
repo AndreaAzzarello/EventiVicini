@@ -15,7 +15,7 @@
 
 <p align="center"><a href="https://eventi-vicini.pages.dev"><b>→ Apri Eventi Vicini</b></a></p>
 
-Eventi Vicini è un'agenda **gratuita** degli eventi pubblici italiani: sagre, mostre, concerti, mercati, attività per bambini. Mostra cosa succede oggi, stasera e nel fine settimana nel tuo comune e intorno a te, in lista o su mappa. È pensata per chi cerca qualcosa da fare senza account, senza pubblicità e senza tracciamento. Gli eventi arrivano dai siti istituzionali dei comuni e dagli open data, **ogni evento rimanda alla sua fonte**, e il progetto non costa nulla da mantenere (Firebase Spark, Cloudflare Pages gratuito).
+Eventi Vicini è un'agenda **gratuita** degli eventi pubblici italiani: sagre, mostre, concerti, mercati, attività per bambini. Mostra cosa succede oggi, stasera e nel fine settimana nel tuo comune e intorno a te, in lista o su mappa. È pensata per chi cerca qualcosa da fare senza account, senza pubblicità e senza tracciamento. Gli eventi arrivano dai siti dei comuni, dai portali turistici regionali, da Ticketmaster (concerti e spettacoli) e dagli utenti, **ogni evento rimanda alla sua fonte**, e il progetto non costa nulla da mantenere (Firebase Spark, Cloudflare Pages gratuito).
 
 *In English: Eventi Vicini is a free agenda of public events across Italy (festivals, exhibitions, concerts, markets, kids' activities). It collects events daily from municipal websites and open data that allow reuse (CC-BY/CC0), shows them as a list or on a map, has no ads and no tracking, and always links back to the original source. SvelteKit on Cloudflare Pages, Firebase Firestore, a Python importer on GitHub Actions. Code under MIT; event data stays under each source's license.*
 
