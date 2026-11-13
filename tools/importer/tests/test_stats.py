@@ -60,3 +60,27 @@ def test_solo_le_dieci_citta_principali():
     db = FakeFirestore()
     write_month_stats(db, [ev(i, f"citta{i:02d}") for i in range(15)], ER, D1)
     assert len(db.data["stats/emilia-romagna_2026-11"]["cities"]) == 10
+
+
+def test_prossimi_giorni_e_la_fotografia_di_oggi_senza_unione_degli_id():
+    db = FakeFirestore()
+    write_month_stats(db, [ev(1), ev(2), ev(3, day=40)], ER, D1)  # e3 è a dicembre: fuori dal mese, dentro i prossimi giorni
+    d = db.data["stats/emilia-romagna_2026-11"]
+    assert (d["events"], d["upcoming"]) == (2, 3)
+    write_month_stats(db, [ev(3, day=40)], ER, D2)  # e1 ed e2 sono finiti: restano nel mese, escono dai prossimi giorni
+    d = db.data["stats/emilia-romagna_2026-11"]
+    assert (d["events"], d["upcoming"]) == (2, 1)
+
+
+def test_regione_con_eventi_solo_nel_mese_dopo_scrive_zero_nel_mese_e_n_nei_prossimi_giorni():
+    db = FakeFirestore()
+    write_month_stats(db, [ev(1, "montelongo", "molise", day=35), ev(2, "provvidenti", "molise", day=37)], {"molise": "Molise"}, D1)
+    d = db.data["stats/molise_2026-11"]
+    assert (d["events"], d["comuni"], d["upcoming"]) == (0, 0, 2)
+
+
+def test_una_riga_di_log_per_regione(caplog):
+    caplog.set_level("INFO", logger="importer")
+    write_month_stats(FakeFirestore(), [ev(1), ev(2, region="veneto", city="verona")], {"emilia-romagna": "Emilia-Romagna", "veneto": "Veneto"}, D1)
+    righe = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Statistiche ")]
+    assert len(righe) == 2 and "emilia-romagna 2026-11: 1 eventi nel mese, 1 da oggi" in righe[0]

@@ -92,6 +92,9 @@ export interface RegionMonth {
 	month: string;
 	events: number;
 	comuni: number;
+	/** Eventi in corso o futuri entro l'orizzonte dell'import (fotografia di oggi); assente nei documenti scritti prima. */
+	upcoming: number | null;
+	updatedAt: number | null;
 	cities: { slug: string; name: string; n: number }[];
 }
 
@@ -101,7 +104,7 @@ export async function listStats(months: string[]): Promise<RegionMonth[]> {
 	const snap = await fs.getDocs(fs.query(fs.collection(db, 'stats'), fs.where('month', 'in', months)));
 	return snap.docs.map((d) => {
 		const x = d.data();
-		return { region: x.region, name: x.name ?? x.region, month: x.month, events: x.events ?? 0, comuni: x.comuni ?? 0, cities: x.cities ?? [] };
+		return { region: x.region, name: x.name ?? x.region, month: x.month, events: x.events ?? 0, comuni: x.comuni ?? 0, upcoming: x.upcoming ?? null, updatedAt: x.updatedAt ?? null, cities: x.cities ?? [] };
 	});
 }
 

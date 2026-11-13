@@ -707,11 +707,12 @@ def month_bounds(now: datetime) -> tuple[str, int, int]:
 TOP_CITIES = 10
 
 
-def month_stats_doc(region: str, name: str, month: str, month_events: list[dict], before: dict, now_ms: int) -> dict:
+def month_stats_doc(region: str, name: str, month: str, month_events: list[dict], before: dict, now_ms: int, upcoming: int = 0) -> dict:
     """Documento stats/{regione}_{AAAA-MM}: eventi attivi nel mese, comuni con eventi e città principali.
 
     L'import vede solo gli eventi in corso o futuri: gli id già contati nei giorni scorsi (campo `ids`, per comune)
     si uniscono a quelli di oggi, così un evento finito a metà mese resta nel totale.
+    `upcoming` invece è la fotografia di oggi: eventi in corso o futuri entro l'orizzonte dell'import, senza unione di id.
     """
     ids: dict[str, list[str]] = {k: list(v) for k, v in (before.get("ids") or {}).items()}
     names: dict[str, str] = dict(before.get("names") or {})
@@ -722,7 +723,7 @@ def month_stats_doc(region: str, name: str, month: str, month_events: list[dict]
             ids[slug].append(ev["id"])
     top = sorted(ids, key=lambda k: (-len(ids[k]), k))[:TOP_CITIES]
     return {"region": region, "name": name, "month": month, "events": sum(len(v) for v in ids.values()),
-            "comuni": len(ids), "cities": [{"slug": k, "name": names.get(k, k), "n": len(ids[k])} for k in top],
+            "comuni": len(ids), "upcoming": upcoming, "cities": [{"slug": k, "name": names.get(k, k), "n": len(ids[k])} for k in top],
             "names": names, "ids": ids, "updatedAt": now_ms}
 
 
@@ -733,8 +734,13 @@ def write_month_stats(db, events: list[dict], regions: dict[str, str], now: date
     before = {d.reference.path: d.to_dict() or {} for d in db.get_all(list(refs.values()))}
     batch = db.batch()
     for r, ref in refs.items():
-        mine = [e for e in events if e["importRegion"] == r and e["startTime"] < end and e["endTime"] >= start]
-        batch.set(ref, month_stats_doc(r, regions[r], month, mine, before.get(ref.path, {}), int(now.timestamp() * 1000)))
+        now_ms = int(now.timestamp() * 1000)
+        region_events = [e for e in events if e["importRegion"] == r]
+        mine = [e for e in region_events if e["startTime"] < end and e["endTime"] >= start]
+        upcoming = len({e["id"] for e in region_events if e["endTime"] >= now_ms})
+        doc = month_stats_doc(r, regions[r], month, mine, before.get(ref.path, {}), now_ms, upcoming)
+        batch.set(ref, doc)
+        log.info("Statistiche %s %s: %d eventi nel mese, %d da oggi, %d comuni (1 scrittura)", r, month, doc["events"], upcoming, doc["comuni"])
     batch.commit()
     return len(refs), len(refs)
 
