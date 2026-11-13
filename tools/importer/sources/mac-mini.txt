@@ -1,7 +1,9 @@
 # Fonti che il runner GitHub non raggiunge (blocco per IP del datacenter) e che non hanno alternative con licenza aperta:
 # le scarica il Mac mini (scarica-fonti.yml), l'importer le rilegge dall'artifact (#54). Un nome per riga, come in SOURCES
-# (nome del comune senza accenti, con trattini). Dati misurati il 12/11/2026 (run 43181740395 e prova dal runner).
+# (nome del comune senza accenti, con trattini). Dati misurati il 12/11/2026 (run 43181740395 e prova dal runner);
+# arquata-scrivia aggiunta il 13/11/2026 (HTTP 403 dal runner GitHub nell'import del 13/11).
 # Non metterci fonti raggiungibili dal runner: sul Mac passerebbero per un percorso in più senza motivo.
+arquata-scrivia
 bagno-di-romagna
 baschi
 catania
