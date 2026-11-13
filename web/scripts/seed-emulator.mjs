@@ -268,7 +268,7 @@ const rome = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: '
 const [yy, mm] = [Number(rome[0].value), Number(rome[2].value)];
 const key = (y, m) => `${y}-${String(m).padStart(2, '0')}`;
 const stats = {
-	[`emilia-romagna_${key(yy, mm)}`]: { region: 'emilia-romagna', name: 'Emilia-Romagna', month: key(yy, mm), events: 412, comuni: 3, cities: [{ slug: 'modena', name: 'Modena', n: 250 }, { slug: 'bologna', name: 'Bologna', n: 162 }], updatedAt: now },
+	[`emilia-romagna_${key(yy, mm)}`]: { region: 'emilia-romagna', name: 'Emilia-Romagna', month: key(yy, mm), events: 412, upcoming: 455, comuni: 3, cities: [{ slug: 'modena', name: 'Modena', n: 250 }, { slug: 'bologna', name: 'Bologna', n: 162 }], updatedAt: now },
 	[`emilia-romagna_${mm === 1 ? key(yy - 1, 12) : key(yy, mm - 1)}`]: { region: 'emilia-romagna', name: 'Emilia-Romagna', month: mm === 1 ? key(yy - 1, 12) : key(yy, mm - 1), events: 374, comuni: 3, cities: [{ slug: 'modena', name: 'Modena', n: 230 }, { slug: 'bologna', name: 'Bologna', n: 144 }], updatedAt: now }
 };
 for (const [id, data] of Object.entries(stats)) {

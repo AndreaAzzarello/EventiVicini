@@ -111,7 +111,7 @@
 			<a href="/termini">Termini</a>
 		</nav>
 		<p class="muted small">
-			Eventi dai siti istituzionali dei Comuni (fonte citata in ogni scheda) e dagli utenti. Mappe &copy;
+			Eventi dai siti dei Comuni, dai portali turistici regionali, da Ticketmaster e dagli utenti (fonte citata in ogni scheda). Mappe &copy;
 			<a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>.
 		</p>
 	</div>

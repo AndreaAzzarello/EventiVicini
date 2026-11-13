@@ -126,7 +126,9 @@ test('admin: statistiche mensili e pagina di stile', async ({ page }) => {
 	await expect(page.getByRole('heading', { name: 'Statistiche' })).toBeVisible();
 	const row = page.getByRole('row', { name: /Emilia-Romagna/ });
 	await expect(row).toContainText('412');
-	await expect(row).toContainText('+38');
+	await expect(row).toContainText('455');
+	await expect(page.getByRole('columnheader', { name: 'Variazione' })).toHaveCount(0);
+	await expect(page.getByText(/Dati aggiornati al più tardi il/)).toBeVisible();
 	await page.getByRole('link', { name: 'Stile' }).click();
 	await expect(page.getByRole('heading', { name: 'Stile' })).toBeVisible();
 	await expect(page.getByText(/su sfondo/).first()).toBeVisible();
