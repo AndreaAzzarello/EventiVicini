@@ -1,4 +1,6 @@
-# Scheduler: avvio puntuale dell'import
+# Scheduler: avvio puntuale dell'import e del download dal Mac mini
+
+Il Worker ha **due** Cron Trigger: alle **06:45 UTC** avvia `scarica-fonti.yml` (fonti del Mac mini, #54, senza input) e alle **08:17 UTC** `import-events.yml` (vedi sotto). La riserva di `scarica-fonti.yml` è il cron di GitHub delle **07:30 UTC**; il suo job `guard` la salta se oggi esiste già un run riuscito, in corso o in coda (i dispatch del Worker passano sempre; `concurrency: scarica-fonti` serializza i resti). Dopo la modifica: `npx wrangler deploy` (il secret `GITHUB_TOKEN` resta; Actions: Read and write copre qualunque workflow del repo).
 
 Worker Cloudflare gratuito che ogni giorno alle **08:17 UTC** (Cron Trigger) chiama l'API di GitHub e avvia `import-events.yml` con `workflow_dispatch` e `auto=true`. Serve perché il cron di GitHub Actions può ritardare di ore o saltare.
 
