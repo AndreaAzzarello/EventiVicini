@@ -6,10 +6,14 @@ compatibility_date = "2026-10-01"
 workers_dev = false
 
 [triggers]
-crons = ["17 8 * * *"] # UTC, come il cron del workflow (che resta alle 10:17 come ultima riserva)
+crons = [
+  "45 6 * * *", # scarica-fonti.yml (Mac mini); riserva: cron di GitHub alle 07:30
+  "17 8 * * *"  # import-events.yml; riserva: cron di GitHub alle 10:17
+] # UTC
 
 [vars]
 GITHUB_REPO = "AndreaAzzarello/EventiVicini"
 WORKFLOW = "import-events.yml"
+SCARICA_WORKFLOW = "scarica-fonti.yml"
 REF = "main"
 # Segreto (mai nel repo): npx wrangler secret put GITHUB_TOKEN

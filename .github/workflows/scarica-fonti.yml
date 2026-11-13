@@ -2,11 +2,13 @@ name: Scarica fonti dal Mac mini
 
 # Scarica gli eventi grezzi delle fonti che il runner GitHub non raggiunge (#54), con il runner self-hosted del Mac mini.
 # Nessun segreto, nessun accesso a Firestore: pubblica solo l'artifact `fonti-mac`, che l'importer rilegge e rivalida.
-# Solo `schedule` e `workflow_dispatch`, solo da main. 06:45 UTC = 07:45 CET / 08:45 CEST, prima dell'import (08:17 UTC);
-# il Mac si sveglia alle 07:15 ora locale (pmset), la finestra copre ora solare e legale.
+# Solo `schedule` e `workflow_dispatch`, solo da main. Avvio puntuale alle 06:45 UTC dal Worker `scheduler/` (Cron Trigger →
+# workflow_dispatch), come per l'import; il cron di GitHub (07:30 UTC) è la riserva, perché può ritardare o saltare.
+# Il job `guard` salta la riserva se oggi (UTC, dalle 06:00) esiste già un run riuscito, in corso o in coda: niente doppie
+# esecuzioni. 06:45 UTC = 07:45 CET / 08:45 CEST, prima dell'import (08:17 UTC); il Mac si sveglia alle 07:15 ora locale (pmset).
 on:
   schedule:
-    - cron: "45 6 * * *"
+    - cron: "30 7 * * *"
   workflow_dispatch:
 
 permissions:
@@ -21,8 +23,35 @@ defaults:
     working-directory: tools/importer
 
 jobs:
-  scarica:
+  guard:
     if: ${{ github.repository == 'AndreaAzzarello/EventiVicini' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      go: ${{ steps.check.outputs.go }}
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          go=true
+          if [ "$EVENT" = "schedule" ]; then
+            since="$(date -u +%F)T06:00:00Z"
+            n=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/scarica-fonti.yml/runs?per_page=30"               --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID) | select(.created_at >= \"$since\") | select(.status != \"completed\" or .conclusion == \"success\")] | length")
+            if [ "${n:-0}" -gt 0 ]; then go=false; echo "Oggi c'è già un run di scarica-fonti ($n): salto la riserva."; fi
+          fi
+          echo "go=$go" >> "$GITHUB_OUTPUT"
+
+  scarica:
+    needs: guard
+    if: ${{ needs.guard.outputs.go == 'true' }}
     runs-on: [self-hosted, macOS, ARM64, mac-eventi]
     timeout-minutes: 45
     steps:
