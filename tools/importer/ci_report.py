@@ -5,6 +5,7 @@
   python ci_report.py simulate [regioni.json]      # quote per giorno della settimana (scenario Italia)
   python ci_report.py sizes <cartella> <sizes.json>   # aggiorna gli eventi per regione (minimo di letture del job)
   python ci_report.py guard                        # avvio automatico: go=false se l'import completo di oggi c'è già
+  python ci_report.py mac-artifact <cartella>      # scarica i dati del Mac mini (ultimo scarica-fonti riuscito su main)
 
 Quote Spark giornaliere (50.000 letture, 20.000 scritture, 20.000 cancellazioni) divise tra i job della matrice.
 """
@@ -285,7 +286,37 @@ def load_sizes(path: Path) -> dict[str, int]:
         return {}  # cache assente: vale la sola proporzione in fonti
 
 
+def mac_artifact(dest: Path) -> bool:
+    """Scarica in `dest` l'artifact `fonti-mac` dell'ultimo run riuscito di scarica-fonti.yml su main (#54) e scrive `dir=` in
+    GITHUB_OUTPUT. Senza segreti. Qualunque problema (nessun run, nessun artifact scaduto, rete) non ferma l'import: le fonti del
+    Mac restano saltate come prima. La freschezza dei dati si controlla file per file (adapters/filesource.py)."""
+    repo = os.environ.get("GITHUB_REPOSITORY", "AndreaAzzarello/EventiVicini")
+
+    def gh(*args: str) -> str:
+        return subprocess.run(["gh", *args], capture_output=True, text=True, check=True).stdout
+
+    try:
+        runs = json.loads(gh("api", f"repos/{repo}/actions/workflows/scarica-fonti.yml/runs?branch=main&status=success&per_page=1"))
+        runs = runs.get("workflow_runs") or []
+        if not runs:
+            print("::warning::Nessun run riuscito di scarica-fonti.yml su main: le fonti del Mac restano saltate.")
+            return False
+        run = runs[0]
+        gh("run", "download", str(run["id"]), "-R", repo, "-n", "fonti-mac", "-D", str(dest))
+    except (subprocess.CalledProcessError, OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        print(f"::warning::Dati del Mac non scaricati ({type(e).__name__}): le sue fonti restano saltate.")
+        return False
+    print(f"Dati del Mac: run {run['id']} del {run.get('created_at', '?')}, {len(list(dest.glob('*.json')))} file")
+    if path := os.environ.get("GITHUB_OUTPUT"):
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"dir={dest}" + chr(10))
+    return True
+
+
 def main(argv: list[str]) -> int:
+    if argv[:1] == ["mac-artifact"] and len(argv) == 2:
+        mac_artifact(Path(argv[1]))
+        return 0  # mai un errore: l'import prosegue anche senza i dati del Mac
     if argv[:1] == ["guard"]:
         guard()
         return 0
