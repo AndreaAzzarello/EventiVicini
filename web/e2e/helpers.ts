@@ -78,3 +78,28 @@ export async function uidOf(page: import('@playwright/test').Page): Promise<stri
 		return all.find((x) => x.value?.uid)!.value.uid;
 	});
 }
+
+/**
+ * Apre l'anteprima della mappa scendendo nei cluster (zoom sui loro confini, oppure elenco se gli eventi hanno lo stesso
+ * indirizzo). Nessuna attesa a tempo: dopo ogni clic si aspetta che l'anteprima compaia o che la vista (data-*) cambi.
+ */
+export async function openMapSheet(page: Page) {
+	const map = page.getByRole('region', { name: 'Mappa degli eventi' });
+	const sheet = page.getByTestId('map-sheet');
+	await expect(map.locator('.ev-pin, .ev-cluster').first()).toBeVisible();
+	const viewOf = async () => [await map.getAttribute('data-lat'), await map.getAttribute('data-lng'), await map.getAttribute('data-zoom')].join(',');
+	for (let i = 0; i < 10 && !(await sheet.isVisible()); i++) {
+		const before = await viewOf();
+		await map.locator('.ev-cluster, .ev-pin').first().click();
+		await expect.poll(async () => (await sheet.isVisible()) || (await viewOf()) !== before).toBe(true);
+	}
+	await expect(sheet).toBeVisible();
+	return { map, sheet };
+}
+
+/** Se l'anteprima mostra l'elenco di un luogo, sceglie il primo evento. */
+export async function pickFirstEvent(sheet: ReturnType<Page['getByTestId']>) {
+	const first = sheet.locator('.pick button').first();
+	if (await first.isVisible()) await first.click();
+	await expect(sheet.getByRole('link', { name: 'Apri scheda' })).toBeVisible();
+}

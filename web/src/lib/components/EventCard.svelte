@@ -63,8 +63,11 @@
 	class:highlighted
 	class:compact
 	data-cat={event.category}
+	data-ev-id={event.id}
 	onmouseenter={() => onhover?.(event.id)}
 	onmouseleave={() => onhover?.(null)}
+	onfocusin={() => onhover?.(event.id)}
+	onfocusout={() => onhover?.(null)}
 >
 	<div class="stub" aria-hidden="true">
 		{#if compact}

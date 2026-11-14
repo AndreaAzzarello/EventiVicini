@@ -1,32 +1,38 @@
 <script lang="ts">
-	import { mount, onMount, unmount } from 'svelte';
+	import { mount, onMount, unmount, untrack } from 'svelte';
 	import { CATEGORY_ICONS } from '$lib/categoryIcons';
 	import { clusterPoints } from '$lib/cluster';
 	import type { Event } from '$lib/event';
+	import { formatWhen } from '$lib/dates';
 	import { fmtNum } from '$lib/format';
 	import type { LatLng } from '$lib/geo';
 	import { baseMap, cssVar, loadLeaflet, type Leaflet } from '$lib/leaflet';
-	import MapPreview from './MapPreview.svelte';
+	import MapSheet from './MapSheet.svelte';
 
 	let {
 		events,
 		center,
 		radiusKm,
 		highlighted = null,
-		onhover
+		onhover,
+		onselect,
+		onlist
 	}: {
 		events: Event[];
 		center: LatLng;
 		radiusKm: number;
 		highlighted?: string | null;
 		onhover?: (id: string | null) => void;
+		/** Evento aperto nell'anteprima (null: nessuno, o l'elenco di un gruppo). */
+		onselect?: (id: string | null) => void;
+		/** «Vedi nella lista»: il genitore porta alla card dell'evento. */
+		onlist?: (id: string) => void;
 	} = $props();
 
 	/** Lato della cella di raggruppamento, in pixel: poco più di un pin. */
 	const CELL = 44;
 	/** Da questo zoom i cluster non si aprono più zoomando: restano punti con lo stesso indirizzo, si elencano. */
 	const STACK_ZOOM = 17;
-	const STACK_MAX = 5;
 
 	let el: HTMLDivElement;
 	let L: Leaflet | null = $state.raw(null);
@@ -38,6 +44,13 @@
 	let failed = $state(false);
 	/** Vista corrente, esposta come data-* per i test E2E. */
 	let view = $state<{ lat: number; lng: number; zoom: number } | null>(null);
+	/** Anteprima aperta: gli id del gruppo (un pin o più eventi nello stesso luogo) e l'evento mostrato, se uno. */
+	let sel = $state<{ group: string[]; id: string | null } | null>(null);
+	/** Evento da cui è partita l'apertura: a lui torna il focus alla chiusura. */
+	let origin: string | null = null;
+	const byId = $derived(new Map(events.map((e) => [e.id, e])));
+	const groupEvents = $derived(sel ? sel.group.flatMap((id) => byId.get(id) ?? []) : []);
+	const activeEvent = $derived(sel?.id ? (byId.get(sel.id) ?? null) : null);
 
 	onMount(() => {
 		let cancelled = false;
@@ -45,6 +58,9 @@
 			.then((lib) => {
 				if (cancelled) return;
 				map = baseMap(lib, el);
+				// In basso c'è l'anteprima: l'attribuzione OSM (obbligatoria) sale in alto a destra.
+				map.attributionControl.setPosition('topright');
+				map.on('click', () => close(false));
 				// Guardie su `map`: un evento in coda dopo lo smontaggio non deve toccare una mappa già rimossa.
 				map.on('moveend', () => {
 					if (!map) return;
@@ -75,23 +91,34 @@
 		};
 	});
 
-	function preview(e: Event) {
-		const div = document.createElement('div');
-		mounted.push(mount(MapPreview, { target: div, props: { event: e } }));
-		return div;
+	function open(group: string[], id: string | null) {
+		if (!sel) origin = group[0];
+		sel = { group, id };
+		onselect?.(id);
+		applyHighlight();
 	}
 
-	/** Più eventi allo stesso indirizzo: un elenco di anteprime, non uno zoom infinito. */
-	function stack(list: Event[]) {
-		const div = document.createElement('div');
-		div.className = 'stack';
-		for (const e of list.slice(0, STACK_MAX)) div.append(preview(e));
-		if (list.length > STACK_MAX) {
-			const more = document.createElement('p');
-			more.textContent = `E altri ${fmtNum(list.length - STACK_MAX)} eventi qui`;
-			div.append(more);
-		}
-		return div;
+	function pick(id: string | null) {
+		if (sel) open(sel.group, id);
+	}
+
+	function close(refocus = true) {
+		if (!sel) return;
+		const back = origin;
+		sel = null;
+		onselect?.(null);
+		applyHighlight();
+		if (refocus && back) markers[back]?.getElement()?.focus({ preventScroll: true });
+	}
+
+	function zoomTo(e: Event) {
+		if (!map) return;
+		map.setView([e.lat, e.lng], Math.min(19, Math.max(map.getZoom() + 2, 16)), { animate: false });
+	}
+
+	/** Etichetta accessibile del marker (Leaflet gli dà già tabindex e role=button). */
+	function label(m: import('leaflet').Marker, text: string) {
+		m.getElement()?.setAttribute('aria-label', text);
 	}
 
 	// Pin a goccia nel colore della categoria, con la sua icona: anche chi non distingue i colori la legge dall'icona.
@@ -117,6 +144,7 @@
 	function applyHighlight() {
 		for (const [id, m] of Object.entries(markers)) {
 			m.getElement()?.classList.toggle('active', id === highlighted);
+			m.getElement()?.classList.toggle('selected', id === sel?.id);
 			m.setZIndexOffset(id === highlighted ? 1000 : 0);
 		}
 	}
@@ -152,21 +180,23 @@
 				const e = c.items[0];
 				markers[e.id] = lib
 					.marker([e.lat, e.lng], { icon: pinIcon(lib, e), title: e.title })
-					.bindPopup(() => preview(e), { minWidth: 200, maxWidth: 280 })
+					.on('click', () => open([e.id], e.id))
 					.on('mouseover', () => onhover?.(e.id))
 					.on('mouseout', () => onhover?.(null))
 					.addTo(layer);
+				label(markers[e.id], `${e.title}, ${formatWhen(e.startTime, e.endTime)}`);
 				continue;
 			}
 			const bounds = lib.latLngBounds(c.items.map((i): [number, number] => [i.lat, i.lng]));
+			const samePlace = bounds.getNorthEast().equals(bounds.getSouthWest()) || zoom >= STACK_ZOOM;
 			const marker = lib
 				.marker([c.lat, c.lng], { icon: clusterIcon(lib, c.items.length), title: `${c.items.length} eventi in quest'area` })
 				.on('click', () => {
-					if (bounds.getNorthEast().equals(bounds.getSouthWest()) || m.getZoom() >= STACK_ZOOM)
-						lib.popup({ minWidth: 200, maxWidth: 280, maxHeight: 320 }).setLatLng([c.lat, c.lng]).setContent(stack(c.items)).openOn(m);
+					if (samePlace) open(c.items.map((i) => i.id), null);
 					else m.fitBounds(bounds, { padding: [48, 48], maxZoom: STACK_ZOOM });
 				})
 				.addTo(layer);
+			label(marker, `${c.items.length} eventi in quest'area: ${samePlace ? 'mostra elenco' : 'avvicina la mappa'}`);
 			for (const i of c.items) markers[i.id] = marker;
 		}
 		applyHighlight();
@@ -180,14 +210,22 @@
 		fitting = true;
 		map.fitBounds(L.latLng(center.lat, center.lng).toBounds(radiusKm * 2000), { padding: [16, 16], animate: false });
 		fitting = false;
-		draw();
+		// draw() legge anche l'anteprima aperta (evidenza): non deve diventare una dipendenza di questo effetto, o ogni apertura rifarebbe fitBounds.
+		untrack(draw);
 	});
 
 	$effect(() => {
 		void highlighted;
 		applyHighlight();
 	});
+
+	// Un filtro che toglie gli eventi aperti chiude l'anteprima.
+	$effect(() => {
+		if (sel && !groupEvents.length) close(false);
+	});
 </script>
+
+<svelte:window onkeydown={(e) => e.key === 'Escape' && sel && close()} />
 
 <div class="wrap">
 	<div
@@ -198,7 +236,11 @@
 		data-lat={view?.lat.toFixed(4)}
 		data-lng={view?.lng.toFixed(4)}
 		data-zoom={view?.zoom}
+		data-selected={sel?.id ?? (sel ? 'gruppo' : undefined)}
 	></div>
+	{#if sel && groupEvents.length}
+		<MapSheet group={groupEvents} active={activeEvent} onpick={pick} onclose={() => close()} onzoom={zoomTo} onlist={(e) => onlist?.(e.id)} />
+	{/if}
 	{#if !L && !failed}<div class="skeleton cover" aria-hidden="true"></div>{/if}
 	{#if failed}<p class="cover fail">La mappa non si carica adesso. La lista funziona lo stesso.</p>{/if}
 </div>
@@ -210,6 +252,8 @@
 		min-height: calc(var(--space-7) * 5);
 		border-radius: var(--radius);
 		overflow: hidden;
+		/* I z-index di Leaflet (fino a 1000) restano dentro la mappa: non passano sopra l'header sticky */
+		isolation: isolate;
 		border: 1px solid var(--border);
 		background: var(--surface-2);
 	}
@@ -227,35 +271,6 @@
 		display: grid;
 		place-items: center;
 		color: var(--muted);
-	}
-	/* Anteprima al tocco: la superficie e il testo del tema, non il bianco di Leaflet */
-	.wrap :global(.leaflet-popup-content-wrapper) {
-		background: var(--surface);
-		color: var(--text);
-		border-radius: var(--radius);
-		box-shadow: var(--shadow-lift);
-	}
-	.wrap :global(.leaflet-popup-tip) {
-		background: var(--surface);
-	}
-	.wrap :global(.leaflet-popup-content) {
-		margin: var(--space-3);
-		font: inherit;
-	}
-	.wrap :global(.leaflet-popup-content p) {
-		margin: var(--space-1) 0 0;
-	}
-	.wrap :global(.leaflet-container a.leaflet-popup-close-button) {
-		color: var(--muted);
-	}
-	.wrap :global(.stack) {
-		display: grid;
-		gap: var(--space-3);
-	}
-	.wrap :global(.stack > p) {
-		margin: 0;
-		color: var(--muted);
-		font-size: var(--text-sm);
 	}
 	.wrap :global(.ev-marker-wrap) {
 		background: none;
@@ -296,6 +311,19 @@
 		font: var(--fw-strong) var(--text-md) var(--font-body);
 		font-variant-numeric: tabular-nums;
 		box-shadow: var(--shadow-card);
+	}
+	.wrap :global(.ev-marker-wrap.selected .ev-pin) {
+		border-color: var(--accent);
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+	.wrap :global(.ev-marker-wrap:focus-visible) {
+		outline: none;
+	}
+	.wrap :global(.ev-marker-wrap:focus-visible .ev-pin),
+	.wrap :global(.ev-marker-wrap:focus-visible .ev-cluster) {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
 	}
 	.wrap :global(.ev-marker-wrap.active .ev-cluster) {
 		border-color: var(--text);

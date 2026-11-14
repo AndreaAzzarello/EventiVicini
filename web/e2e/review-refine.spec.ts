@@ -1,4 +1,5 @@
 import { test } from '@playwright/test';
+import { openMapSheet } from './helpers';
 
 // Screenshot di revisione, non fanno parte dei test: REVIEW_REFINE=<cartella> → web/.review/<cartella>/
 const OUT = process.env.REVIEW_REFINE;
@@ -31,11 +32,7 @@ for (const theme of ['light', 'dark']) {
 			await page.locator('.ev-pin, .ev-cluster').first().waitFor();
 			await page.waitForLoadState('networkidle');
 			await page.screenshot({ path: file('mappa', size) });
-			const popup = page.locator('.leaflet-popup');
-			for (let i = 0; i < 8 && !(await popup.isVisible()); i++) {
-				await page.locator('.ev-cluster, .ev-pin').first().click();
-				await page.waitForTimeout(500);
-			}
+			await openMapSheet(page);
 			await page.screenshot({ path: file('mappa-anteprima', size) });
 
 			// Ricerca aperta con i suggerimenti
