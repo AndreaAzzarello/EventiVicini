@@ -6,7 +6,7 @@
 	import Map from '@lucide/svelte/icons/map';
 	import MapPin from '@lucide/svelte/icons/map-pin';
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
-	import { onMount, untrack } from 'svelte';
+	import { onMount, tick as flush, untrack } from 'svelte';
 	import { goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import EventList from '$lib/components/EventList.svelte';
@@ -41,7 +41,10 @@
 	let now = $state(Date.now());
 	let view = $state<'list' | 'map'>(page.url.searchParams.get('vista') === 'mappa' ? 'map' : 'list');
 	let wide = $state(false);
-	let highlighted = $state<string | null>(null);
+	/** Card o pin sotto il puntatore o col focus, e evento aperto nell'anteprima della mappa: la lista e la mappa evidenziano l'uno o l'altro. */
+	let hovered = $state<string | null>(null);
+	let selected = $state<string | null>(null);
+	const highlighted = $derived(hovered ?? selected);
 	let search: SearchBox | undefined = $state();
 	/** Primo accesso senza posizione salvata né permesso di geolocalizzazione: si sceglie il luogo dalla ricerca. */
 	let needsPlace = $state(untrack(() => data.noPlace)); // senza luogo nell'URL si parte dalla scelta, anche nell'HTML del server
@@ -172,6 +175,15 @@
 	function setFilter(f: Filter) {
 		filter = f;
 		syncUrl(f);
+	}
+
+	/** «Vedi nella lista» dall'anteprima della mappa: porta alla card (su mobile prima cambia vista) e le dà il focus. */
+	async function showInList(id: string) {
+		if (view !== 'list' && !wide) setView('list');
+		await flush();
+		const card = document.querySelector<HTMLElement>(`[data-ev-id="${CSS.escape(id)}"]`);
+		card?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+		card?.querySelector<HTMLElement>('a')?.focus({ preventScroll: true });
 	}
 
 	function setView(v: 'list' | 'map') {
@@ -312,7 +324,7 @@
 					error={partial ? '' : error}
 					counts={partial ? data.sectionCounts : null}
 					{highlighted}
-					onhover={(id) => (highlighted = id)}
+					onhover={(id) => (hovered = id)}
 					onretry={load}
 				>
 					{#snippet empty()}
@@ -381,7 +393,9 @@
 						center={place}
 						radiusKm={filter.radiusKm}
 						{highlighted}
-						onhover={(id) => (highlighted = id)}
+						onhover={(id) => (hovered = id)}
+						onselect={(id) => (selected = id)}
+						onlist={showInList}
 					/>
 				{/if}
 			</div>
