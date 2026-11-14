@@ -74,3 +74,23 @@ def test_main_esce_1_solo_se_nessuna_fonte_riesce(monkeypatch, tmp_path):
     monkeypatch.setattr(run, "SOURCES", {"a": src(exc=httpx.ConnectTimeout("t")), "b": src(exc=httpx.ConnectTimeout("t"))})
     assert scarica.main(["--list", str(lst), "--out", str(tmp_path / "o2")]) == 1
     run.httpfetch.DEFAULT_GATE = None
+
+
+def test_fonte_bloccata_oltre_il_tetto_va_in_errore_e_le_altre_proseguono(monkeypatch, tmp_path):
+    import time
+
+    def slow(clt, now, horizon):
+        for _ in range(3):
+            time.sleep(0.02)
+            clt.get("https://www.comune.example.it/")
+            yield {"id": "x"}
+
+    monkeypatch.setattr(run, "SOURCES", {"lenta": SimpleNamespace(base="https://www.comune.example.it", regional=False, events=slow),
+                                         "ok": src([{"id": "e"}])})
+    res = scarica.download(["lenta", "ok"], tmp_path, client(), NOW, 60, budget=0.01)
+    assert "saltata" in res["lenta"]["error"] and res["ok"] == {"events": 1, "error": None}
+    assert json.loads((tmp_path / "lenta.json").read_text(encoding="utf-8"))["events"] == []
+
+
+def test_tetto_per_fonte_del_mac_e_di_3_minuti():
+    assert scarica.SOURCE_BUDGET == 180

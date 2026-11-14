@@ -5,7 +5,7 @@ name: Scarica fonti dal Mac mini
 # Solo `schedule` e `workflow_dispatch`, solo da main. Avvio puntuale alle 06:45 UTC dal Worker `scheduler/` (Cron Trigger →
 # workflow_dispatch), come per l'import; il cron di GitHub (07:30 UTC) è la riserva, perché può ritardare o saltare.
 # Il job `guard` salta la riserva se oggi (UTC, dalle 06:00) esiste già un run riuscito, in corso o in coda: niente doppie
-# esecuzioni. 06:45 UTC = 07:45 CET / 08:45 CEST, prima dell'import (08:17 UTC); il Mac si sveglia alle 07:15 ora locale (pmset).
+# esecuzioni. 06:45 UTC = 07:45 CET / 08:45 CEST, prima dell'import (08:17 UTC); il Mac è sempre acceso (solo lo schermo si spegne).
 on:
   schedule:
     - cron: "30 7 * * *"

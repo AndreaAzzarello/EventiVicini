@@ -29,6 +29,8 @@ log = logging.getLogger("importer")
 HERE = Path(__file__).parent
 VERSION = 1
 LIST_FILE = HERE / "sources" / "mac-mini.txt"
+# Secondi per fonte: dal Mac le fonti sane impiegano 5-45 s (misure del 12/11); oltre 3 minuti la fonte è bloccata, si segna in errore e si passa alla prossima.
+SOURCE_BUDGET = 180
 
 
 def read_list(path: Path = LIST_FILE) -> list[str]:
@@ -84,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--list", type=Path, default=LIST_FILE)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--horizon-days", type=int, default=60)
-    p.add_argument("--source-budget", type=float, default=run.SOURCE_BUDGET)
+    p.add_argument("--source-budget", type=float, default=SOURCE_BUDGET)
     args = p.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
     httpfetch.DEFAULT_GATE = NetGate(ip_interval=run.IP_INTERVAL, subnet_concurrency=run.SUBNET_CONCURRENCY)
