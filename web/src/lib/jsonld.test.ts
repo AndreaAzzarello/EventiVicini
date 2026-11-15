@@ -26,3 +26,21 @@ describe('safeJson dentro <script>: contenuto ostile', () => {
 		expect(safeJson({ d: 'a <!-- b' })).toBe('{"d":"a \\u003c!-- b"}');
 	});
 });
+
+describe('eventJsonLd: prezzo', () => {
+	const url = 'https://example.test/eventi/x';
+	it('unknown senza biglietti: nessuna offerta, nessun prezzo inventato', () => {
+		const d = eventJsonLd({ ...xssUno(), priceType: 'unknown', ticketUrl: '' }, url);
+		expect(d.offers).toBeUndefined();
+		expect(d.isAccessibleForFree).toBeUndefined();
+	});
+	it('unknown con link ai biglietti: offerta senza price', () => {
+		const d = eventJsonLd({ ...xssUno(), priceType: 'unknown', ticketUrl: 'https://example.test/t' }, url);
+		expect(d.offers).not.toHaveProperty('price');
+	});
+	it('free: prezzo 0 e gratuito', () => {
+		const d = eventJsonLd({ ...xssUno(), priceType: 'free', ticketUrl: '' }, url);
+		expect(d.offers).toMatchObject({ price: 0 });
+		expect(d.isAccessibleForFree).toBe(true);
+	});
+});

@@ -188,11 +188,11 @@ def map_category(item: dict) -> str:
 
 
 def map_price(text: str) -> str:
-    """free / low / premium. Senza indicazioni chiare: low (meglio non promettere gratis)."""
+    """free / low / premium / unknown. Senza importi né parole di gratuità: unknown ("Prezzo sul sito"), mai un prezzo inventato."""
     amounts = [float((a or b).replace(",", ".")) for a, b in EURO_RE.findall(text)]
     if amounts:
         return "premium" if max(amounts) >= PREMIUM_FROM_EUR else "low"
-    return "free" if FREE_RE.search(text) else "low"
+    return "free" if FREE_RE.search(text) else "unknown"
 
 
 HOUR_RE = re.compile(

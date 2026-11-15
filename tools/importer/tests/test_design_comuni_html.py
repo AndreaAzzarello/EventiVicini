@@ -31,7 +31,7 @@ def event(slug: str, n: int, today: str) -> dict:
 # (comune, dettaglio, "oggi", titolo, inizio, fine, luogo, indirizzo, prezzo, categoria)
 CASES = [
     ("sarsina", 1, "2026-10-20", "Ludi Plautini Sarsinates VIII – 24 ottobre 2026", "2026-10-24 10:15",
-     "2026-10-24 18:00", "Teatro Silvio Pellico", "Largo Alcide De Gasperi, 1", "low", "culture"),
+     "2026-10-24 18:00", "Teatro Silvio Pellico", "Largo Alcide De Gasperi, 1", "unknown", "culture"),
     ("mercato-saraceno", 1, "2026-10-20", None, "2026-10-23 21:00", "2026-10-23 23:30", "Palazzo Dolcini",
      "Viale Giacomo Matteotti, 2", "free", "culture"),
     ("verghereto", 1, "2025-10-01", None, "2025-10-12 09:00", "2025-10-19 23:00", "Comune di Verghereto",

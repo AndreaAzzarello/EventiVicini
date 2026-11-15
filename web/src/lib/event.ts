@@ -89,14 +89,14 @@ export function fromData(id: string, m: Record<string, unknown>): Event {
 	const start = num(m.startTime);
 	const endMs = m.endTime == null ? start : num(m.endTime);
 	const category = str(m.category, 'other');
-	const priceType = str(m.priceType, 'free');
+	const priceType = str(m.priceType, 'unknown');
 	const source = str(m.source, 'manual');
 	return {
 		id,
 		title: str(m.title),
 		shortDescription: str(m.shortDescription),
 		category: (category in CATEGORIES ? category : 'other') as Category,
-		priceType: (priceType in PRICE_TYPES ? priceType : 'free') as PriceType,
+		priceType: (priceType in PRICE_TYPES ? priceType : 'unknown') as PriceType,
 		startTime: start,
 		endTime: endMs,
 		venueName: str(m.venueName),
