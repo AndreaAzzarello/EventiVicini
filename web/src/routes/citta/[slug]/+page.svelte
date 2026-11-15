@@ -7,6 +7,8 @@
 	import FilterBar from '$lib/components/FilterBar.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import type { Event } from '$lib/event';
+	import type { ChosenPlace } from '$lib/geo';
+	import { KEYS, readJson } from '$lib/storage';
 	import { EMPTY_FILTER, applyFilter, filterFromParams, filterToParams, type Filter } from '$lib/filters';
 	import { fmtNum } from '$lib/format';
 	import { sections } from '$lib/sections';
@@ -17,9 +19,13 @@
 	let { data } = $props();
 	let now = $state(Date.now());
 	let mounted = $state(false);
+	// Il luogo scelto sta solo nel browser: la distanza si calcola qui, non sul server (stessa lettura della scheda evento).
+	let origin = $state<ChosenPlace | null>(null);
 	onMount(() => {
 		now = Date.now();
 		mounted = true;
+		const saved = readJson<ChosenPlace | null>(KEYS.place, null);
+		if (saved && Number.isFinite(saved.lat) && Number.isFinite(saved.lng)) origin = saved;
 	});
 	const name = $derived(data.cityAlt ? `${data.city} / ${data.cityAlt}` : data.city);
 	const where = $derived(data.province ? `${name} (${data.province})` : name);
@@ -105,11 +111,12 @@
 	</nav>
 	<h1>Eventi a {name}</h1>
 	<p class="muted lead">
-		{totalFiltered === 1 ? 'Un evento in programma' : `${fmtNum(totalFiltered)} eventi in programma`}{total !== totalFiltered ? ` (di ${fmtNum(total)})` : ''} a {where}.
+		{totalFiltered === 1 ? 'Un evento in programma' : `${fmtNum(totalFiltered)} eventi in programma`}{total !== totalFiltered ? ` (di ${fmtNum(total)})` : ''} a {where}.{#if data.capped}
+		Qui mostriamo i primi {fmtNum(total)}: <a href={`/?luogo=${data.slug}`}>vedili tutti nella ricerca</a>.{/if}
 	</p>
 	<p class="map-link"><a class="btn btn-sm" href={`/?luogo=${data.slug}&vista=mappa${query ? `&${query}` : ''}`}><Map size={16} aria-hidden="true" /> Vedi sulla mappa</a></p>
 	<FilterBar {filter} onchange={setFilter} showRadius={false} />
-	<EventList events={visible} {now} {counts} loading={waiting}>
+	<EventList events={visible} {now} {counts} {origin} loading={waiting}>
 		{#snippet empty()}
 			{#if total > 0}
 				<h2>Niente con questi filtri</h2>

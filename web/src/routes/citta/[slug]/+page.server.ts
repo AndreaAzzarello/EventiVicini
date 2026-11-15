@@ -9,6 +9,8 @@ import type { PageServerLoad } from './$types';
 
 /** Card per pagina: tante nell'HTML (e poi «Mostra altri»), perché renderne centinaia costa CPU al Worker (#51). */
 const PAGE_SIZE = 24;
+/** Stesso tetto di eventsInCity (limit = 100): se la lista lo raggiunge, gli eventi in più non sono qui (la home li mostra). */
+const CITY_LIMIT = 100;
 
 export const load: PageServerLoad = async ({ params, setHeaders, url }) => {
 	if (params.slug !== slugify(params.slug)) error(404, 'Città non trovata');
@@ -30,7 +32,7 @@ export const load: PageServerLoad = async ({ params, setHeaders, url }) => {
 	const regionSlug = region ? slugify(region) : '';
 	const regionPage = regionSlug ? await regionCoverage(regionSlug).catch(() => null) : null;
 	const cityAlt = events.find((e) => e.cityAlt)?.cityAlt ?? '';
-	const meta = { slug: params.slug, city, cityAlt, province, region, regionSlug: regionPage ? regionSlug : '' };
+	const meta = { slug: params.slug, capped: events.length >= CITY_LIMIT, city, cityAlt, province, region, regionSlug: regionPage ? regionSlug : '' };
 	const now = Date.now();
 	const liveCount = events.filter((e) => e.endTime >= now).length;
 	// Città piccola: tutto nell'HTML, il browser filtra come sempre.
