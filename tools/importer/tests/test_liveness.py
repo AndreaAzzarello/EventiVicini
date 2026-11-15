@@ -1,6 +1,7 @@
 """#56: un evento la cui pagina risponde ancora non si segna come sparito; sparito davvero (404/410/redirect) sì."""
 
 import sys
+from urllib.parse import urlsplit
 from pathlib import Path
 
 import httpx
@@ -105,3 +106,19 @@ def test_stale_updates_con_still_online():
     assert set(out) == {"via"}
     assert sorted(asked) == [f"{BASE}/e/via", f"{BASE}/e/vivo"]  # solo i candidati veri: né altro host né evento finito
     assert set(stale_updates(docs, set(), {BASE.split("//")[1]}, NOW, 60 * DAY)) == {"vivo", "via"}  # senza controllo, come prima
+
+
+def test_unknown_registrati_per_host_e_motivo():
+    def handler(req):
+        if req.url.path == "/robots.txt":
+            return httpx.Response(404)
+        if req.url.path.endswith("/boom/"):
+            raise httpx.ConnectTimeout("t")
+        return httpx.Response(403)
+    c = checker(handler)
+    for p in ("a", "b"):
+        c(f"{BASE}/eventi/{p}/")
+    c(f"{BASE}/eventi/boom/")
+    host = urlsplit(BASE).netloc
+    assert c.unknown_by_host == {host: {"HTTP 403": 2, "ConnectTimeout": 1}}
+    assert c.unknown_summary() == f"{host}: ConnectTimeout 1, HTTP 403 2"

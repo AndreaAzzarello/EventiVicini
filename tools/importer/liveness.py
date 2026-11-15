@@ -40,6 +40,20 @@ class LiveChecker:
         self.max_checks = max_checks
         self.done: dict[str, bool] = {}
         self.stats = {"online": 0, "gone": 0, "unknown": 0, "duplicates": 0, "skipped": 0}
+        self.unknown_by_host: dict[str, dict[str, int]] = {}  # host → motivo → quante pagine (#70)
+
+    def _unknown(self, url: str, reason: str) -> bool:
+        """Registra una pagina di cui non si sa nulla (resta visibile) con host e motivo, per vedere chi la causa (#70)."""
+        self.stats["unknown"] += 1
+        host = urlsplit(url).netloc.lower()
+        by_reason = self.unknown_by_host.setdefault(host, {})
+        by_reason[reason] = by_reason.get(reason, 0) + 1
+        log.info("controllo pagina %s: nel dubbio resta visibile (%s)", url, reason)
+        return True
+
+    def unknown_summary(self) -> str:
+        return "; ".join(f"{h}: " + ", ".join(f"{r} {n}" for r, n in sorted(rs.items()))
+                         for h, rs in sorted(self.unknown_by_host.items()))
 
     def __call__(self, url: str) -> bool:
         if url in self.done:
@@ -58,9 +72,7 @@ class LiveChecker:
         try:
             res = self.fetcher.get(url)
         except (Blocked, RobotsUnknown, httpx.HTTPError) as e:
-            log.info("controllo pagina %s: nel dubbio resta visibile (%s)", url, type(e).__name__)
-            self.stats["unknown"] += 1
-            return True
+            return self._unknown(url, type(e).__name__)
         if res.status_code in GONE:
             self.stats["gone"] += 1
             return False
@@ -71,5 +83,4 @@ class LiveChecker:
                 return False
             self.stats["online"] += 1
             return True
-        self.stats["unknown"] += 1
-        return True
+        return self._unknown(url, f"HTTP {res.status_code}")

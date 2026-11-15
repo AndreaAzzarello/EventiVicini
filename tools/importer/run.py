@@ -941,6 +941,8 @@ def _main(argv: list[str] | None = None) -> int:
         return 2
     if checker is not None:
         log.info("Controllo pagine degli eventi non più in lista: %s", ", ".join(f"{k} {v}" for k, v in checker.stats.items()))
+        if checker.unknown_by_host:
+            log.info("Pagine «unknown» per host (motivo, numero): %s", checker.unknown_summary())
     from db import client as firestore_client
 
     db = firestore_client()
