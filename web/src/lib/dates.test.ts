@@ -95,6 +95,12 @@ describe('formattazione', () => {
 		expect(formatWhen(romeTime(2026, 11, 14), romeTime(2026, 11, 14, 23, 59), now)).toBe(
 			'sabato 14 novembre · tutto il giorno'
 		));
+	it('00:00 senza fine (fine uguale all inizio): tutto il giorno, non «00:00»', () => {
+		const start = romeTime(2026, 11, 14);
+		expect(formatWhen(start, start, now)).toBe('sabato 14 novembre · tutto il giorno');
+	});
+	it('un orario vero a mezzanotte e mezza resta un orario', () =>
+		expect(formatWhen(romeTime(2026, 11, 14, 0, 30), romeTime(2026, 11, 14, 0, 30), now)).toBe('sabato 14 novembre · 00:30'));
 	it('più giorni', () =>
 		expect(formatWhen(romeTime(2026, 11, 12, 10), romeTime(2026, 11, 15, 18), now)).toBe('dal 12 nov al 15 nov'));
 	it('anno diverso', () => expect(formatWhen(romeTime(2027, 1, 6, 10), romeTime(2027, 1, 6, 12), now)).toMatch(/2027/));
