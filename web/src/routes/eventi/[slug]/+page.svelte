@@ -46,6 +46,8 @@
 
 	const Cat = $derived(CATEGORY_ICONS[e.category]);
 	const source = $derived(eventSource(e));
+	// Open Data Hub non dà una pagina leggibile dell'evento (la fonte rimanda al portale): niente «sito ufficiale» che non c'è
+	const fromOpenData = $derived(source.href === 'https://opendatahub.com/');
 	const vendor = $derived(e.ticketUrl ? ticketVendor(e.ticketUrl) : null);
 	const offSale = $derived(ticketsOffSale(e));
 	const img = $derived(e.imageUrl ? imageSources(e.imageUrl) : null);
@@ -188,7 +190,7 @@
 	</section>
 
 	<p class="source muted">
-		Verifica sempre date e orari sul sito ufficiale prima di partire.
+		Verifica sempre date e orari {fromOpenData ? 'presso l’organizzatore' : 'sul sito ufficiale'} prima di partire.
 		{#if vendor && !offSale}I biglietti li vende {vendor}: il pulsante apre il suo sito, dove valgono le sue condizioni.{/if}
 	</p>
 
