@@ -119,6 +119,8 @@ describe('luogo nell’URL', () => {
 		expect(parse('luogo=emilia-romagna')).toMatchObject({ label: 'Emilia-Romagna', slug: 'emilia-romagna' });
 		expect(parse('luogo=sconosciuto')).toBeNull();
 		expect(parse('luogo=../etc')).toBeNull();
+		expect(parse('luogo=Bolzano')).toMatchObject({ slug: 'bolzano' }); // maiuscole: stesso luogo
+		expect(parse('luogo=%20BOLZANO%20')).toMatchObject({ slug: 'bolzano' });
 	});
 	it('accetta coordinate italiane e rifiuta il resto', () => {
 		expect(parse('nome=Lecce&lat=40.35&lng=18.17')).toEqual({ lat: 40.35, lng: 18.17, label: 'Lecce' });
