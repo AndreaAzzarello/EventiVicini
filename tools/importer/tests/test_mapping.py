@@ -76,8 +76,9 @@ def test_scarta_finiti_e_oltre_orizzonte():
     ("Gratuito, su prenotazione", "free"),
     ("Biglietti Ingresso 15€ (riduzioni 10€)", "low"),
     ("Intero 30 euro", "premium"),
-    ("a pagamento", "low"),
-    ("", "low"),
+    ("a pagamento", "unknown"),
+    ("Costo: -", "unknown"),
+    ("", "unknown"),
 ])
 def test_prezzo(text, expected):
     assert map_price(text) == expected

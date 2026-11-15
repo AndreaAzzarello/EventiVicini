@@ -61,7 +61,7 @@ def test_tutte_le_fixture_si_mappano(name):
     for e in evs:
         assert e["title"] and "&amp;" not in e["title"] and e["approxLocation"] is False
         assert e["startTime"] < e["endTime"] and e["sourceUrl"].startswith(f"https://www.comune.{name}.fe.it/")
-        assert e["id"] == event_id(e["sourceUrl"]) and e["priceType"] in ("free", "low", "premium")
+        assert e["id"] == event_id(e["sourceUrl"]) and e["priceType"] in ("free", "low", "premium", "unknown")
         assert "_geocode" in e
 
 
@@ -73,13 +73,13 @@ def test_copparo_mappatura_completa():
     assert datetime.fromtimestamp(e["startTime"] / 1000, ROME).strftime("%Y-%m-%d %H:%M") == "2026-10-31 18:00"
     assert (e["venueName"], e["address"], e["lat"], e["lng"]) == (
         "Centro storico di Copparo", "Copparo, via Roma 28", 44.8950912, 11.8272517)
-    assert e["priceType"] == "low"  # costo "-": nessuna informazione
+    assert e["priceType"] == "unknown"  # costo "-": nessuna informazione
     assert e["imageUrl"].startswith("https://www.comune.copparo.fe.it/wp-content/uploads/")
     assert e["sourceUrl"] == "https://www.comune.copparo.fe.it/vivere-il-comune/eventi/aperi-halloween-in-via-cavour/"
     assert e["category"] == "other" and e["tags"] == []
     assert e["_geocode"][0] == "via Roma 28, Copparo"
     t = evs['Stagione teatrale - "Balena?"']
-    assert t["priceType"] == "low" and t["lat"] == 44.8933091 and t["venueName"] == 'Teatro Comunale "De Micheli"'
+    assert t["priceType"] == "unknown" and t["lat"] == 44.8933091 and t["venueName"] == 'Teatro Comunale "De Micheli"'
 
 
 def test_orario_non_convertito_da_utc():
