@@ -17,7 +17,11 @@
 	}: { filter: Filter; onchange: (f: Filter) => void; showRadius?: boolean; children?: Snippet } = $props();
 
 	const set = (patch: Partial<Filter>) => onchange({ ...filter, ...patch });
-	const active = $derived(filter.q !== '' || filter.when !== 'any' || filter.free || filter.kids || filter.category !== null);
+	// Filtri attivi (il raggio non conta: «Azzera» lo lascia com'è)
+	const activeCount = $derived(
+		[filter.q !== '', filter.when !== 'any', filter.free, filter.kids, filter.category !== null].filter(Boolean).length
+	);
+	const active = $derived(activeCount > 0);
 
 	const PRESETS: [DateWindow, string][] = [
 		['today', 'Oggi'],
@@ -67,6 +71,9 @@
 <form class="filters" role="search" onsubmit={(e) => e.preventDefault()}>
 	{@render children?.()}
 	<div class="row" role="group" aria-label="Filtri">
+		{#if active}
+			<button type="button" class="chip reset" onclick={reset}><X size={16} aria-hidden="true" /> Azzera ({activeCount})</button>
+		{/if}
 		{#if showRadius}
 			<label class="select-chip">
 				<span class="visually-hidden">Distanza massima</span>
@@ -98,9 +105,6 @@
 				<Icon size={16} aria-hidden="true" />{label}
 			</button>
 		{/each}
-		{#if active}
-			<button type="button" class="chip reset" onclick={reset}><X size={16} aria-hidden="true" /> Azzera</button>
-		{/if}
 	</div>
 </form>
 
