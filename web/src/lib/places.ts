@@ -268,7 +268,8 @@ const inItaly = (lat: number, lng: number) =>
 
 /** Luogo indicato nell'URL, o null se manca o non è valido (la home usa allora il predefinito o quello salvato). */
 export function placeFromParams(p: URLSearchParams, regions: CoverageRegion[]): ChosenPlace | null {
-	const slug = p.get('luogo');
+	// ?luogo=Modena vale come ?luogo=modena: gli slug sono sempre minuscoli
+	const slug = p.get('luogo')?.trim().toLowerCase();
 	if (slug) {
 		if (!/^[a-z0-9-]{1,80}$/.test(slug)) return null;
 		for (const r of regions) {

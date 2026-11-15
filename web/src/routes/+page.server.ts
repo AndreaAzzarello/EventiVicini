@@ -22,7 +22,7 @@ export const load: PageServerLoad = async ({ url, setHeaders }) => {
 	const radiusKm = filter.radiusKm;
 	const wanted = url.searchParams.has('luogo') || url.searchParams.has('lat');
 	const regions = await coverage().catch(() => []);
-	const slug = url.searchParams.get('luogo') ?? '';
+	const slug = (url.searchParams.get('luogo') ?? '').trim().toLowerCase();
 	let fromUrl = wanted ? placeFromParams(url.searchParams, regions) : null;
 	// Qualsiasi comune italiano si apre anche senza eventi: lo risolve l'indice per iniziale, senza letture Firestore.
 	if (wanted && !fromUrl) fromUrl = await comuneBySlug(slug);
@@ -48,8 +48,9 @@ export const load: PageServerLoad = async ({ url, setHeaders }) => {
 				.filter((h) => h.events > 0)
 				.map((h) => ({ slug: h.place.slug!, name: h.place.label, events: h.events }))
 		};
+		// popular c'è anche con un luogo sconosciuto: niente vicolo cieco, si scelgono le città con più eventi
 		// km: 0 → mai "coperto": il browser scarica gli eventi solo dopo aver saputo il luogo
-		return { ...base, events: [], fetched: { lat: place.lat, lng: place.lng, km: 0 }, error: '', popular: wanted ? null : popular, partial: false, total: 0, sectionCounts: null };
+		return { ...base, events: [], fetched: { lat: place.lat, lng: place.lng, km: 0 }, error: '', popular, partial: false, total: 0, sectionCounts: null };
 	}
 
 	try {

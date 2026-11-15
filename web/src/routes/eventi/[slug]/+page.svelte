@@ -46,6 +46,8 @@
 
 	const Cat = $derived(CATEGORY_ICONS[e.category]);
 	const source = $derived(eventSource(e));
+	// Open Data Hub non dà una pagina leggibile dell'evento (la fonte rimanda al portale): niente «sito ufficiale» che non c'è
+	const fromOpenData = $derived(source.href === 'https://opendatahub.com/');
 	const vendor = $derived(e.ticketUrl ? ticketVendor(e.ticketUrl) : null);
 	const offSale = $derived(ticketsOffSale(e));
 	const img = $derived(e.imageUrl ? imageSources(e.imageUrl) : null);
@@ -91,7 +93,7 @@
 </svelte:head>
 
 <article class="container narrow detail" data-cat={e.category}>
-	<a class="back" href="/"><ArrowLeft size={20} aria-hidden="true" /> Tutti gli eventi</a>
+	<a class="back" href={e.citySlug ? cityPath(e.citySlug) : '/'}><ArrowLeft size={20} aria-hidden="true" /> {e.citySlug && e.city ? `Eventi a ${e.city}` : 'Tutti gli eventi'}</a>
 
 	{#if ended}
 		<p class="notice" role="note"><strong>Evento concluso.</strong> Lo lasciamo qui per memoria: cerca le prossime date in home.</p>
@@ -188,7 +190,7 @@
 	</section>
 
 	<p class="source muted">
-		Verifica sempre date e orari sul sito ufficiale prima di partire.
+		Verifica sempre date e orari {fromOpenData ? 'presso l’organizzatore' : 'sul sito ufficiale'} prima di partire.
 		{#if vendor && !offSale}I biglietti li vende {vendor}: il pulsante apre il suo sito, dove valgono le sue condizioni.{/if}
 	</p>
 

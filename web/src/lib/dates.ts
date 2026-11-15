@@ -149,10 +149,12 @@ const sameDay = (a: number, b: number) => {
 	const y = romeParts(b);
 	return x.year === y.year && x.month === y.month && x.day === y.day;
 };
+/** Evento senza orario: dalle 00:00 alle 23:59, oppure alle 00:00 senza una fine (fine uguale o prima dell'inizio). */
 export const allDay = (start: number, end: number) => {
 	const s = romeParts(start);
 	const e = romeParts(end);
-	return s.hour === 0 && s.minute === 0 && e.hour === 23 && e.minute === 59;
+	if (s.hour !== 0 || s.minute !== 0) return false;
+	return end <= start || (e.hour === 23 && e.minute === 59);
 };
 
 /** "sabato 14 novembre · 21:00–23:30", "dal 12 nov al 15 nov". Anno solo se diverso da quello corrente. */

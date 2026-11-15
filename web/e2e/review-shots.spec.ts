@@ -11,7 +11,7 @@ const PAGES: [string, string][] = [
 	['regione', '/regione/emilia-romagna'],
 	['dettaglio', '/eventi/jazz-in-piazza-grande-seedJazz']
 ];
-const SIZES: [string, number, number][] = [['360', 360, 740], ['390', 390, 844], ['desktop', 1280, 800]];
+const SIZES: [string, number, number][] = [['360', 360, 740], ['390', 390, 844], ['768', 768, 1024], ['desktop', 1280, 800]];
 
 for (const theme of ['light', 'dark']) {
 	test(`screenshot ${theme}`, async ({ page }) => {
