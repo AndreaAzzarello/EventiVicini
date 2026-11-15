@@ -141,7 +141,7 @@
 			</div>
 			<div>
 				<dt><Ticket size={20} aria-hidden="true" /> Prezzo</dt>
-				<dd>{PRICE_TYPES[e.priceType]}</dd>
+				<dd class:muted={e.priceType === 'unknown'}>{PRICE_TYPES[e.priceType]}</dd>
 			</div>
 			{#if isForKids(e)}
 				<div>

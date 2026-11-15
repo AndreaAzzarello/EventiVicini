@@ -71,7 +71,7 @@ describe('url e slug', () => {
 describe('fromData', () => {
 	it('default come in Dart e campi interni ignorati', () => {
 		const e = fromData('x', { title: 'T', startTime: 10, submittedBy: 'uid-segreto', ticketUrl: 'javascript:x' });
-		expect(e).toMatchObject({ id: 'x', category: 'other', priceType: 'free', endTime: 10, source: 'manual', ticketUrl: '' });
+		expect(e).toMatchObject({ id: 'x', category: 'other', priceType: 'unknown', endTime: 10, source: 'manual', ticketUrl: '' });
 		expect('submittedBy' in e).toBe(false);
 	});
 });
@@ -119,6 +119,7 @@ describe('PRICE_TYPES', () => {
 	it('un prezzo sconosciuto non diventa "Gratis"', () => {
 		expect(PRICE_TYPES.unknown).toBe('Prezzo sul sito');
 		expect(fromData('x', { priceType: 'unknown' }).priceType).toBe('unknown');
+		expect(fromData('x', { priceType: 'strano' }).priceType).toBe('unknown'); // mai gratis per ripiego: il filtro «Gratis» resta affidabile
 	});
 });
 

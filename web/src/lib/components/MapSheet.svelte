@@ -80,7 +80,7 @@
 		<ul class="facts">
 			<li><Clock size={16} aria-hidden="true" /><span>{formatWhen(active.startTime, active.endTime)}</span></li>
 			<li><MapPin size={16} aria-hidden="true" /><span>{active.approxLocation ? 'Luogo da confermare' : active.venueName || active.city}</span></li>
-			<li><Ticket size={16} aria-hidden="true" /><span>{PRICE_TYPES[active.priceType]}</span></li>
+			<li class:muted={active.priceType === 'unknown'}><Ticket size={16} aria-hidden="true" /><span>{PRICE_TYPES[active.priceType]}</span></li>
 		</ul>
 		<div class="actions">
 			<a class="btn btn-primary btn-sm" href={eventPath(active)}>Apri scheda</a>

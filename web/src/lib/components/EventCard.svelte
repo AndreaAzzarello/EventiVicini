@@ -94,7 +94,7 @@
 					{#if km != null}<span class="km"> · {km < 1 ? '< 1' : fmtNum(Math.round(km))} km</span>{/if}
 				</span>
 			</li>
-			<li class:free={isFree(event)}><Ticket size={16} aria-hidden="true" /><span>{PRICE_TYPES[event.priceType]}</span></li>
+			<li class:free={isFree(event)} class:muted={event.priceType === 'unknown'}><Ticket size={16} aria-hidden="true" /><span>{PRICE_TYPES[event.priceType]}</span></li>
 			{#if isForKids(event) && event.category !== 'kids'}
 				<li><Baby size={16} aria-hidden="true" /><span>Per bambini</span></li>
 			{/if}
