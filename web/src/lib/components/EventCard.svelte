@@ -45,7 +45,8 @@
 					allDay(event.startTime, event.endTime) ? 'Tutto il giorno' : `${ongoing ? 'dalle ' : ''}${formatTime(event.startTime)}`
 				}`
 	);
-	const place = $derived(event.venueName || event.address);
+	// Senza nome del luogo l'indirizzo grezzo («Via …, CAP città») è lungo e poco utile in una card: meglio la località.
+	const place = $derived(event.venueName || event.locality || event.address);
 	const img = $derived(event.imageUrl ? imageSources(event.imageUrl) : null);
 	let broken = $state(false);
 
@@ -194,11 +195,22 @@
 	}
 	h3 {
 		margin: 0 0 var(--space-2);
-		font-size: var(--text-lg);
-		overflow-wrap: anywhere;
-	}
-	.compact h3 {
 		font-size: var(--text-md);
+		overflow-wrap: anywhere;
+		/* titoli lunghi: al massimo 3 righe, il titolo intero resta nel dettaglio */
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 3;
+		line-clamp: 3;
+		overflow: hidden;
+	}
+	@media (min-width: 520px) {
+		h3 {
+			font-size: var(--text-lg);
+		}
+		.compact h3 {
+			font-size: var(--text-md);
+		}
 	}
 	h3 a {
 		color: var(--text);
