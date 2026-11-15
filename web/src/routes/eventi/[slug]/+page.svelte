@@ -91,7 +91,7 @@
 </svelte:head>
 
 <article class="container narrow detail" data-cat={e.category}>
-	<a class="back" href="/"><ArrowLeft size={20} aria-hidden="true" /> Tutti gli eventi</a>
+	<a class="back" href={e.citySlug ? cityPath(e.citySlug) : '/'}><ArrowLeft size={20} aria-hidden="true" /> {e.citySlug && e.city ? `Eventi a ${e.city}` : 'Tutti gli eventi'}</a>
 
 	{#if ended}
 		<p class="notice" role="note"><strong>Evento concluso.</strong> Lo lasciamo qui per memoria: cerca le prossime date in home.</p>
