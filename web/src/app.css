@@ -349,6 +349,32 @@ dialog::backdrop {
 	}
 }
 
+/* Passaggio card → dettaglio (View Transitions, vedi DESIGN.md «Movimento»): il riquadro della card si allarga nella testata.
+   Il resto della pagina si dissolve; i pseudo-elementi non sono toccati dall'azzeramento sopra, per questo hanno la loro regola. */
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation-duration: var(--dur);
+}
+::view-transition-group(ev-media) {
+	animation-duration: var(--dur-view);
+	animation-timing-function: var(--ease);
+	border-radius: var(--radius);
+	overflow: clip;
+}
+/* da quadrato a 2:1 senza deformare: l'immagine riempie e si ritaglia */
+::view-transition-old(ev-media),
+::view-transition-new(ev-media) {
+	height: 100%;
+	object-fit: cover;
+}
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-group(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none !important;
+	}
+}
+
 /* Testi lunghi (privacy, termini) */
 .prose {
 	padding-top: var(--space-4);

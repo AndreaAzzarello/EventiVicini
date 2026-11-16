@@ -46,6 +46,8 @@
 	/* Movimento */
 	--ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 	--dur: 150ms;
+	/* Massimo per transizioni di pagina e pannelli (View Transitions): oltre sembra attesa */
+	--dur-view: 250ms;
 
 	/* Grigi caldi (10 gradini) */
 	--gray-50: #fbf9f7;

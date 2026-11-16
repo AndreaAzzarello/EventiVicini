@@ -223,6 +223,8 @@
 		border-radius: var(--radius);
 		overflow: hidden;
 		background: var(--surface-2);
+		/* arrivo della transizione dalla card (viewTransition.ts, regole in app.css) */
+		view-transition-name: ev-media;
 	}
 	.hero img {
 		display: block;
