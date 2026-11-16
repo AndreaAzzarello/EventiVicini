@@ -17,6 +17,7 @@ Agenda gratuita di eventi pubblici locali (partita da Modena). Dettagli completi
 - OpenStreetMap/Nominatim: User-Agent identificativo, max 1 richiesta/s.
 - Cookie "senza banner" (dettagli in `ClaudeVault\decisioni\eventivicini-cookie.md`): solo storage tecnico dichiarato in `web/src/lib/cookies.ts` (alimenta `/cookie` e `e2e/storage.spec.ts`). Statistiche solo Cloudflare Web Analytics. Vietati Google Maps/Analytics/Fonts remoti, Meta Pixel, embed YouTube/social, SDK pubblicitari. Ogni dipendenza frontend nuova: dichiara nel piano cosa scrive nel browser e aggiorna `cookies.ts`.
 - Design: le regole sono in `DESIGN.md`, i valori in `web/src/lib/styles/tokens.css`, il controllo automatico in `design.test.ts`.
+- Movimento: regole e budget in `DESIGN.md` (voce «Movimento»). Niente librerie d'animazione: CSS, View Transitions e `svelte/transition`; `prefers-reduced-motion` sempre rispettato; durate solo dai token `--dur*` (max 250 ms).
 
 ## Comandi (da `web/` salvo diversa indicazione)
 - Dev: `npm run dev` (legge `.env`); anteprima Cloudflare: `npm run preview` (porta 8788).

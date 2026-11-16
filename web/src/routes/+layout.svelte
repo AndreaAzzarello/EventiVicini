@@ -6,6 +6,7 @@
 	import frauncesItalicUrl from '@fontsource/fraunces/files/fraunces-latin-600-italic.woff2?url';
 	import { onMount } from 'svelte';
 	import { dev } from '$app/environment';
+	import { onNavigate } from '$app/navigation';
 	import { env as pub } from '$env/dynamic/public';
 	import { page } from '$app/state';
 	import Heart from '@lucide/svelte/icons/heart';
@@ -18,9 +19,28 @@
 	import { favorites, session } from '$lib/session.svelte';
 	import { KEYS, readJson, writeJson } from '$lib/storage';
 	import { dismiss, pause, resume, toasts } from '$lib/toast.svelte';
+	import { MEDIA_NAME, shouldTransition, sourceFor } from '$lib/viewTransition';
 
 	let { children } = $props();
 	let theme = $state<'light' | 'dark' | null>(null);
+
+	// Card → dettaglio: il riquadro della card si allarga nella testata (View Transitions, vedi DESIGN.md «Movimento»).
+	// onNavigate parte a dati già caricati: l'attesa di rete non congela la pagina. Senza le condizioni di shouldTransition non si fa nulla.
+	onNavigate((navigation) => {
+		const toPath = navigation.to?.url.pathname;
+		const supported = typeof document.startViewTransition === 'function';
+		if (!shouldTransition({ type: navigation.type, toPath, reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches, supported })) return;
+		const from = sourceFor(document, toPath!);
+		if (!from) return;
+		from.style.viewTransitionName = MEDIA_NAME;
+		return new Promise<void>((resolve) => {
+			const t = document.startViewTransition(async () => {
+				resolve();
+				await navigation.complete;
+			});
+			void t.finished.finally(() => (from.style.viewTransitionName = ''));
+		});
+	});
 
 	onMount(() => {
 		theme = readJson(KEYS.theme, null);

@@ -181,6 +181,102 @@ const hue = (h: string) => {
 	return (x * 60 + 360) % 360;
 };
 
+// --- Movimento (DESIGN.md «Movimento») ---
+
+const TIME = /(?<![\w.-])(?:\d*\.)?\d+m?s\b/g;
+
+/**
+ * Eccezioni ammesse alle durate letterali in transition/animation (altrove solo `var(--dur…)`), ognuna con il suo motivo.
+ * `stack` sono i preamboli dei blocchi che contengono la dichiarazione (es. `@media (…)`, `.leaflet-zoom-anim`).
+ */
+const MOTION_EXCEPTIONS: { reason: string; when: (stack: string[]) => boolean }[] = [
+	{
+		reason: 'azzeramento sotto prefers-reduced-motion: porta le durate a ~0, non è una durata di design',
+		when: (stack) => stack.some((p) => /^@media[^{]*prefers-reduced-motion\s*:\s*reduce/.test(p))
+	},
+	{
+		reason: 'CSS di terze parti (Leaflet): le sue classi .leaflet-* hanno durate proprie, anche negli override in app.css (il suo foglio sta in node_modules e non è scansionato)',
+		when: (stack) => stack.some((p) => /\.leaflet-/.test(p))
+	}
+];
+
+/** Dichiarazioni CSS con la pila dei blocchi che le contengono (commenti esclusi). */
+function declarations(css: string): { decl: string; stack: string[] }[] {
+	const out: { decl: string; stack: string[] }[] = [];
+	const stack: string[] = [];
+	let buf = '';
+	const flush = () => {
+		if (buf.trim()) out.push({ decl: buf.trim(), stack: [...stack] });
+		buf = '';
+	};
+	for (const ch of css.replace(/\/\*[\s\S]*?\*\//g, '')) {
+		if (ch === '{') {
+			stack.push(buf.trim());
+			buf = '';
+		} else if (ch === '}') {
+			flush();
+			stack.pop();
+		} else if (ch === ';') flush();
+		else buf += ch;
+	}
+	return out;
+}
+
+/** Durate letterali in transition/animation fuori dalle eccezioni (0s e 0ms sono ammessi). */
+function literalDurations(css: string): string[] {
+	return declarations(css)
+		.filter(({ decl }) => /^(transition|animation)(-duration|-delay)?\s*:/.test(decl))
+		.filter(({ decl }) => [...decl.matchAll(TIME)].some((m) => !/^0m?s$/.test(m[0])))
+		.filter(({ stack }) => !MOTION_EXCEPTIONS.some((e) => e.when(stack)))
+		.map(({ decl }) => decl.replace(/\s+/g, ' '));
+}
+
+/** CSS di un file: tutto un .css, oppure blocchi <style> e attributi style="" di un .svelte/.html. */
+function cssOf(f: string): string {
+	if (f.endsWith('.css')) return readFileSync(f, 'utf8');
+	if (f.endsWith('.ts')) return '';
+	const src = readFileSync(f, 'utf8');
+	const blocks = [...src.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]);
+	const attrs = [...src.replace(/<style\b[\s\S]*?<\/style>/g, '').matchAll(/style="([^"]*)"/g)].map((m) => m[1]);
+	return [...blocks, ...attrs].join(';\n');
+}
+
+describe('movimento', () => {
+	it('durate di transition e animation solo da token (--dur, --dur-view); eccezioni: reduced-motion e Leaflet', () => {
+		const hits = files.flatMap((f) => literalDurations(cssOf(f)).map((d) => `${rel(f)}  ${d}`));
+		expect(hits).toEqual([]);
+	});
+
+	it('il controllo vede le durate letterali e rispetta le eccezioni documentate', () => {
+		expect(literalDurations('.a { transition: opacity 200ms; }')).toHaveLength(1);
+		expect(literalDurations('.a { animation: x 1.5s ease; }')).toHaveLength(1);
+		expect(literalDurations('.a { transition: opacity var(--dur) var(--ease); animation: none; }')).toEqual([]);
+		expect(literalDurations('@media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; } }')).toEqual([]);
+		expect(literalDurations('.leaflet-zoom-anim .leaflet-zoom-animated { transition: transform 0.25s; }')).toEqual([]);
+		expect(literalDurations('@media (min-width: 600px) { .a { transition: color 100ms; } }')).toHaveLength(1);
+	});
+
+	it('le durate dei token non superano 250 ms (--dur-view è il massimo per transizioni di pagina e pannelli)', () => {
+		const durs = Object.entries(vars).filter(([k]) => k.startsWith('--dur'));
+		expect(durs.map(([k]) => k)).toEqual(expect.arrayContaining(['--dur', '--dur-view']));
+		for (const [k, v] of durs) expect(parseFloat(v), k).toBeLessThanOrEqual(250);
+	});
+
+	it('movimento ridotto: app.css azzera animazioni e transizioni di tutti gli elementi e dei pseudo-elementi delle View Transitions', () => {
+		const app = readFileSync(join(SRC, 'app.css'), 'utf8');
+		expect(app).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{\s*\*,\s*\*::before,\s*\*::after\s*\{[^}]*animation-duration[^}]*transition-duration/);
+		expect(app).toMatch(/::view-transition-group\(\*\),\s*::view-transition-old\(\*\),\s*::view-transition-new\(\*\)\s*\{[^}]*animation:\s*none/);
+	});
+
+	it('ogni file con regole sui pseudo-elementi delle View Transitions ha il suo blocco prefers-reduced-motion', () => {
+		const bad = files.filter((f) => {
+			const c = cssOf(f);
+			return c.includes('::view-transition') && !c.includes('prefers-reduced-motion');
+		});
+		expect(bad.map(rel)).toEqual([]);
+	});
+});
+
 describe.each([
 	['chiaro', 0],
 	['scuro', 1]
