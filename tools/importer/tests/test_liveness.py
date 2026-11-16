@@ -122,3 +122,37 @@ def test_unknown_registrati_per_host_e_motivo():
     host = urlsplit(BASE).netloc
     assert c.unknown_by_host == {host: {"HTTP 403": 2, "ConnectTimeout": 1}}
     assert c.unknown_summary() == f"{host}: ConnectTimeout 1, HTTP 403 2"
+
+
+def test_esito_del_mac_al_posto_della_richiesta_dal_runner():
+    """#70: l'host blocca il runner GitHub (403), ma il Mac ha già visto la pagina sparita o viva."""
+    def blocked(req):
+        return httpx.Response(404) if req.url.path == "/robots.txt" else httpx.Response(403)
+    client = httpx.Client(transport=httpx.MockTransport(blocked), follow_redirects=True)
+    c = LiveChecker(client, set(), None, precomputed={f"{BASE}/eventi/via/": "gone", f"{BASE}/eventi/vivo": "online",
+                                                      f"{BASE}/eventi/boh/": "unknown"})
+    c.fetcher.min_interval = 0
+    assert c(f"{BASE}/eventi/via") is False  # barra finale e maiuscole dell'host non contano
+    assert c(f"{BASE}/eventi/vivo/") is True
+    assert c(f"{BASE}/eventi/boh/") is True and c.stats["unknown"] == 1  # esito non certo: si richiede, 403 → resta visibile
+    assert c.stats["mac"] == 2 and c.fetcher.requests <= 2
+
+
+def test_senza_esiti_del_mac_il_comportamento_resta_quello_di_prima():
+    c = checker(site({"/eventi/vivo/": httpx.Response(200, text="ok")}))
+    assert c(f"{BASE}/eventi/vivo/") is True and c(f"{BASE}/eventi/via/") is False and c.stats["mac"] == 0
+
+
+def test_lettura_degli_esiti_del_mac(tmp_path):
+    import json
+    from datetime import datetime, timedelta, timezone
+    from liveness import read_mac_results
+    now = datetime(2026, 11, 17, 8, 0, tzinfo=timezone.utc)
+    f = tmp_path / "_liveness.json"
+    assert read_mac_results(tmp_path, now) == {}  # file assente
+    f.write_text(json.dumps({"checkedAt": (now - timedelta(hours=2)).isoformat(), "results": {"u": "gone", "v": "boh", "w": "online"}}))
+    assert read_mac_results(tmp_path, now) == {"u": "gone", "w": "online"}
+    f.write_text(json.dumps({"checkedAt": (now - timedelta(hours=40)).isoformat(), "results": {"u": "gone"}}))
+    assert read_mac_results(tmp_path, now) == {}  # troppo vecchio
+    f.write_text("non è json")
+    assert read_mac_results(tmp_path, now) == {}

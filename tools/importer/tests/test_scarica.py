@@ -94,3 +94,47 @@ def test_fonte_bloccata_oltre_il_tetto_va_in_errore_e_le_altre_proseguono(monkey
 
 def test_tetto_per_fonte_del_mac_e_di_3_minuti():
     assert scarica.SOURCE_BUDGET == 180
+
+
+def _doc(urls, ok=True, end=NOW.timestamp() * 1000 + 86_400_000):
+    return {"ok": ok, "events": [{"sourceUrl": u, "startTime": end - 3600_000, "endTime": end} for u in urls]}
+
+
+def _write(d, name, doc):
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{name}.json").write_text(json.dumps(doc), encoding="utf-8")
+
+
+def test_candidati_solo_eventi_non_finiti_spariti_da_una_fonte_riuscita_oggi_e_ieri(tmp_path):
+    out, state = tmp_path / "out", tmp_path / "state"
+    now_ms = int(NOW.timestamp() * 1000)
+    _write(state, "a", _doc(["https://a/1", "https://a/2"]))
+    _write(out, "a", _doc(["https://a/1"]))  # a/2 è sparito
+    _write(state, "finito", _doc(["https://f/1"], end=now_ms - 1000))
+    _write(out, "finito", _doc([]))  # sparito ma già finito: non serve controllarlo
+    _write(state, "ko", _doc(["https://k/1"]))
+    _write(out, "ko", _doc([], ok=False))  # fonte fallita oggi: non si sa cosa sia sparito
+    _write(out, "nuova", _doc(["https://n/1"]))  # nessun riferimento di ieri
+    cands, today = scarica.gone_candidates(state, out, ["a", "finito", "ko", "nuova"], now_ms)
+    assert cands == ["https://a/2"] and today == {"https://a/1", "https://n/1"}
+
+
+def test_esiti_certi_in_liveness_json_e_stato_aggiornato_solo_per_le_fonti_riuscite(tmp_path):
+    out, state = tmp_path / "out", tmp_path / "state"
+    _write(state, "a", _doc(["https://a.it/vivo", "https://a.it/via", "https://a.it/boh"]))
+    _write(out, "a", _doc([]))
+    _write(state, "ko", _doc(["https://k/1"]))
+    _write(out, "ko", _doc([], ok=False))
+
+    def handler(req):
+        if req.url.path == "/robots.txt":
+            return httpx.Response(404)
+        return {"/vivo": httpx.Response(200, text="ok"), "/via": httpx.Response(404)}.get(req.url.path, httpx.Response(403))
+    c = httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+    res = scarica.check_gone(out, state, ["a", "ko"], c, NOW)
+    assert res == {"https://a.it/vivo": "online", "https://a.it/via": "gone"}  # 403 = dubbio: non si scrive
+    written = json.loads((out / "_liveness.json").read_text(encoding="utf-8"))
+    assert written["results"] == res and written["checkedAt"] == NOW.isoformat()
+    scarica.save_state(out, state, ["a", "ko"])
+    assert json.loads((state / "a.json").read_text(encoding="utf-8"))["events"] == []
+    assert len(json.loads((state / "ko.json").read_text(encoding="utf-8"))["events"]) == 1  # il riferimento di ieri resta

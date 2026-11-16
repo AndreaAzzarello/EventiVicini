@@ -34,7 +34,7 @@ from geo import PROVINCES, enrich, in_viewbox, slugify
 import fetch as httpfetch  # `fetch` è anche una funzione locale di collect()
 from fetch import CONNECT_FAILED
 from geocode import Geocoder
-from liveness import LiveChecker
+from liveness import LiveChecker, read_mac_results
 from netcluster import NetGate, interleave
 from meter import BudgetExceeded, SourceMeter
 from mapping import ROME, content_hash, dedupe_key, html_to_text, is_long_running, one_line
@@ -932,7 +932,9 @@ def _main(argv: list[str] | None = None) -> int:
         with httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=httpx.Timeout(30, connect=CONNECT_TIMEOUT),
                           follow_redirects=True) as live_client:
             if not args.no_liveness:  # controllo di pagina prima di segnare un evento come sparito (#56)
-                checker = LiveChecker(live_client, {ev["sourceUrl"] for ev in events if ev.get("sourceUrl")}, HERE / ".httpcache")
+                mac_results = read_mac_results(args.fonti_mac, now) if args.fonti_mac and args.fonti_mac.is_dir() else {}
+                checker = LiveChecker(live_client, {ev["sourceUrl"] for ev in events if ev.get("sourceUrl")}, HERE / ".httpcache",
+                                      precomputed=mac_results)
             stats = write(events, now, ok_hosts, args.horizon_days, {slugify(SOURCES[n].region) for n in names},
                           max_writes=args.max_writes, max_reads=args.max_reads, excluded={x["id"] for x in excluded},
                           manifest_dir=HERE / "manifests", reconcile=args.reconcile, with_bundles=True, still_online=checker)
