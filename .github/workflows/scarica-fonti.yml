@@ -68,7 +68,7 @@ jobs:
       - name: Scarica
         env:
           PYTHONUNBUFFERED: "1"
-        run: .venv/bin/python scarica.py --list sources/mac-mini.txt --out fonti-mac
+        run: .venv/bin/python scarica.py --list sources/mac-mini.txt --out fonti-mac --state "$HOME/.cache/scarica-fonti"
       - uses: actions/upload-artifact@v6
         with:
           name: fonti-mac

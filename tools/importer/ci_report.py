@@ -306,7 +306,7 @@ def mac_artifact(dest: Path) -> bool:
     except (subprocess.CalledProcessError, OSError, ValueError, KeyError, TypeError, AttributeError) as e:
         print(f"::warning::Dati del Mac non scaricati ({type(e).__name__}): le sue fonti restano saltate.")
         return False
-    print(f"Dati del Mac: run {run['id']} del {run.get('created_at', '?')}, {len(list(dest.glob('*.json')))} file")
+    print(f"Dati del Mac: run {run['id']} del {run.get('created_at', '?')}, {len([f for f in dest.glob('*.json') if not f.name.startswith('_')])} file")
     if path := os.environ.get("GITHUB_OUTPUT"):
         with open(path, "a", encoding="utf-8") as f:
             f.write(f"dir={dest}" + chr(10))

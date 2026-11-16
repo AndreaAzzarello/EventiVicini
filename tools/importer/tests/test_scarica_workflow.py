@@ -28,3 +28,10 @@ def test_il_guard_salta_la_riserva_e_lo_scarica_dipende_da_lui():
 def test_resta_la_concurrency_senza_cancellare_il_run_in_corso():
     assert "group: scarica-fonti" in WF and "cancel-in-progress: false" in WF
 
+
+
+def test_il_mac_ricorda_il_download_precedente_in_casa_sua_senza_segreti():
+    """#70: lo stato sta sul Mac (non nell'artifact e senza token in più): se manca, vale «nel dubbio visibile»."""
+    scarica = WF.split("\n  scarica:\n")[1]
+    assert '--state "$HOME/.cache/scarica-fonti"' in scarica
+    assert "actions: read" not in scarica
