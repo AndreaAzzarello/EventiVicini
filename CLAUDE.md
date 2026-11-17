@@ -6,6 +6,7 @@ Agenda gratuita di eventi pubblici locali (partita da Modena). Dettagli completi
 - `web/`: SvelteKit + `adapter-cloudflare`, deploy su Cloudflare Pages. Lettura Firestore via REST nel Worker (niente Admin SDK).
 - `firebase/`: regole e indici Firestore, test delle regole. Progetto `appeventi-1e860`.
 - `tools/importer/`: importer Python (Plone, WordPress DCI, Design Comuni HTML) lanciato da GitHub Actions.
+- Lo stack non si rimette in discussione senza un motivo nuovo: motivi, alternative scartate e vincoli di revisione in `ClaudeVault\decisioni\eventivicini-stack.md`.
 
 ## Vincoli
 - Firebase resta sul piano Spark (Auth + Firestore; niente Storage, Functions. Hosting solo come redirect 301 verso Pages: `firebase/hosting-redirect` + blocco `hosting` di `firebase/firebase.json`; non disattivarlo, serve a `/__/auth/handler` del login Google). Quote al giorno: 50.000 letture, 20.000 scritture, 20.000 cancellazioni.
