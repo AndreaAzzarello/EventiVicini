@@ -11,6 +11,7 @@
 	import { CATEGORIES, eventPath, PRICE_TYPES, type Event } from '$lib/event';
 	import { fmtNum } from '$lib/format';
 	import { imageSources } from '$lib/images';
+	import { sheet } from '$lib/motion';
 	import CategoryArt from './CategoryArt.svelte';
 
 	// Anteprima di un pin o di un gruppo di eventi nello stesso luogo. Sta fuori da Leaflet (non è un popup):
@@ -21,7 +22,8 @@
 		onpick,
 		onclose,
 		onzoom,
-		onlist
+		onlist,
+		instant
 	}: {
 		group: Event[];
 		active?: Event | null;
@@ -29,6 +31,8 @@
 		onclose: () => void;
 		onzoom: (e: Event) => void;
 		onlist: (e: Event) => void;
+		/** true mentre la mappa si muove: la scheda entra e esce senza animazione. */
+		instant?: () => boolean;
 	} = $props();
 
 	const MAX_LIST = 20;
@@ -56,7 +60,19 @@
 	}
 </script>
 
-<div class="sheet" bind:this={root} role="dialog" aria-modal="false" aria-labelledby="sheet-title" data-testid="map-sheet" data-cat={active?.category}>
+<!-- |local: si anima solo quando la scheda compare o sparisce da sola, non quando la mappa se ne va con la pagina. In uscita è inert: niente clic su un pannello che sta sparendo. -->
+<div
+	class="sheet"
+	bind:this={root}
+	role="dialog"
+	aria-modal="false"
+	aria-labelledby="sheet-title"
+	data-testid="map-sheet"
+	data-cat={active?.category}
+	in:sheet|local={{ token: '--dur-view', instant }}
+	out:sheet|local={{ token: '--dur', instant }}
+	onoutrostart={(e) => ((e.currentTarget as HTMLElement).inert = true)}
+>
 	<button type="button" class="close" aria-label="Chiudi anteprima" onclick={onclose}><X size={20} aria-hidden="true" /></button>
 	{#if active && Icon}
 		{#if group.length > 1}
@@ -120,12 +136,6 @@
 		border-top: 1px solid var(--border);
 		border-radius: var(--radius) var(--radius) 0 0;
 		box-shadow: var(--shadow-overlay);
-		animation: rise var(--dur) var(--ease);
-	}
-	@keyframes rise {
-		from {
-			transform: translateY(100%);
-		}
 	}
 	@media (min-width: 960px) {
 		.sheet {
@@ -136,11 +146,6 @@
 			border: 1px solid var(--border);
 			border-radius: var(--radius);
 			box-shadow: var(--shadow-lift);
-		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.sheet {
-			animation: none;
 		}
 	}
 	.close {
