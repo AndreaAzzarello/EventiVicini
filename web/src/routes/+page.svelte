@@ -240,11 +240,11 @@
 		{#if !needsPlace}
 			<div class="where">
 				<p class="summary" aria-live="polite">
-					{#if (loading && !partial) || pending}Cerco eventi…{:else}<!-- a capo solo tra i gruppi: «vicino a» resta con il luogo -->
-						{#if error}<span class="nowrap">Elenco non disponibile</span>{:else}<span class="nowrap">{count}</span>{/if}
-						<span class="nowrap">{error ? 'per' : 'vicino a'}
+					{#if (loading && !partial) || pending}Cerco eventi…{:else}<!-- a capo solo tra i due gruppi: «N eventi · entro X km» e «da luogo» restano interi -->
+						<span class="nowrap">{error ? 'Elenco non disponibile' : count} · entro {filter.radiusKm} km</span>
+						<span class="nowrap">{error ? 'per' : 'da'}
 							<button type="button" class="place-link" onclick={() => search?.openPlaces()} aria-haspopup="listbox">
-								<MapPin size={16} aria-hidden="true" />{place.label}</button></span> <span class="nowrap">· entro {filter.radiusKm} km</span>{/if}
+								<MapPin size={16} aria-hidden="true" />{place.label}</button></span>{/if}
 				</p>
 				<button type="button" class="btn btn-sm" onclick={locate} disabled={locating}>
 					<LocateFixed size={16} aria-hidden="true" /> Usa la mia posizione
@@ -476,6 +476,16 @@
 	}
 	.intro h1 {
 		margin: 0 0 var(--space-2);
+	}
+	/* Schermi stretti: riquadro più basso, stesso carattere (titolo, motivo a righe) */
+	@media (max-width: 399px) {
+		.intro {
+			margin: var(--space-2) 0;
+			padding: var(--space-2) var(--space-3);
+		}
+		.intro h1 {
+			margin-bottom: var(--space-1);
+		}
 	}
 	.popular {
 		margin: var(--space-4) 0;
