@@ -98,3 +98,29 @@ def test_il_passo_del_mac_viene_prima_dell_importer_e_la_cache_non_cambia():
     assert names.index("Dati del Mac mini") < names.index("Importer")
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "fonti-mac" not in text.split("- name: Dati del Mac mini")[0]  # nessun percorso nuovo nelle cache
+
+
+def test_riepilogo_distingue_file_di_fonti_e_liveness(tmp_path, monkeypatch, out, capsys):
+    """#70: il 17/11 «31 file» non diceva che _liveness.json era vuoto."""
+    (tmp_path / "x").mkdir()
+    files = [f"f{i}.json" for i in range(3)]
+
+    def fake(cmd, **kw):
+        r = FakeGh(runs=[{"id": 7, "created_at": "2026-11-17T06:45:45Z"}], files=files)(cmd, **kw)
+        if cmd[1] != "api":
+            (Path(cmd[cmd.index("-D") + 1]) / "_liveness.json").write_text(
+                json.dumps({"version": 1, "checkedAt": "2026-11-17T06:46:07+00:00", "results": {"u": "gone", "v": "online"}}), encoding="utf-8")
+        return r
+    monkeypatch.setattr(ci_report.subprocess, "run", fake)
+    assert ci_report.mac_artifact(tmp_path / "x" / "m") is True
+    assert "3 file di fonti + _liveness.json (2 verdetti, generato alle 06:46 UTC)" in capsys.readouterr().out
+
+
+def test_riepilogo_liveness_assente_o_illeggibile(tmp_path):
+    for n in ("a", "b"):
+        (tmp_path / f"{n}.json").write_text("{}", encoding="utf-8")
+    assert ci_report.describe_mac_dir(tmp_path) == "2 file di fonti, _liveness.json assente"
+    (tmp_path / "_liveness.json").write_text("{", encoding="utf-8")
+    assert ci_report.describe_mac_dir(tmp_path) == "2 file di fonti, _liveness.json illeggibile"
+    (tmp_path / "_liveness.json").write_text(json.dumps({"checkedAt": "2026-11-17T06:46:07+00:00", "results": {}}), encoding="utf-8")
+    assert ci_report.describe_mac_dir(tmp_path) == "2 file di fonti + _liveness.json (0 verdetti, generato alle 06:46 UTC)"
