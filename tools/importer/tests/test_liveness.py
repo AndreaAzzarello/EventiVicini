@@ -205,3 +205,38 @@ def test_skipped_del_mac_e_neutro_per_la_regola_dei_2_giri():
     plan = plan_writes([], {"id1": doc0}, {"comune.example.it"}, NOW, 60 * DAY,
                        still_online=LiveChecker(client, set(), None, mac_hosts={"comune.example.it"}))
     assert plan["stale"] == {} and plan["write"] == []
+
+
+def _src(base, url_eventi="", regional=False):
+    from types import SimpleNamespace
+    return SimpleNamespace(base=base, url_eventi=url_eventi, regional=regional)
+
+
+def test_host_del_mac_da_mac_mini_txt_e_host_condivisi():
+    """#70: gli host vengono dall'elenco del Mac (non dall'artifact) e un host condiviso con fonti normali si segnala."""
+    from run import mac_host_info
+    sources = {"jesolo": _src("https://www.comune.jesolo.ve.it", "https://www.comune.jesolo.ve.it/eventi"),
+               "altra": _src("https://comune.altra.it"),
+               "gemella": _src("https://COMUNE.jesolo.ve.it"),  # stesso sito, senza www e in maiuscolo
+               "unione": _src("https://unione.example.it", "https://www.comune.jesolo.ve.it/agenda"),
+               "regione": _src("https://www.comune.jesolo.ve.it", regional=True)}
+    hosts, shared = mac_host_info(sources, ["jesolo", "inesistente"])
+    assert hosts == {"comune.jesolo.ve.it"}
+    assert shared == {"comune.jesolo.ve.it": ["gemella", "unione"]}  # la regionale e le fonti del Mac non contano
+    assert mac_host_info(sources, ["altra"]) == ({"comune.altra.it"}, {})
+
+
+def test_log_verdetti_dal_mac_e_host_condiviso(caplog):
+    import logging
+    from run import log_mac_verdicts
+    client = httpx.Client(transport=httpx.MockTransport(_no_requests), follow_redirects=True)
+    c = LiveChecker(client, set(), None, precomputed={f"{BASE}/eventi/a": "online"}, mac_hosts={"comune.example.it"})
+    c(f"{BASE}/eventi/a")
+    c(f"{BASE}/eventi/b")
+    c(f"{BASE}/eventi/c")
+    with caplog.at_level(logging.INFO, logger="importer"):
+        log_mac_verdicts(c, 5, {"comune.example.it": ["gemella"]})
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "Verdetti dal Mac: 5 letti, 1 usati, 2 mancanti" in text
+    assert "host del Mac condiviso con: gemella (comune.example.it)" in text
+    assert c.fetcher.requests == 0  # host condiviso: nessuna richiesta da GitHub

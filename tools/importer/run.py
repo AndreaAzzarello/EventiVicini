@@ -345,6 +345,27 @@ def source_hosts(source) -> set[str]:
     return {urlsplit(u).netloc for u in urls if u}
 
 
+def mac_host_info(sources: dict, mac_names: list[str]) -> tuple[set[str], dict[str, list[str]]]:
+    """(host delle fonti del Mac, {host: altre fonti NON del Mac che lo usano}). Per gli host del Mac GitHub non fa richieste di
+    controllo pagina (#70); se un host è condiviso con fonti normali la scelta resta prudente ma va resa visibile nel log."""
+    hosts = {host_key(h) for n in mac_names if n in sources for h in source_hosts(sources[n])}
+    shared: dict[str, set[str]] = {}
+    for n, a in sources.items():
+        if n in mac_names or getattr(a, "regional", False):
+            continue
+        for h in source_hosts(a):
+            if host_key(h) in hosts:
+                shared.setdefault(host_key(h), set()).add(n)
+    return hosts, {h: sorted(v) for h, v in sorted(shared.items())}
+
+
+def log_mac_verdicts(checker, read: int, shared: dict[str, list[str]]) -> None:
+    """Riga fissa dell'import: quanti verdetti del Mac letti, usati, mancanti (#70), e gli host condivisi con altre fonti."""
+    log.info("Verdetti dal Mac: %d letti, %d usati, %d mancanti", read, checker.stats["mac"], checker.stats["mac_missing"])
+    for host, others in shared.items():
+        log.warning("host del Mac condiviso con: %s (%s): nessuna richiesta di controllo da GitHub, nel dubbio visibile", ", ".join(others), host)
+
+
 def stale_updates(docs: dict[str, dict], seen_ids: set[str], ok_hosts: set[str], now_ms: int,
                   horizon_ms: int, still_online=None) -> dict[str, dict]:
     """Aggiornamenti per gli eventi scraper non ancora finiti che la loro fonte non pubblica più.
@@ -933,8 +954,12 @@ def _main(argv: list[str] | None = None) -> int:
                           follow_redirects=True) as live_client:
             if not args.no_liveness:  # controllo di pagina prima di segnare un evento come sparito (#56)
                 mac_results = read_mac_results(args.fonti_mac, now) if args.fonti_mac and args.fonti_mac.is_dir() else {}
+                from scarica import read_list
+                mac_hosts, mac_shared = mac_host_info(SOURCES, read_list())  # anche senza artifact: niente richieste (#70)
+                if not mac_results:
+                    log.warning("Verdetti del Mac assenti, scaduti o vuoti: le pagine delle sue fonti restano visibili, senza richieste")
                 checker = LiveChecker(live_client, {ev["sourceUrl"] for ev in events if ev.get("sourceUrl")}, HERE / ".httpcache",
-                                      precomputed=mac_results)
+                                      precomputed=mac_results, mac_hosts=mac_hosts)
             stats = write(events, now, ok_hosts, args.horizon_days, {slugify(SOURCES[n].region) for n in names},
                           max_writes=args.max_writes, max_reads=args.max_reads, excluded={x["id"] for x in excluded},
                           manifest_dir=HERE / "manifests", reconcile=args.reconcile, with_bundles=True, still_online=checker)
@@ -942,6 +967,7 @@ def _main(argv: list[str] | None = None) -> int:
         log.error("%s", e)
         return 2
     if checker is not None:
+        log_mac_verdicts(checker, len(mac_results), mac_shared)
         log.info("Controllo pagine degli eventi non più in lista: %s", ", ".join(f"{k} {v}" for k, v in checker.stats.items()))
         if checker.unknown_by_host:
             log.info("Pagine «unknown» per host (motivo, numero): %s", checker.unknown_summary())
