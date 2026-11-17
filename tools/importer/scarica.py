@@ -8,7 +8,9 @@ Un file per fonte, con l'ora del download: chi lo rilegge decide per ogni fonte 
 
 Con --state il Mac ricorda l'ultimo download riuscito di ogni fonte e ricontrolla (404/410/redirect = sparita) le pagine
 degli eventi che oggi non sono più in lista: l'esito per URL va in <out>/_liveness.json e l'importer lo usa al posto della
-richiesta dal runner GitHub, che quelle pagine non le raggiunge (#70). Senza stato o senza esito vale «nel dubbio visibile».
+richiesta dal runner GitHub, che quelle pagine non le raggiunge (#70). Gli spariti restano «pendenti» in <state>/_pending.json
+(fino a 2 verdetti `gone`, alla fine dell'evento o dopo 14 giorni), così il secondo giro della pulizia trova il verdetto anche
+il giorno dopo. Senza stato o senza esito vale «nel dubbio visibile»: GitHub non rifà mai il controllo per queste fonti.
 """
 
 from __future__ import annotations
@@ -38,6 +40,8 @@ LIST_FILE = HERE / "sources" / "mac-mini.txt"
 # Secondi per fonte: dal Mac le fonti sane impiegano 5-45 s (misure del 12/11); oltre 3 minuti la fonte è bloccata, si segna in errore e si passa alla prossima.
 SOURCE_BUDGET = 180
 LIVENESS_FILE = "_liveness.json"
+PENDING_FILE = "_pending.json"  # nello stato del Mac: eventi spariti da ricontrollare nei giorni dopo (non va nell'artifact)
+PENDING_MAX_DAYS = 14
 MAX_GONE_CHECKS = 150  # richieste di controllo per run: oltre, gli altri URL restano «nel dubbio visibili»
 
 
@@ -97,38 +101,106 @@ def _read_ok(path: Path) -> dict | None:
     return doc if isinstance(doc, dict) and doc.get("ok") else None
 
 
-def gone_candidates(state: Path, out: Path, names: list[str], now_ms: int) -> tuple[list[str], set[str]]:
-    """(URL da ricontrollare, URL di oggi). Candidati: eventi non ancora finiti del download precedente che la stessa fonte,
-    riuscita anche oggi, non elenca più. Una fonte fallita oggi o ieri non ha candidati (non si sa cosa sia sparito)."""
-    candidates: list[str] = []
+def _load_pending(state: Path) -> dict[str, dict]:
+    """url → {source, endTime, since, gone}: eventi spariti da una lista e non ancora chiusi; {} se il file manca o è guasto."""
+    try:
+        doc = json.loads((state / PENDING_FILE).read_text(encoding="utf-8"))
+        items = doc["items"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+    if not isinstance(items, dict):
+        return {}
+    num = (int, float)
+    return {u: {"source": e["source"], "endTime": int(e["endTime"]), "since": int(e["since"]), "gone": int(e["gone"])}
+            for u, e in items.items() if isinstance(u, str) and isinstance(e, dict) and isinstance(e.get("source"), str)
+            and all(isinstance(e.get(k), num) and not isinstance(e.get(k), bool) for k in ("endTime", "since", "gone"))}
+
+
+def _save_pending(state: Path, items: dict[str, dict]) -> None:
+    state.mkdir(parents=True, exist_ok=True)
+    tmp = state / (PENDING_FILE + ".tmp")
+    tmp.write_text(json.dumps({"version": VERSION, "items": items}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    tmp.replace(state / PENDING_FILE)
+
+
+def collect_candidates(state: Path, out: Path, names: list[str], now_ms: int,
+                       pending: dict[str, dict] | None = None) -> tuple[list[tuple[str, str, int]], set[str]]:
+    """([(url, fonte, fine evento)] dal più vicino, URL di oggi). Candidati: eventi non ancora finiti del download precedente che
+    la stessa fonte, riuscita anche oggi, non elenca più, più i «pendenti» dei giorni scorsi (stato `_pending.json`) che non sono
+    ricomparsi: così un evento sparito ieri si ricontrolla anche oggi e domani (2° verdetto), non solo il giorno dopo la sparizione.
+    Una fonte fallita oggi o ieri non ha candidati (non si sa cosa sia sparito)."""
+    found: dict[str, tuple[str, int]] = {}
     today_urls: set[str] = set()
+    ok_today: set[str] = set()
     for name in names:
         today = _read_ok(out / f"{name}.json")
         if today is None:
             continue
+        ok_today.add(name)
         now_urls = {e["sourceUrl"] for e in today["events"] if e.get("sourceUrl")}
         today_urls |= now_urls
         before = _read_ok(state / f"{name}.json")
         for e in (before or {}).get("events", []):
             url = e.get("sourceUrl")
-            if url and url not in now_urls and (e.get("endTime") or e.get("startTime") or now_ms) >= now_ms and url not in candidates:
-                candidates.append(url)
-    return candidates, today_urls
+            when = int(e.get("endTime") or e.get("startTime") or now_ms)
+            if url and url not in now_urls and when >= now_ms and url not in found:
+                found[url] = (name, when)
+    for url, e in (pending or {}).items():
+        if url not in found and url not in today_urls and e["source"] in ok_today and e["endTime"] >= now_ms:
+            found[url] = (e["source"], e["endTime"])
+    return [(u, n, w) for u, (n, w) in sorted(found.items(), key=lambda kv: (kv[1][1], kv[0]))], today_urls
+
+
+def gone_candidates(state: Path, out: Path, names: list[str], now_ms: int,
+                    pending: dict[str, dict] | None = None) -> tuple[list[str], set[str]]:
+    """(URL da ricontrollare, URL di oggi): vedi collect_candidates."""
+    cands, today_urls = collect_candidates(state, out, names, now_ms, pending)
+    return [u for u, _, _ in cands], today_urls
+
+
+def next_pending(old: dict[str, dict], checked: list[tuple[str, str, int]], verdicts: dict[str, str], names: list[str],
+                 today_urls: set[str], now_ms: int) -> dict[str, dict]:
+    """Nuovo elenco dei pendenti. Esce chi è ricomparso, finito, risultato `gone` per la 2ª volta o pendente da oltre
+    PENDING_MAX_DAYS giorni; un dubbio (nessun esito) non azzera né conta. I pendenti di una fonte oggi fallita restano."""
+    items: dict[str, dict] = {}
+    for url, e in old.items():
+        if url not in today_urls and e["endTime"] >= now_ms and e["source"] in names:
+            items[url] = dict(e)
+    for url, name, when in checked:
+        e = items.get(url) or {"source": name, "endTime": when, "since": now_ms, "gone": 0}
+        if verdicts.get(url) == "gone":
+            e["gone"] += 1
+        items[url] = e
+    return {u: e for u, e in items.items() if e["gone"] < 2 and now_ms - e["since"] <= PENDING_MAX_DAYS * 86_400_000}
 
 
 def check_gone(out: Path, state: Path, names: list[str], client: httpx.Client, now: datetime,
                max_checks: int = MAX_GONE_CHECKS) -> dict[str, str]:
     """Ricontrolla i candidati e scrive <out>/_liveness.json con gli esiti certi (online | gone); gli altri non si scrivono."""
-    candidates, today_urls = gone_candidates(state, out, names, int(now.timestamp() * 1000))
+    now_ms = int(now.timestamp() * 1000)
+    first_run = not state.exists() or not any(state.glob("*.json"))
+    old_pending = _load_pending(state)
+    candidates, today_urls = collect_candidates(state, out, names, now_ms, old_pending)
+    if first_run:
+        log.info("Controllo pagine spariti: nessuno stato precedente, primo giro: niente da ricontrollare oggi")
     checker = LiveChecker(client, today_urls, None, max_checks)
     results: dict[str, str] = {}
-    for url in candidates:
+    verdicts: dict[str, str] = {}
+    per_source: dict[str, dict[str, int]] = {}
+    for url, name, _ in candidates:
         v = checker.verdict(url)
+        verdicts[url] = v
         if v in ("online", "gone"):
             results[url] = v
+        c = per_source.setdefault(name, {"online": 0, "gone": 0, "dubbi": 0})
+        c[v if v in ("online", "gone") else "dubbi"] += 1
     doc = {"version": VERSION, "checkedAt": now.isoformat(), "results": results}
     (out / LIVENESS_FILE).write_text(json.dumps(doc, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    log.info("Controllo pagine spariti: %d candidati, %d esiti (%s); %d dubbi", len(candidates), len(results),
+    _save_pending(state, next_pending(old_pending, candidates, verdicts, names, today_urls, now_ms))
+    for name, c in sorted(per_source.items()):
+        log.info("%s: %d pagine controllate (online %d, gone %d, dubbi %d)", name, sum(c.values()), c["online"], c["gone"], c["dubbi"])
+    log.info("Controllo pagine spariti: %d candidati (%d già pendenti), %d esiti (%s); %d dubbi", len(candidates),
+             sum(1 for u, _, _ in candidates if u in old_pending), len(results),
              ", ".join(f"{k} {v}" for k, v in checker.stats.items() if v), checker.stats["unknown"])
     if checker.unknown_by_host:
         log.info("Pagine «unknown» per host (motivo, numero): %s", checker.unknown_summary())
