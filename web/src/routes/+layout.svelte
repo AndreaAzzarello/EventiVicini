@@ -360,6 +360,14 @@
 		background: var(--text);
 		color: var(--bg);
 		box-shadow: var(--shadow-overlay);
+		/* Entrata: dissolvenza e pochi px dal basso. Senza @starting-style il messaggio appare subito. L'uscita resta istantanea. */
+		transition:
+			opacity var(--dur) var(--ease),
+			transform var(--dur) var(--ease);
+		@starting-style {
+			opacity: 0;
+			transform: translateY(var(--space-1));
+		}
 	}
 	.toast span {
 		flex: 1;
