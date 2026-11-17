@@ -5,6 +5,7 @@ Formato ispirato a [Keep a Changelog](https://keepachangelog.com/it/). Le versio
 ## [Non rilasciato]
 
 ### Aggiunto
+- Micro-movimento, senza librerie: battito del cuore quando si aggiunge un preferito (CSS), uscita e entrata della scheda mappa con `svelte/transition` (durate lette dai token da `lib/motion.ts`, nessuna animazione durante trascinamento o zoom), entrata dei toast con `@starting-style`. Con `prefers-reduced-motion` tutto a durata zero. Alla chiusura della scheda il focus torna al marker solo se era nella scheda. Controllo in `design.test.ts` contro le durate fisse nei parametri delle transizioni Svelte, ed e2e `motion.spec.ts`.
 - Movimento: passaggio card → dettaglio evento con le View Transitions (il riquadro della card si allarga nella testata), senza librerie né cookie; solo da clic su un collegamento, con supporto del browser e senza `prefers-reduced-motion`. Token `--dur-view` (250 ms), voce «Movimento» in `DESIGN.md`, controllo delle durate in `design.test.ts` ed e2e `view-transition.spec.ts`.
 - Ricerca su tutti i comuni italiani (~7.900, da ISTAT e Wikidata): file statico caricato al primo uso della barra, nomi bilingui, abbreviazioni (S. / San), omonimi con la sigla della provincia, `?luogo=` per qualsiasi comune senza letture Firestore.
 - Raggio allargato in automatico (50 o 100 km) dove non ci sono eventi vicini, con avviso; senza eventi nemmeno a 100 km, messaggio e comuni più vicini.
