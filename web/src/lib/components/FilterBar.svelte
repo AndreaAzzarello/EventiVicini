@@ -144,6 +144,10 @@
 		padding: 2px;
 		margin: 0;
 		scrollbar-width: none;
+		/* Indizio di scorrimento: gli ultimi chip sfumano a destra (maschera alfa, vale in tema chiaro e scuro). Il padding finale porta l'ultimo chip fuori dalla sfumatura. */
+		padding-inline-end: var(--space-6);
+		-webkit-mask-image: linear-gradient(to right, black calc(100% - var(--space-6)), transparent);
+		mask-image: linear-gradient(to right, black calc(100% - var(--space-6)), transparent);
 	}
 	.row > * {
 		flex: none;
@@ -164,12 +168,30 @@
 	.select-chip {
 		position: relative; /* contiene il testo visually-hidden: fuori dallo scroller allargherebbe la pagina */
 	}
+	/* Stessa altezza dei chip: Safari su iPhone ignora min-height sui select nativi, quindi aspetto proprio e height fissa */
 	.select-chip select {
+		-webkit-appearance: none;
+		appearance: none;
+		box-sizing: border-box;
+		height: var(--control);
 		min-height: var(--control);
 		width: auto;
-		padding: var(--space-1) var(--space-6) var(--space-1) var(--space-3);
+		padding: 0 var(--space-6) 0 var(--space-3);
 		border-radius: var(--radius);
-		font-size: var(--text-sm);
+		font: var(--fw-regular) var(--text-sm)/var(--lh-tight) var(--font-body);
+	}
+	.select-chip::after {
+		content: '';
+		position: absolute;
+		top: 50%;
+		right: var(--space-3);
+		width: var(--space-3);
+		height: var(--space-3);
+		transform: translateY(-50%);
+		background: var(--muted);
+		-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+		mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+		pointer-events: none;
 	}
 	.reset {
 		border-style: dashed;
@@ -197,6 +219,9 @@
 		.row {
 			flex-wrap: wrap;
 			overflow: visible;
+			padding-inline-end: 2px;
+			-webkit-mask-image: none;
+			mask-image: none;
 		}
 		.sep {
 			display: none;
