@@ -17,7 +17,7 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -286,6 +286,21 @@ def load_sizes(path: Path) -> dict[str, int]:
         return {}  # cache assente: vale la sola proporzione in fonti
 
 
+def describe_mac_dir(dest: Path) -> str:
+    """«31 file di fonti + _liveness.json (N verdetti, generato alle HH:MM UTC)»: i file delle fonti e, a parte, i verdetti sulle
+    pagine sparite (#70). Un _liveness.json assente o illeggibile si dice, non si nasconde nel conteggio."""
+    files = len([f for f in dest.glob("*.json") if not f.name.startswith("_")])
+    try:
+        doc = json.loads((dest / "_liveness.json").read_text(encoding="utf-8"))
+        n = len(doc["results"])
+        at = datetime.fromisoformat(doc["checkedAt"]).astimezone(timezone.utc)
+        return f"{files} file di fonti + _liveness.json ({n} verdetti, generato alle {at:%H:%M} UTC)"
+    except FileNotFoundError:
+        return f"{files} file di fonti, _liveness.json assente"
+    except (OSError, ValueError, KeyError, TypeError):
+        return f"{files} file di fonti, _liveness.json illeggibile"
+
+
 def mac_artifact(dest: Path) -> bool:
     """Scarica in `dest` l'artifact `fonti-mac` dell'ultimo run riuscito di scarica-fonti.yml su main (#54) e scrive `dir=` in
     GITHUB_OUTPUT. Senza segreti. Qualunque problema (nessun run, nessun artifact scaduto, rete) non ferma l'import: le fonti del
@@ -306,7 +321,7 @@ def mac_artifact(dest: Path) -> bool:
     except (subprocess.CalledProcessError, OSError, ValueError, KeyError, TypeError, AttributeError) as e:
         print(f"::warning::Dati del Mac non scaricati ({type(e).__name__}): le sue fonti restano saltate.")
         return False
-    print(f"Dati del Mac: run {run['id']} del {run.get('created_at', '?')}, {len([f for f in dest.glob('*.json') if not f.name.startswith('_')])} file")
+    print(f"Dati del Mac: run {run['id']} del {run.get('created_at', '?')}, {describe_mac_dir(dest)}")
     if path := os.environ.get("GITHUB_OUTPUT"):
         with open(path, "a", encoding="utf-8") as f:
             f.write(f"dir={dest}" + chr(10))

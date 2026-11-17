@@ -138,3 +138,83 @@ def test_esiti_certi_in_liveness_json_e_stato_aggiornato_solo_per_le_fonti_riusc
     scarica.save_state(out, state, ["a", "ko"])
     assert json.loads((state / "a.json").read_text(encoding="utf-8"))["events"] == []
     assert len(json.loads((state / "ko.json").read_text(encoding="utf-8"))["events"]) == 1  # il riferimento di ieri resta
+
+
+def _day(tmp_path, n):
+    return tmp_path / f"out{n}", tmp_path / "state"
+
+
+def _site(vivo=(), via=()):
+    def handler(req):
+        if req.url.path == "/robots.txt":
+            return httpx.Response(404)
+        if req.url.path in vivo:
+            return httpx.Response(200, text="ok")
+        return httpx.Response(404) if req.url.path in via else httpx.Response(403)
+    return httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+
+
+def test_primo_giro_senza_stato_log_e_nessun_candidato(tmp_path, caplog):
+    """#70 (ipotesi a): il 17/11 lo stato era vuoto, 0 candidati senza dirlo. Ora il log lo spiega."""
+    import logging
+    out, state = _day(tmp_path, 1)
+    _write(out, "a", _doc(["https://a.it/1"]))
+    with caplog.at_level(logging.INFO, logger="importer"):
+        assert scarica.check_gone(out, state, ["a"], _site(), NOW) == {}
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "primo giro" in text and "0 candidati" in text
+    assert json.loads((out / "_liveness.json").read_text(encoding="utf-8"))["results"] == {}
+
+
+def test_sparito_resta_pendente_e_ottiene_il_secondo_verdetto_il_giorno_dopo(tmp_path, caplog):
+    """Il giorno 2 l'URL non è più nel file del giorno 1: senza stato dei pendenti il secondo giro non avrebbe verdetto."""
+    import logging
+    from datetime import timedelta
+    state = tmp_path / "state"
+    d1, d2, d3 = tmp_path / "d1", tmp_path / "d2", tmp_path / "d3"
+    _write(state, "a", _doc(["https://a.it/uno", "https://a.it/due"]))
+    _write(d1, "a", _doc(["https://a.it/due"]))  # giorno 1: uno è sparito dalla lista
+    with caplog.at_level(logging.INFO, logger="importer"):
+        r1 = scarica.check_gone(d1, state, ["a"], _site(via=["/uno"]), NOW)
+    assert r1 == {"https://a.it/uno": "gone"}
+    assert "a: 1 pagine controllate (online 0, gone 1, dubbi 0)" in "\n".join(r.getMessage() for r in caplog.records)
+    scarica.save_state(d1, state, ["a"])
+    _write(d2, "a", _doc(["https://a.it/due"]))  # giorno 2: stesso elenco, «uno» non è nemmeno nel file di ieri
+    r2 = scarica.check_gone(d2, state, ["a"], _site(via=["/uno"]), NOW + timedelta(days=1))
+    assert r2 == {"https://a.it/uno": "gone"}  # 2° verdetto: è ancora candidato grazie ai pendenti
+    scarica.save_state(d2, state, ["a"])
+    _write(d3, "a", _doc(["https://a.it/due"]))
+    assert scarica.check_gone(d3, state, ["a"], _site(via=["/uno"]), NOW + timedelta(days=2)) == {}  # 2 gone: uscito dai pendenti
+
+
+def test_pendente_esce_se_ricompare_finisce_o_scade_e_un_dubbio_non_conta(tmp_path):
+    now_ms = int(NOW.timestamp() * 1000)
+    day = 86_400_000
+    old = {"https://a.it/torna": {"source": "a", "endTime": now_ms + day, "since": now_ms - day, "gone": 0},
+           "https://a.it/finito": {"source": "a", "endTime": now_ms - 1, "since": now_ms - day, "gone": 0},
+           "https://a.it/vecchio": {"source": "a", "endTime": now_ms + day, "since": now_ms - 15 * day, "gone": 0},
+           "https://a.it/boh": {"source": "a", "endTime": now_ms + day, "since": now_ms - day, "gone": 1},
+           "https://k.it/giu": {"source": "k", "endTime": now_ms + day, "since": now_ms - day, "gone": 1}}
+    checked = [("https://a.it/boh", "a", now_ms + day), ("https://a.it/nuovo", "a", now_ms + day)]
+    new = scarica.next_pending(old, checked, {"https://a.it/boh": "unknown", "https://a.it/nuovo": "online"}, ["a", "k"],
+                               {"https://a.it/torna"}, now_ms)
+    assert set(new) == {"https://a.it/boh", "https://a.it/nuovo", "https://k.it/giu"}  # k fallita oggi: il pendente resta
+    assert new["https://a.it/boh"]["gone"] == 1  # dubbio: né +1 né azzerato
+
+
+def test_fonte_fallita_oggi_non_ricontrolla_i_pendenti(tmp_path):
+    state, out = tmp_path / "state", tmp_path / "out"
+    now_ms = int(NOW.timestamp() * 1000)
+    _write(state, "a", _doc([]))
+    _write(out, "a", _doc([], ok=False))
+    pend = {"https://a.it/x": {"source": "a", "endTime": now_ms + 1000, "since": now_ms, "gone": 0}}
+    assert scarica.gone_candidates(state, out, ["a"], now_ms, pend) == ([], set())
+
+
+def test_candidati_ordinati_dal_piu_vicino(tmp_path):
+    state, out = tmp_path / "state", tmp_path / "out"
+    now_ms = int(NOW.timestamp() * 1000)
+    _write(state, "a", {"ok": True, "events": [{"sourceUrl": "https://a/lontano", "endTime": now_ms + 9 * 86_400_000},
+                                               {"sourceUrl": "https://a/vicino", "endTime": now_ms + 86_400_000}]})
+    _write(out, "a", _doc([]))
+    assert scarica.gone_candidates(state, out, ["a"], now_ms)[0] == ["https://a/vicino", "https://a/lontano"]
