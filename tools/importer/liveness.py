@@ -9,6 +9,8 @@ per host, ETag come nell'adapter):
 Eccezione: un doppione WordPress («…-copy») il cui originale è nella lista di oggi si nasconde comunque.
 Le pagine delle fonti del Mac mini il runner GitHub non le raggiunge (403, timeout): le controlla il Mac (scarica.py,
 `_liveness.json` nell'artifact) e qui si usa il suo esito, `online` o `gone`, al posto della richiesta (#70).
+Per gli host delle fonti del Mac (`mac_hosts`) GitHub non fa MAI richieste: senza esito del Mac la pagina è «skipped», cioè
+resta visibile. L'esito è neutro per la regola dei 2 giri: non conta come giro mancante e non azzera il contatore (#70).
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from fetch import Blocked, Fetcher, RobotsUnknown
+from registry import host_key
 
 log = logging.getLogger("importer")
 MAX_CHECKS = 300  # richieste di controllo per import: oltre, nel dubbio l'evento resta visibile
@@ -56,13 +59,14 @@ class LiveChecker:
     """Callable url → True se l'evento va tenuto visibile. Un'istanza per import: ricorda gli esiti."""
 
     def __init__(self, client: httpx.Client, seen_urls: set[str], cache_dir: Path | None = None, max_checks: int = MAX_CHECKS,
-                 precomputed: dict[str, str] | None = None):
+                 precomputed: dict[str, str] | None = None, mac_hosts: set[str] | frozenset[str] = frozenset()):
         self.fetcher = Fetcher(client, cache_dir=cache_dir, retries=1, backoff=3.0)
         self.seen = {_norm(u) for u in seen_urls}
         self.max_checks = max_checks
         self.done: dict[str, bool] = {}
         self.precomputed = {_norm(u): v for u, v in (precomputed or {}).items() if v in ("online", "gone")}  # esiti del Mac (#70)
-        self.stats = {"online": 0, "gone": 0, "unknown": 0, "duplicates": 0, "skipped": 0, "mac": 0}
+        self.mac_hosts = {host_key(h) for h in mac_hosts}  # host serviti dal Mac: nessuna richiesta da GitHub (#70)
+        self.stats = {"online": 0, "gone": 0, "unknown": 0, "duplicates": 0, "skipped": 0, "mac": 0, "mac_missing": 0}
         self.unknown_by_host: dict[str, dict[str, int]] = {}  # host → motivo → quante pagine (#70)
 
     def _unknown(self, url: str, reason: str) -> bool:
@@ -97,6 +101,10 @@ class LiveChecker:
         if pre:  # lo ha già controllato il Mac, da un IP che il sito non blocca
             self.stats["mac"] += 1
             return pre
+        if host_key(url) in self.mac_hosts:  # fonte del Mac senza esito: nessuna richiesta, nel dubbio visibile
+            self.stats["mac_missing"] += 1
+            log.info("controllo pagina %s: fonte del Mac senza esito, resta visibile (nessuna richiesta)", url)
+            return "skipped"
         if self.fetcher.requests >= self.max_checks:
             self.stats["skipped"] += 1
             return "skipped"
