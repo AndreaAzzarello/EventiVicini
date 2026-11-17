@@ -515,9 +515,15 @@
 	.hint:empty {
 		display: none;
 	}
+	/* Selettore Lista/Mappa (< 960 px): sempre raggiungibile, agganciato sotto l'header. Sotto header e dialog (1000), sopra la lista;
+	   i z-index di Leaflet restano dentro la mappa (isolation in EventsMap), quindi non lo coprono. */
 	.toolbar {
-		display: flex;
-		margin: var(--space-3) 0;
+		position: sticky;
+		top: var(--header-offset);
+		z-index: 900;
+		margin: var(--space-3) 0 0;
+		padding: var(--space-2) 0;
+		background: var(--bg);
 	}
 	.widened {
 		margin: 0 0 var(--space-3);
@@ -563,29 +569,39 @@
 		outline: 2px solid var(--focus);
 		outline-offset: 2px;
 	}
+	/* Controllo segmentato a tutta larghezza, due metà uguali. Attiva: piena (--text su --bg, come i toast: AA nei due temi); inattiva: neutra, peso normale. */
 	.tabs {
-		display: inline-flex;
-		padding: var(--space-1);
-		border-radius: var(--radius);
-		background: var(--surface-2);
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		height: var(--control);
 		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--surface);
+		overflow: hidden;
 	}
 	.tabs button {
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
 		gap: var(--space-2);
-		min-height: var(--control-sm);
 		padding: 0 var(--space-3);
-		border: none;
-		border-radius: var(--radius-sm);
+		border: 0;
 		background: none;
 		color: var(--text);
-		font: var(--fw-strong) var(--text-sm) var(--font-body);
+		font: var(--fw-regular) var(--text-md)/var(--lh-tight) var(--font-body);
 		cursor: pointer;
+		transition:
+			background-color var(--dur) var(--ease),
+			color var(--dur) var(--ease);
+	}
+	.tabs button:focus-visible {
+		outline: 2px solid var(--focus);
+		outline-offset: calc(var(--space-1) * -1);
 	}
 	.tabs [aria-selected='true'] {
-		background: var(--surface);
-		color: var(--accent);
+		background: var(--text);
+		color: var(--bg);
+		font-weight: var(--fw-strong);
 	}
 	/* Passando da lista a mappa il riquadro appare con una dissolvenza (con movimento ridotto è istantanea, vedi app.css) */
 	.list-pane,

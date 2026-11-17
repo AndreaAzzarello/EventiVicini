@@ -20,6 +20,8 @@
 	--control-sm: 32px;
 	--control: 48px;
 	--header-h: 64px;
+	/* Dove si agganciano gli elementi sticky sotto l'header (che ha anche il padding della safe area in alto) */
+	--header-offset: calc(var(--header-h) + env(safe-area-inset-top));
 
 	/* Larghezze dei contenitori */
 	--w-prose: 760px;
