@@ -41,6 +41,9 @@
 	let markers: Record<string, import('leaflet').Marker> = {};
 	let mounted: ReturnType<typeof mount>[] = [];
 	let fitting = false;
+	/** Mappa in trascinamento o zoom: la scheda non si anima. */
+	let moving = false;
+	let wrap: HTMLDivElement;
 	let failed = $state(false);
 	/** Vista corrente, esposta come data-* per i test E2E. */
 	let view = $state<{ lat: number; lng: number; zoom: number } | null>(null);
@@ -60,7 +63,9 @@
 				map = baseMap(lib, el);
 				// In basso c'è l'anteprima: l'attribuzione OSM (obbligatoria) sale in alto a destra.
 				map.attributionControl.setPosition('topright');
-				map.on('click', () => close(false));
+				map.on('click', () => close());
+				map.on('movestart zoomstart', () => (moving = true));
+				map.on('moveend zoomend', () => (moving = false));
 				// Guardie su `map`: un evento in coda dopo lo smontaggio non deve toccare una mappa già rimossa.
 				map.on('moveend', () => {
 					if (!map) return;
@@ -102,13 +107,16 @@
 		if (sel) open(sel.group, id);
 	}
 
-	function close(refocus = true) {
+	/** Chiude l'anteprima. Il focus torna al marker solo se era nella scheda (tasto, Esc, Chiudi); dopo un tocco sulla mappa resta dov'è. */
+	function close() {
 		if (!sel) return;
 		const back = origin;
+		const active = document.activeElement;
+		const inSheet = !!active && !!wrap.querySelector('[data-testid="map-sheet"]')?.contains(active);
 		sel = null;
 		onselect?.(null);
 		applyHighlight();
-		if (refocus && back) markers[back]?.getElement()?.focus({ preventScroll: true });
+		if (inSheet && back) markers[back]?.getElement()?.focus({ preventScroll: true });
 	}
 
 	function zoomTo(e: Event) {
@@ -221,13 +229,13 @@
 
 	// Un filtro che toglie gli eventi aperti chiude l'anteprima.
 	$effect(() => {
-		if (sel && !groupEvents.length) close(false);
+		if (sel && !groupEvents.length) close();
 	});
 </script>
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && sel && close()} />
 
-<div class="wrap">
+<div class="wrap" bind:this={wrap}>
 	<div
 		bind:this={el}
 		class="map"
@@ -239,7 +247,7 @@
 		data-selected={sel?.id ?? (sel ? 'gruppo' : undefined)}
 	></div>
 	{#if sel && groupEvents.length}
-		<MapSheet group={groupEvents} active={activeEvent} onpick={pick} onclose={() => close()} onzoom={zoomTo} onlist={(e) => onlist?.(e.id)} />
+		<MapSheet group={groupEvents} active={activeEvent} onpick={pick} onclose={() => close()} onzoom={zoomTo} onlist={(e) => onlist?.(e.id)} instant={() => moving} />
 	{/if}
 	{#if !L && !failed}<div class="skeleton cover" aria-hidden="true"></div>{/if}
 	{#if failed}<p class="cover fail">La mappa non si carica adesso. La lista funziona lo stesso.</p>{/if}

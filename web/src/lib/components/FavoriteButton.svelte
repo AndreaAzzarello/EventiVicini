@@ -5,13 +5,18 @@
 
 	let { id, title, label = false }: { id: string; title: string; label?: boolean } = $props();
 	const on = $derived(favorites.has(id));
+	// Battito: nasce solo dal clic che aggiunge (mai dal render né dai preferiti già salvati) e finisce con l'animazione.
+	let beat = $state(false);
 
 	async function click(e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
+		const adding = !on;
+		beat = adding;
 		try {
-			await favorites.toggle(id);
+			if (!(await favorites.toggle(id))) beat = false; // limite raggiunto o rimosso: niente battito
 		} catch {
+			beat = false;
 			toast('Non sono riuscito a salvare il preferito. Riprova.');
 		}
 	}
@@ -22,9 +27,11 @@
 	class="fav"
 	class:on
 	class:with-label={label}
+	class:beat
 	aria-pressed={on}
 	aria-label={label ? undefined : on ? `Togli “${title}” dai preferiti` : `Aggiungi “${title}” ai preferiti`}
 	onclick={click}
+	onanimationend={() => (beat = false)}
 >
 	<Heart size={label ? 16 : 20} fill={on ? 'currentColor' : 'none'} aria-hidden="true" />
 	{#if label}<span>{on ? 'Nei preferiti' : 'Salva'}</span>{/if}
@@ -53,6 +60,15 @@
 	}
 	.on {
 		color: var(--accent);
+	}
+	/* Solo transform; con movimento ridotto app.css porta la durata a ~0 e animationend scatta lo stesso. */
+	.beat :global(svg) {
+		animation: beat var(--dur) var(--ease);
+	}
+	@keyframes beat {
+		50% {
+			transform: scale(1.2);
+		}
 	}
 	.with-label {
 		padding: 0 var(--space-3);
