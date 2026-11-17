@@ -634,7 +634,7 @@
 		.map-pane {
 			position: sticky;
 			top: calc(var(--header-h) + var(--space-3));
-			height: calc(100vh - var(--header-h) - var(--space-5));
+			height: calc(100dvh - var(--header-h) - var(--space-5));
 		}
 	}
 </style>

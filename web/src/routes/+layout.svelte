@@ -173,6 +173,7 @@
 		position: sticky;
 		top: 0;
 		z-index: 1000;
+		padding-top: env(safe-area-inset-top); /* iPhone in orizzontale o a schermo intero: sotto la notch */
 		background: var(--bg);
 		border-bottom: 1px solid var(--border);
 	}
@@ -297,7 +298,7 @@
 		}
 	}
 	main {
-		min-height: calc(100vh - var(--header-h) - var(--space-7) * 3);
+		min-height: calc(100svh - var(--header-h) - var(--space-7) * 3);
 		outline: none;
 	}
 	.site-footer {

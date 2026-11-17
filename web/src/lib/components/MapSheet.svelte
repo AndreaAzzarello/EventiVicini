@@ -130,7 +130,7 @@
 		gap: var(--space-2);
 		max-height: 55%;
 		overflow-y: auto;
-		padding: var(--space-3) var(--space-4) var(--space-4);
+		padding: var(--space-3) var(--space-4) max(var(--space-4), env(safe-area-inset-bottom));
 		background: var(--surface);
 		color: var(--text);
 		border-top: 1px solid var(--border);
