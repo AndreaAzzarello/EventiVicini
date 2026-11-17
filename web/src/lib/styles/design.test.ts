@@ -52,6 +52,14 @@ const none = (hits: Hit[]) => expect(hits.map((h) => `${h.at}  ${h.text}`)).toEq
 const GOOGLE_LOGO = 'src/lib/components/GoogleLogo.svelte';
 const GOOGLE_COLORS = ['#4285F4', '#34A853', '#FBBC05', '#EA4335'];
 
+/** Unica eccezione ai gradienti: una maschera alfa (mask-image) che dissolve il bordo di un contenitore a scorrimento. Solo black/transparent e lunghezze dei token: nessun colore. */
+const isAlphaMask = (t: string) => {
+	const m = t.match(/^\s*(?:-webkit-)?mask-image:\s*linear-gradient\(([^;]*)\);\s*$/);
+	if (!m) return false;
+	const inner = m[1].replace(/var\(--space-\d\)/g, '');
+	return !/#|rgb|hsl|light-dark|var\(|url\(/.test(inner) && /transparent/.test(inner);
+};
+
 describe('design system', () => {
 	it('spaziature, raggi e dimensioni solo da token (ammessi 0, 1px e 2px per i filetti)', () =>
 		none(
@@ -100,13 +108,21 @@ describe('design system', () => {
 		none(
 			scan((t) => {
 				if (/text-transform:\s*(uppercase|capitalize)/.test(t)) return t.trim();
-				if (/(linear|radial|conic)-gradient/.test(t)) return t.trim();
+				if (/(linear|radial|conic)-gradient/.test(t) && !isAlphaMask(t)) return t.trim();
 				if (/text-shadow:|drop-shadow|backdrop-filter/.test(t)) return t.trim();
 				const bs = t.match(/box-shadow:\s*([^;]+)/)?.[1].trim();
 				if (bs && !['none', 'var(--shadow-overlay)', 'var(--shadow-card)', 'var(--shadow-lift)'].includes(bs)) return t.trim();
 				return null;
 			})
 		));
+
+	it('auto-test: solo la maschera alfa dei chip è un gradiente ammesso', () => {
+		expect(isAlphaMask('mask-image: linear-gradient(to right, black calc(100% - var(--space-6)), transparent);')).toBe(true);
+		expect(isAlphaMask('background: linear-gradient(to right, black, transparent);')).toBe(false);
+		expect(isAlphaMask('mask-image: linear-gradient(to right, #f00, transparent);')).toBe(false);
+		expect(isAlphaMask('mask-image: linear-gradient(to right, var(--accent), transparent);')).toBe(false);
+		expect(isAlphaMask('mask-image: radial-gradient(black, transparent);')).toBe(false);
+	});
 
 	// Eccezione documentata in DESIGN.md: il corsivo Fraunces è solo del titolo display e del logo (.display-em).
 	it('corsivo solo in app.css (.display-em): titolo display e logo', () =>

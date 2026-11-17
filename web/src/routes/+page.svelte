@@ -240,11 +240,11 @@
 		{#if !needsPlace}
 			<div class="where">
 				<p class="summary" aria-live="polite">
-					{#if (loading && !partial) || pending}Cerco eventi…{:else}<!-- a capo solo tra i gruppi: «vicino a» resta con il luogo -->
-						{#if error}<span class="nowrap">Elenco non disponibile</span>{:else}<span class="nowrap">{count}</span>{/if}
-						<span class="nowrap">{error ? 'per' : 'vicino a'}
+					{#if (loading && !partial) || pending}Cerco eventi…{:else}<!-- a capo solo tra i due gruppi: «N eventi · entro X km» e «da luogo» restano interi -->
+						<span class="nowrap">{error ? 'Elenco non disponibile' : count} · entro {filter.radiusKm} km</span>
+						<span class="nowrap">{error ? 'per' : 'da'}
 							<button type="button" class="place-link" onclick={() => search?.openPlaces()} aria-haspopup="listbox">
-								<MapPin size={16} aria-hidden="true" />{place.label}</button></span> <span class="nowrap">· entro {filter.radiusKm} km</span>{/if}
+								<MapPin size={16} aria-hidden="true" />{place.label}</button></span>{/if}
 				</p>
 				<button type="button" class="btn btn-sm" onclick={locate} disabled={locating}>
 					<LocateFixed size={16} aria-hidden="true" /> Usa la mia posizione
@@ -477,6 +477,16 @@
 	.intro h1 {
 		margin: 0 0 var(--space-2);
 	}
+	/* Schermi stretti: riquadro più basso, stesso carattere (titolo, motivo a righe) */
+	@media (max-width: 399px) {
+		.intro {
+			margin: var(--space-2) 0;
+			padding: var(--space-2) var(--space-3);
+		}
+		.intro h1 {
+			margin-bottom: var(--space-1);
+		}
+	}
 	.popular {
 		margin: var(--space-4) 0;
 	}
@@ -515,9 +525,15 @@
 	.hint:empty {
 		display: none;
 	}
+	/* Selettore Lista/Mappa (< 960 px): sempre raggiungibile, agganciato sotto l'header. Sotto header e dialog (1000), sopra la lista;
+	   i z-index di Leaflet restano dentro la mappa (isolation in EventsMap), quindi non lo coprono. */
 	.toolbar {
-		display: flex;
-		margin: var(--space-3) 0;
+		position: sticky;
+		top: var(--header-offset);
+		z-index: 900;
+		margin: var(--space-3) 0 0;
+		padding: var(--space-2) 0;
+		background: var(--bg);
 	}
 	.widened {
 		margin: 0 0 var(--space-3);
@@ -563,29 +579,39 @@
 		outline: 2px solid var(--focus);
 		outline-offset: 2px;
 	}
+	/* Controllo segmentato a tutta larghezza, due metà uguali. Attiva: piena (--text su --bg, come i toast: AA nei due temi); inattiva: neutra, peso normale. */
 	.tabs {
-		display: inline-flex;
-		padding: var(--space-1);
-		border-radius: var(--radius);
-		background: var(--surface-2);
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		height: var(--control);
 		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--surface);
+		overflow: hidden;
 	}
 	.tabs button {
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
 		gap: var(--space-2);
-		min-height: var(--control-sm);
 		padding: 0 var(--space-3);
-		border: none;
-		border-radius: var(--radius-sm);
+		border: 0;
 		background: none;
 		color: var(--text);
-		font: var(--fw-strong) var(--text-sm) var(--font-body);
+		font: var(--fw-regular) var(--text-md)/var(--lh-tight) var(--font-body);
 		cursor: pointer;
+		transition:
+			background-color var(--dur) var(--ease),
+			color var(--dur) var(--ease);
+	}
+	.tabs button:focus-visible {
+		outline: 2px solid var(--focus);
+		outline-offset: calc(var(--space-1) * -1);
 	}
 	.tabs [aria-selected='true'] {
-		background: var(--surface);
-		color: var(--accent);
+		background: var(--text);
+		color: var(--bg);
+		font-weight: var(--fw-strong);
 	}
 	/* Passando da lista a mappa il riquadro appare con una dissolvenza (con movimento ridotto è istantanea, vedi app.css) */
 	.list-pane,
@@ -634,7 +660,7 @@
 		.map-pane {
 			position: sticky;
 			top: calc(var(--header-h) + var(--space-3));
-			height: calc(100vh - var(--header-h) - var(--space-5));
+			height: calc(100dvh - var(--header-h) - var(--space-5));
 		}
 	}
 </style>

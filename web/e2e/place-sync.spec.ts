@@ -323,7 +323,7 @@ test.describe('schermo stretto', () => {
 
 	test('il nome del luogo nella riga sopra la lista apre i suggerimenti', async ({ page }) => {
 		await page.goto('/');
-		await expect(page.locator('.summary')).toContainText('vicino a');
+		await expect(page.locator('.summary')).toContainText(/eventi · entro \d+ km da/);
 		await placeButton(page, 'Modena').click();
 		await expect(searchBox(page)).toBeFocused();
 		await expect(page.getByRole('option', { name: /Modena/ })).toBeVisible(); // i più frequenti, senza scrivere
