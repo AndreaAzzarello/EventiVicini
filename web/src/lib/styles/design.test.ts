@@ -241,6 +241,21 @@ function cssOf(f: string): string {
 	return [...blocks, ...attrs].join(';\n');
 }
 
+/**
+ * Durate letterali nei parametri delle transizioni Svelte (altrove solo da `motionMs`, lib/motion.ts):
+ * direttive `in:/out:/transition:` con `{{ duration: N }}`, e in un file che importa da svelte/transition|easing|animate
+ * ogni `duration: N` (chiamate a fly/fade/slide/scale…, oggetti restituiti dalle transizioni proprie).
+ * Timeout, permanenza dei toast e altre opzioni non di animazione stanno in file che non importano quei moduli: non si toccano.
+ */
+function literalTransitionDurations(src: string): string[] {
+	const out: string[] = [];
+	const directive = /\b(?:in|out|transition):[\w.]+(?:\|\w+)*\s*=\s*\{\{[^}]*\bduration\s*:\s*[1-9]\d*[^}]*\}\}/g;
+	for (const m of src.matchAll(directive)) out.push(m[0].replace(/\s+/g, ' '));
+	if (/from\s+['"]svelte\/(transition|easing|animate)['"]/.test(src))
+		for (const m of src.matchAll(/\bduration\s*:\s*[1-9]\d*/g)) out.push(m[0]);
+	return out;
+}
+
 describe('movimento', () => {
 	it('durate di transition e animation solo da token (--dur, --dur-view); eccezioni: reduced-motion e Leaflet', () => {
 		const hits = files.flatMap((f) => literalDurations(cssOf(f)).map((d) => `${rel(f)}  ${d}`));
@@ -254,6 +269,22 @@ describe('movimento', () => {
 		expect(literalDurations('@media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; } }')).toEqual([]);
 		expect(literalDurations('.leaflet-zoom-anim .leaflet-zoom-animated { transition: transform 0.25s; }')).toEqual([]);
 		expect(literalDurations('@media (min-width: 600px) { .a { transition: color 100ms; } }')).toHaveLength(1);
+	});
+
+	it('svelte/transition: nessuna durata letterale nei parametri delle transizioni (solo da motionMs)', () => {
+		const hits = files.filter((f) => /\.(svelte|ts)$/.test(f)).flatMap((f) => literalTransitionDurations(readFileSync(f, 'utf8')).map((d) => `${rel(f)}  ${d}`));
+		expect(hits).toEqual([]);
+	});
+
+	it('il controllo delle transizioni Svelte vede le durate fisse e non tocca i timeout né la permanenza dei toast', () => {
+		expect(literalTransitionDurations('<div in:fly={{ y: 8, duration: 200 }}></div>')).toHaveLength(1);
+		expect(literalTransitionDurations('<div out:fade|local={{ duration: 150 }}></div>')).toHaveLength(1);
+		expect(literalTransitionDurations("import { fly } from 'svelte/transition';\nfly(node, { duration: 300 });")).toHaveLength(1);
+		expect(literalTransitionDurations('<div out:sheet|local={{ token: "--dur", instant }}></div>')).toEqual([]);
+		expect(literalTransitionDurations("import { cubicOut } from 'svelte/easing';\nreturn { duration: motionMs(token), easing: cubicOut };")).toEqual([]);
+		expect(literalTransitionDurations('setTimeout(() => close(), 3000); const o = { duration: 5000 };')).toEqual([]);
+		// la durata di permanenza dei toast non è un'animazione
+		expect(literalTransitionDurations(readFileSync(join(SRC, 'lib', 'toast.svelte.ts'), 'utf8'))).toEqual([]);
 	});
 
 	it('le durate dei token non superano 250 ms (--dur-view è il massimo per transizioni di pagina e pannelli)', () => {
