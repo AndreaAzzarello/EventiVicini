@@ -309,3 +309,25 @@ def test_tetto_richieste_mai_superato(tmp_path):
     for n in range(6):
         _, d = s.run_day(memo, DAY0 + timedelta(days=n))
         assert detail_gets(d) <= MAX_DETAILS
+
+
+def test_riga_di_regione_somma_le_fonti(tmp_path, monkeypatch, caplog):
+    from types import SimpleNamespace
+
+    import fetch
+
+    monkeypatch.setattr(fetch, "CACHE_DIR", tmp_path)
+    detailmemo.reset()
+    try:
+        memo = detailmemo.shared(tmp_path)
+        memo.set_counter("a", skipped=10, rotated=2, tail_left=30, gets=8)
+        memo.set_counter("b", skipped=5, rotated=1, tail_left=0, gets=4)
+        memo.count("a", sitemap_skipped=1)
+        src = SimpleNamespace(region="Piemonte")
+        with caplog.at_level(logging.INFO, logger="importer"):
+            run.log_detail_summary(["a", "b"], {"a": src, "b": src})
+        assert [r.getMessage() for r in caplog.records if r.getMessage().startswith("Dettagli")] == [
+            "Dettagli (Piemonte): richieste di dettaglio 12, saltati (finiti) 15, riletti a rotazione 3, coda da esplorare 30 "
+            "(fonti con coda 1), sitemap vuote saltate 1"]
+    finally:
+        detailmemo.reset()

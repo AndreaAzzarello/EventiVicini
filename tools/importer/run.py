@@ -25,6 +25,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import bundles
 import clusters
+import detailmemo
 import logsafe
 import sourcehealth
 import unreachable
@@ -819,6 +820,18 @@ def summary(stats: dict[str, dict], sources: dict) -> str:
     return text
 
 
+def log_detail_summary(names: list[str], sources: dict) -> None:
+    """Una riga per regione sui dettagli delle pagine evento (#81): quanti saltati perché finiti, quanti riletti a rotazione, quanta
+    coda di sitemap resta da esplorare (fonti con coda: finché è > 0 la memoria non è completa), sitemap senza URL saltate."""
+    memo = detailmemo.shared(httpfetch.CACHE_DIR)
+    if memo is None:
+        return
+    for region, c in sorted(memo.summary({n: sources[n].region for n in names}).items()):
+        log.info("Dettagli (%s): richieste di dettaglio %d, saltati (finiti) %d, riletti a rotazione %d, coda da esplorare %d "
+                 "(fonti con coda %d), sitemap vuote saltate %d", region, c.get("gets", 0), c.get("skipped", 0), c.get("rotated", 0),
+                 c.get("tail_left", 0), c.get("tail_sources", 0), c.get("sitemap_skipped", 0))
+
+
 def persist_state(state_file: Path, state: dict | None, health_file: Path, health: dict | None, dry_run: bool) -> bool:
     """Salva lo stato degli host (con le subnet giù) e la salute delle fonti. Nel dry-run no: non deve spostare in avanti
     né parcheggi né cluster né lastOkAt (ticket #16; nel workflow la cache del dry-run è comunque solo in lettura)."""
@@ -836,6 +849,7 @@ def main(argv: list[str] | None = None) -> int:
         return _main(argv)
     finally:
         httpfetch.DEFAULT_GATE = None  # lo stato globale non esce dall'import (i test chiamano main più volte)
+        detailmemo.reset()
 
 
 def _main(argv: list[str] | None = None) -> int:
@@ -907,11 +921,13 @@ def _main(argv: list[str] | None = None) -> int:
         finally:
             geocoder.save()
             persist_state(state_file, state, health_file, health, args.dry_run)
+            detailmemo.save_all(now.astimezone(ROME).date())  # memoria dei dettagli (#81): sta in .httpcache, come la cache HTTP
     summary(stats, SOURCES)
+    log_detail_summary(names, SOURCES)
     print(excluded_report(excluded))
     log.info("Totale dopo deduplica: %d (richieste Nominatim: %d)", len(events), geocoder.requests)
     net = gate.stats()
-    busiest = ", ".join(f"{ip} {v['requests']} ric., picco {v['peak60']}/min" for ip, v in list(net["top_ips"].items())[:3])
+    busiest = ", ".join(f"{ip} {v['requests']} ric., picco {v['peak60']}/min" for ip, v in list(net["top_ips"].items())[:10])
     log.info("Rete: %d IP, %.0f s di attesa per i limiti (%d pause di subnet); più colpiti: %s",
              net["ips"], net["throttle_s"], net["cooldowns"], busiest or "-")
     if geocoder.deferred:
