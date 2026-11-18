@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, urljoin, urlsplit
 import httpx
 from selectolax.lexbor import LexborHTMLParser
 
+import detailmemo
 from fetch import CACHE_DIR, Blocked, Fetcher, RobotsUnknown
 from relevance import is_season
 from mapping import (KIDS_RE, LONG_RUNNING_DAYS, ROME, category_from_title, event_id, geocode_queries, html_to_text,
@@ -30,6 +31,7 @@ from mapping import (KIDS_RE, LONG_RUNNING_DAYS, ROME, category_from_title, even
 log = logging.getLogger("importer")
 
 MAX_DETAILS = 40  # dettagli scaricati per comune a ogni import
+TAIL_PER_DAY = 5  # dettagli mai letti oltre le prime MAX_DETAILS posizioni (coda della sitemap) esplorati al giorno per fonte (#81)
 ARCHIVE_RE = re.compile(r"/(?:archivio(?:-eventi)?|index\.html?)/?$", re.I)
 SUMMARY_LINKS = 6  # link ad altri eventi, senza data strutturata: la pagina è un riepilogo
 TYPICAL_PATHS = ["/vivere-il-comune/eventi/", "/novita/eventi/", "/eventi/", "/evento/"]
@@ -374,6 +376,7 @@ class DesignComuniHtmlAdapter:
     max_pages: int = 5
     max_details: int = MAX_DETAILS
     fetcher: Fetcher | None = field(default=None, compare=False)  # solo per i test
+    memo: detailmemo.DetailMemo | None = field(default=None, compare=False)  # solo per i test; di norma detailmemo.shared()
 
     # -- rete
     def _get(self, f: Fetcher, url: str, why: list[str] | None = None) -> str | None:
@@ -391,10 +394,13 @@ class DesignComuniHtmlAdapter:
             why.append(f"HTTP {res.status_code}")
         return res.text if res.status_code < 400 else None
 
-    def _list_urls(self, f: Fetcher, now: datetime) -> list[str]:
-        """Link ai dettagli dalla lista (con paginazione) e, se manca roba, dalla sitemap."""
+    def _list_urls(self, f: Fetcher, now: datetime, memo: detailmemo.DetailMemo | None = None) -> tuple[list[str], set[str]]:
+        """(candidati, link datati): link ai dettagli dalla lista (con paginazione) e, se manca roba, dalla sitemap. Non si
+        tronca a max_details: il tetto vale per le richieste (events), dopo aver tolto i dettagli finiti già noti.
+        I link datati sono quelli della lista con data leggibile e non passata: non si saltano mai (#81)."""
         starts = [self.url_eventi] if self.url_eventi else [self.base + p for p in TYPICAL_PATHS]
         found: dict[str, None] = {}
+        dated: set[str] = set()
         listing = ""
         why: list[str] = []
         for start in starts:
@@ -404,7 +410,7 @@ class DesignComuniHtmlAdapter:
                 if page is None:
                     break
                 listing = listing or url
-                links, nxt = parse_list(page, url, now.date())
+                links, nxt = parse_list(page, url, now.astimezone(ROME).date(), dated)
                 found.update(dict.fromkeys(links))
                 url = nxt
                 if not url:
@@ -417,44 +423,103 @@ class DesignComuniHtmlAdapter:
             raise httpx.HTTPError(f"pagina eventi assente o non leggibile ({', '.join(dict.fromkeys(why)) or 'nessuna risposta'}): {starts[0]}")
         if listing:
             path = urlsplit(listing).path.rstrip("/")
-            for u in self._sitemap_urls(f, path):
+            # La sitemap senza URL utili si salta per 7 giorni, ma solo se la lista ha dato link: una lista vuota (AJAX, nessun
+            # evento ora) si completa dalla sitemap, che non va rimandata (#81).
+            for u in self._sitemap_urls(f, path, memo if found else None, now.astimezone(ROME).date()):
                 found.setdefault(u)
-        return list(found)[: self.max_details]
+        return list(found), dated
 
-    def _sitemap_urls(self, f: Fetcher, path: str) -> list[str]:
-        """URL sotto `path` dalla sitemap di robots.txt (più recenti per prima)."""
+    def _sitemap_urls(self, f: Fetcher, path: str, memo: detailmemo.DetailMemo | None = None,
+                      today: date | None = None) -> list[str]:
+        """URL sotto `path` dalla sitemap di robots.txt (più recenti per prima). Con memo, una sitemap che non ha dato URL
+        sotto `path` (per esempio un sitemapindex) si ricontrolla dopo EMPTY_SITEMAP_SKIP_DAYS giorni."""
         sitemaps = f.sitemaps(self.base)[:2]
         urls: list[tuple[str, str]] = []
         for sm in sitemaps:
+            if memo is not None and today is not None and memo.sitemap_skipped(sm, today):
+                memo.count(self.name, sitemap_skipped=1)
+                continue
             xml = self._get(f, sm)
             if xml is None:
                 continue
+            mine = 0
             for loc, mod in re.findall(r"<loc>([^<]+)</loc>(?:\s*<lastmod>([^<]*)</lastmod>)?", xml):
                 u = html.unescape(loc.strip())
                 if urlsplit(u).path.startswith(path + "/") and urlsplit(u).path.rstrip("/") != path:
                     urls.append((mod or "", u))
+                    mine += 1
+            if memo is not None and today is not None:
+                memo.mark_sitemap(sm, mine == 0, today)
         return [u for _, u in sorted(urls, reverse=True)]
 
     def events(self, client: httpx.Client, now: datetime, horizon_days: int):
+        """Un GET per dettaglio, al massimo max_details. Con la memoria dei dettagli (detailmemo, #81) si saltano quelli di eventi
+        finiti da più di 2 giorni (salvo il 5% a rotazione e i link datati della lista) e i posti liberati vanno ai dettagli non
+        ancora noti: quelli entro la vecchia finestra (prime max_details posizioni) sempre, quelli della coda della sitemap
+        al massimo TAIL_PER_DAY al giorno. Senza memoria (nessuna cache su disco) si legge come prima: i primi max_details."""
         f = self.fetcher or Fetcher(client, cache_dir=CACHE_DIR, retries=4, backoff=3.0)  # server comunali lenti: Fanano ha timeout a intermittenza
-        urls = self._list_urls(f, now)
-        found = 0
-        for url in urls:
+        memo = self.memo if self.memo is not None else detailmemo.shared(f.cache_dir)
+        today = now.astimezone(ROME).date()
+        urls, dated = self._list_urls(f, now, memo)
+        cutoff = detailmemo.finished_cutoff_ms(today)
+        found = gets = skipped = rotated = tail_reads = tail_left = 0
+        for i, url in enumerate(urls):
             if ARCHIVE_RE.search(urlsplit(url).path):  # archivio e index.html sono elenchi, non eventi
                 continue
-            page = self._get(f, url)
+            in_window = i < self.max_details
+            if memo is None:
+                if not in_window:
+                    continue
+            else:
+                if not memo.known(url) and (meta := f._cached(url)):  # seme a costo zero: il corpo è già in .httpcache
+                    memo.record(url, _end_ms(parse_detail(meta["body"], url, today)), today)
+                if memo.known(url):
+                    memo.touch(url, today)
+                    end = memo.ended_ms(url)
+                    if end is None:  # letta senza data valida: nella finestra come prima, in coda solo a rotazione
+                        if not in_window:
+                            if not detailmemo.in_rotation(url, today):
+                                continue
+                            rotated += 1
+                    elif end < cutoff and url not in dated:  # finito
+                        if in_window and detailmemo.in_rotation(url, today):
+                            rotated += 1
+                        else:
+                            skipped += in_window
+                            continue
+                elif not in_window:  # mai letto, in coda alla sitemap
+                    if tail_reads >= TAIL_PER_DAY:
+                        tail_left += 1
+                        continue
+                    tail_reads += 1
+                if gets >= self.max_details:
+                    tail_left += not memo.known(url)
+                    continue
+            why: list[str] = []
+            page = self._get(f, url, why)
+            gets += 1
             if page is None:
+                if memo is not None and ("HTTP 404" in why or "HTTP 410" in why):  # pagina tolta: non si riprova ogni giorno
+                    memo.record(url, None, today)
                 continue
-            ev = self.event_from_page(page, url, now, horizon_days)
+            d = parse_detail(page, url, today)
+            if memo is not None:
+                memo.record(url, _end_ms(d), today)
+            ev = self._event(d, now, horizon_days) if d is not None else None
             if ev is not None:
                 found += 1
                 yield ev
-        log.info("%s: %d pagine evento lette, %d futuri", self.name, len(urls), found)
+        log.info("%s: %d pagine evento lette, %d futuri", self.name, gets, found)
+        if memo is not None:
+            memo.set_counter(self.name, skipped=skipped, rotated=rotated, tail_left=tail_left, gets=gets)
+            log.info("%s: dettagli saltati (finiti): %d, riletti a rotazione: %d, coda da esplorare: %d",
+                     self.name, skipped, rotated, tail_left)
 
     def event_from_page(self, page: str, url: str, now: datetime, horizon_days: int) -> dict | None:
         d = parse_detail(page, url, now.astimezone(ROME).date())
-        if d is None:
-            return None
+        return self._event(d, now, horizon_days) if d is not None else None
+
+    def _event(self, d: dict, now: datetime, horizon_days: int) -> dict | None:
         start, end = d["start"], d["end"]
         if d["recurring"] and end - start > timedelta(days=LONG_RUNNING_DAYS):  # "tutti i sabati": la prossima data
             day = next_weekday(_clean(d["description"]), start.date(), end.date(), now.astimezone(ROME).date())
@@ -498,8 +563,14 @@ def _event_href(href: str, host: str, here: str) -> str:
     return href if EVENT_LINK.search(p.path) or p.path.startswith(here + "/") else ""
 
 
-def parse_list(page: str, url: str, today: date) -> tuple[list[str], str | None]:
-    """Link ai dettagli (saltando le card già finite, se la lista lo dice) e URL della pagina successiva."""
+def _end_ms(d: dict | None) -> int | None:
+    """Fine grezza dell'evento (per i ricorrenti la fine della serie, mai prima di quella emessa) in ms, None senza dettaglio valido."""
+    return int(d["end"].timestamp() * 1000) if d else None
+
+
+def parse_list(page: str, url: str, today: date, dated: set[str] | None = None) -> tuple[list[str], str | None]:
+    """Link ai dettagli (saltando le card già finite, se la lista lo dice) e URL della pagina successiva.
+    dated (opzionale): riceve i link la cui card ha una data leggibile e non passata."""
     tree = LexborHTMLParser(page)
     host, here = urlsplit(url).netloc, urlsplit(url).path.rstrip("/")
     links: list[str] = []
@@ -512,6 +583,8 @@ def parse_list(page: str, url: str, today: date) -> tuple[list[str], str | None]
         if nums and (p := parse_dates(_clean(nums[-1].text()), today)) and p[0] < today:
             continue  # già finito
         links.append(href.split("#")[0])
+        if dated is not None and nums and p:
+            dated.add(links[-1])
     nxt = tree.css_first('a[rel="next"], link[rel="next"], .pagination a[aria-label*="success" i], .pagination .next a')
     href = nxt.attributes.get("href") if nxt else None
     return list(dict.fromkeys(links)), urljoin(url, href) if href and href != "#" else None
