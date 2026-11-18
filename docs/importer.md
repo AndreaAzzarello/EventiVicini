@@ -36,7 +36,9 @@ Per i siti Design Comuni Italia senza API degli eventi (`adapters/design_comuni_
 
 - **Lista**: `url_eventi` del registro, poi `/vivere-il-comune/eventi/`, `/novita/eventi/`, `/eventi/`, `/evento/`; paginazione `rel=next` (al massimo 5 pagine). Le liste caricate via AJAX ("Carica altri risultati") non si seguono: la sitemap dichiarata in `robots.txt` integra la lista quando mancano eventi.
 - **Dettaglio**, in ordine di priorità: JSON-LD `schema.org/Event`, microdata, link "Aggiungi al calendario" (Google Calendar), `.point-list` e Dal/Al, testo libero.
-- **Limite**: al massimo 40 dettagli per comune a ogni import (`MAX_DETAILS`).
+- **Limite**: al massimo 40 richieste di dettaglio per comune a ogni import (`MAX_DETAILS`). Il tetto vale per le richieste, non per i candidati (#81).
+- **Dettagli di eventi finiti** (`detailmemo.py`, `.httpcache/_ended.json`: url → fine dell'evento, salvato dalla stessa cache di Actions per regione): si saltano i dettagli con fine anteriore a mezzanotte (Europe/Rome) di oggi − 2 giorni. Eccezioni: il 5% riletto ogni giorno a rotazione (`sha1(url) % 20` sull'ordinale del giorno: stessa data, stesso insieme; tutti in 20 giorni), i link della lista con data leggibile non passata, le pagine mai lette. I posti liberati vanno ai dettagli non ancora noti: quelli entro le prime 40 posizioni sempre, quelli della coda della sitemap al massimo 5 al giorno per fonte (`TAIL_PER_DAY`). La memoria decide solo cosa saltare: se manca (cache scaduta, dry-run, primo giro) si legge di più, mai di meno. Una sitemap senza URL sotto il percorso eventi (per esempio un sitemapindex) si salta per 7 giorni se la lista ha dato link. Un evento saltato perché finito non conta come sparito dalla fonte (`stale_updates` considera solo eventi non ancora finiti).
+- **Log**: per fonte `dettagli saltati (finiti): N, riletti a rotazione: M, coda da esplorare: K`; per regione `Dettagli (<regione>): …`. Finché «coda da esplorare» è > 0 la memoria non è completa.
 - **Cortesia**: `robots.txt` prima di ogni richiesta, 1 richiesta al secondo per host, retry con backoff, cache ETag/Last-Modified in `tools/importer/.httpcache` (risposta 304 senza riscaricare).
 - **Limiti**: i feed `.ics` non sono letti. Drupal, Joomla, Halley e Maggioli non sono nei campioni analizzati.
 
@@ -59,6 +61,7 @@ python run.py --horizon-days 30         # orizzonte diverso (default 60)
 python cleanup.py --dry-run             # conta cosa verrebbe eliminato
 python cleanup.py                       # elimina eventi e proposte scaduti (al massimo 15.000 al giorno)
 python geocode.py --clean               # ripulisce geocache.json, senza chiamare Nominatim
+python misura_rete.py <id del run>      # richieste e attese per regione, IP e fornitore dal log di un import (gh); con due id: confronto prima/dopo
 python copertura.py                     # reports/copertura_er.md: stima su campione (1 pagina, sitemap, max 10 dettagli per comune), senza geocoding e senza scrivere
 python copertura.py --no-estimate       # solo i conteggi del registro
 ```

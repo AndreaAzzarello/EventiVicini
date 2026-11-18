@@ -1,0 +1,12 @@
+import (piemonte, 15458, true)	UNKNOWN STEP	2026-11-18T08:34:40.7221877Z pogno: 40 pagine evento lette, 2 futuri
+import (piemonte, 15458, true)	UNKNOWN STEP	2026-11-18T08:34:40.7222282Z pogno: 169,0 s, 44 richieste, ok, 2 eventi grezzi
+import (piemonte, 15458, true)	UNKNOWN STEP	2026-11-18T08:43:07.7037856Z castellamonte: 40 pagine evento lette, 1 futuri
+import (piemonte, 15458, true)	UNKNOWN STEP	2026-11-18T08:43:07.7038300Z castellamonte: 169,0 s, 44 richieste, ok, 1 eventi grezzi
+import (piemonte, 15458, true)	UNKNOWN STEP	2026-11-18T08:49:32.3741688Z reano: 32 pagine evento lette, 0 futuri
+import (piemonte, 15458, true)	UNKNOWN STEP	2026-11-18T08:49:32.3742108Z reano: 129,0 s, 36 richieste, ok, 0 eventi grezzi
+import (piemonte, 15458, true)	UNKNOWN STEP	2026-11-18T09:01:58.5546430Z Rete: 14 IP, 7712 s di attesa per i limiti (0 pause di subnet); più colpiti: 151.11.50.116 2227 ric., picco 61/min, 35.186.216.151 221 ric., picco 36/min, 34.8.63.202 57 ric., picco 19/min
+import (trentino-alto-adige, 4394, false)	UNKNOWN STEP	2026-11-18T08:32:32.4142528Z aldino: 2 pagine evento lette, 2 futuri
+import (trentino-alto-adige, 4394, false)	UNKNOWN STEP	2026-11-18T08:32:32.4143143Z aldino: 7,4 s, 5 richieste, ok, 2 eventi grezzi
+import (trentino-alto-adige, 4394, false)	UNKNOWN STEP	2026-11-18T08:36:34.7035125Z lana: 9 pagine evento lette, 6 futuri
+import (trentino-alto-adige, 4394, false)	UNKNOWN STEP	2026-11-18T08:36:34.7035632Z lana: 45,3 s, 12 richieste, ok, 6 eventi grezzi
+import (trentino-alto-adige, 4394, false)	UNKNOWN STEP	2026-11-18T08:43:00.5285597Z Rete: 4 IP, 2006 s di attesa per i limiti (0 pause di subnet); più colpiti: 20.107.132.93 617 ric., picco 61/min, 99.81.25.153 71 ric., picco 43/min, 99.80.82.152 44 ric., picco 38/min
