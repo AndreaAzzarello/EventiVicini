@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { romeTime } from './dates';
 import { fromData } from './event';
-import { EMPTY_FILTER, applyFilter, filterFromParams, filterToParams, type Filter } from './filters';
+import { EMPTY_FILTER, applyFilter, filterFromParams, filterToParams, groupingFor, type Filter } from './filters';
 
 const now = romeTime(2026, 10, 28, 12); // mercoledì
 const ev = (id: string, over: Record<string, unknown>) =>
@@ -92,4 +92,37 @@ describe('URL', () => {
 		expect(filterFromParams(new URLSearchParams('cat=party&r=7&quando=ieri'))).toEqual(EMPTY_FILTER));
 	it('i vecchi link con cat=kids diventano il filtro rapido Bambini', () =>
 		expect(filterFromParams(new URLSearchParams('cat=kids'))).toEqual({ ...EMPTY_FILTER, kids: true }));
+});
+
+describe('groupingFor', () => {
+	it('nessun filtro di date o «Oggi»: raggruppamento per tempo come prima', () => {
+		expect(groupingFor(EMPTY_FILTER, now)).toBeNull();
+		expect(groupingFor({ ...EMPTY_FILTER, when: 'today' }, now)).toBeNull();
+	});
+	it('Domani, Weekend, 7 giorni e Scegli date: l’intervallo scelto', () => {
+		expect(groupingFor({ ...EMPTY_FILTER, when: 'weekend' }, now)).toEqual({ range: [romeTime(2026, 10, 31), romeTime(2026, 11, 2)], when: 'weekend' });
+		expect(groupingFor({ ...EMPTY_FILTER, when: 'tomorrow' }, now)?.when).toBe('tomorrow');
+		expect(groupingFor({ ...EMPTY_FILTER, when: 'range', from: '2026-11-02' }, now)?.when).toBe('range');
+	});
+});
+
+describe('applyFilter con il weekend', () => {
+	const list = [
+		ev('lungo', { startTime: romeTime(2026, 10, 20, 10), endTime: romeTime(2026, 11, 3, 18) }), // attraversa il weekend
+		ev('solo-sabato', { startTime: romeTime(2026, 10, 31, 10), endTime: romeTime(2026, 10, 31, 12) }),
+		ev('finito-venerdi', { startTime: romeTime(2026, 10, 30, 18), endTime: romeTime(2026, 10, 30, 23) }),
+		ev('giovedi-sabato', { startTime: romeTime(2026, 10, 29, 20), endTime: romeTime(2026, 10, 31, 9) })
+	];
+	const weekend = { ...EMPTY_FILTER, when: 'weekend' as const };
+	const out = () => applyFilter(list, weekend, now, null).map((e) => e.id);
+	it('evento lungo che attraversa il weekend e uno che finisce sabato: dentro; finito venerdì: fuori', () => {
+		expect(out()).toContain('lungo');
+		expect(out()).toContain('giovedi-sabato');
+		expect(out()).toContain('solo-sabato');
+		expect(out()).not.toContain('finito-venerdi');
+	});
+	it('l’ordine parte dall’inizio del weekend, non da oggi', () => {
+		// gli eventi già iniziati contano dal sabato 00:00: stesso giorno, poi per inizio reale (lungo, giovedì) e infine solo-sabato
+		expect(out()).toEqual(['lungo', 'giovedi-sabato', 'solo-sabato']);
+	});
 });
