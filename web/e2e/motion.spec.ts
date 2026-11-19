@@ -125,10 +125,13 @@ function suite(reduced: boolean) {
 
 		test('tocco sulla mappa: chiude e il focus resta dov’è, senza scroll', async ({ page }) => {
 			const { map, sheet } = await open(page);
-			await map.scrollIntoViewIfNeeded(); // lo scroll del clic di Playwright non conta: si misura dopo
+			// Lo scroll che Playwright fa per rendere raggiungibile il punto (sotto l'header e il selettore sticky) non conta: il hover lo
+			// esaurisce prima della misura, così il clic non scrolla più e resta solo l'eventuale scroll della pagina.
 			const box = (await map.boundingBox())!;
+			const at = { position: { x: box.width / 2, y: 6 } };
+			await map.hover(at);
 			const y = await page.evaluate(() => window.scrollY);
-			await map.click({ position: { x: box.width / 2, y: 6 } });
+			await map.click(at);
 			await expect(sheet).toHaveCount(0);
 			await expect(focusedMarker(page)).toHaveCount(0);
 			expect(await page.evaluate(() => window.scrollY)).toBe(y);
