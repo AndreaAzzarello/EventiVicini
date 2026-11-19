@@ -17,7 +17,7 @@
 	import { comuniStore } from '$lib/comuni.svelte';
 	import { coverageStore } from '$lib/coverage.svelte';
 	import type { Event } from '$lib/event';
-	import { applyFilter, filterFromParams, type Filter } from '$lib/filters';
+	import { applyFilter, filterFromParams, groupingFor, type Filter } from '$lib/filters';
 	import { DEFAULT_RADIUS_KM, distanceKm, SNAP_MARGIN_KM, snapCoord, type ChosenPlace } from '$lib/geo';
 	import { fmtNum } from '$lib/format';
 	import { locateMe } from '$lib/locate';
@@ -61,6 +61,7 @@
 	});
 	const partial = $derived(data.partial && events === data.events && JSON.stringify(filter) === ssrFilterKey);
 	const visible = $derived(applyFilter(events, filter, now, place));
+	const grouping = $derived(groupingFor(filter, now));
 	const covered = $derived(distanceKm(place, fetched) + filter.radiusKm <= fetched.km);
 	const eventMatches = (text: string) => applyFilter(events, { ...filter, q: text }, now, place);
 	const placeHit = $derived(filter.q.trim() ? strongPlace(filter.q, coverageStore.regions, comuniStore.index) : null);
@@ -323,6 +324,7 @@
 					loading={(loading && !partial) || pending}
 					error={partial ? '' : error}
 					counts={partial ? data.sectionCounts : null}
+					{grouping}
 					{highlighted}
 					onhover={(id) => (hovered = id)}
 					onretry={load}

@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import { HTML_CACHE } from '$lib/server/cache';
 import { comuneBySlug } from '$lib/server/comuneSlug';
-import { applyFilter, filterFromParams } from '$lib/filters';
+import { applyFilter, filterFromParams, groupingFor } from '$lib/filters';
 import { DEFAULT_PLACE, type ChosenPlace } from '$lib/geo';
 import { autoRadius, nearestWithEvents, placeFromEvents, placeFromParams, popularPlaces, regionsWithEvents } from '$lib/places';
 import { sections } from '$lib/sections';
@@ -58,7 +58,7 @@ export const load: PageServerLoad = async ({ url, setHeaders }) => {
 		// Con i filtri dell'URL le card sono già quelle che il browser mostrerebbe: le prime SSR_CARDS vanno nell'HTML, con i conteggi
 		// dell'elenco intero (titoli di sezione e riepilogo senza salti). `fetched.km = 0` fa scaricare la lista completa dopo l'idratazione.
 		const now = Date.now();
-		const groups = sections(applyFilter(around.events, filter, now, place), now);
+		const groups = sections(applyFilter(around.events, filter, now, place), now, groupingFor(filter, now));
 		const total = groups.reduce((n, g) => n + g.events.length, 0);
 		if (total <= SSR_CARDS) return { ...base, ...around, error: '', popular: null, partial: false, total, sectionCounts: null };
 		const sectionCounts = Object.fromEntries(groups.map((g) => [g.key, g.events.length]));

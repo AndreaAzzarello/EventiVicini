@@ -1,7 +1,7 @@
 import { HTML_CACHE } from '$lib/server/cache';
 import { error, redirect } from '@sveltejs/kit';
 import { cityPath, slugify } from '$lib/event';
-import { applyFilter, filterFromParams } from '$lib/filters';
+import { applyFilter, filterFromParams, groupingFor } from '$lib/filters';
 import { sections } from '$lib/sections';
 import { comuneBySlug } from '$lib/server/comuneSlug';
 import { coverage, eventsInCity, regionCoverage } from '$lib/server/firestore';
@@ -39,7 +39,8 @@ export const load: PageServerLoad = async ({ params, setHeaders, url }) => {
 	if (liveCount <= PAGE_SIZE) return { ...meta, events, all: true, total: liveCount, liveCount, pagina: 1, pages: 1, sectionCounts: null };
 
 	// Città grande: la pagina ?pagina=N della lista già filtrata (filtri dell'URL) e ordinata per sezioni.
-	const groups = sections(applyFilter(events, filterFromParams(url.searchParams), now, null), now);
+	const filter = filterFromParams(url.searchParams);
+	const groups = sections(applyFilter(events, filter, now, null), now, groupingFor(filter, now));
 	const list = groups.flatMap((g) => g.events);
 	const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
 	const asked = Number(url.searchParams.get('pagina'));

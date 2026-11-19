@@ -31,14 +31,14 @@ const ids = (f: Partial<Filter>) => applyFilter(events, { ...EMPTY_FILTER, ...f 
 describe('applyFilter', () => {
 	it('esclude finiti e lontani, ordina per inizio', () => expect(ids({})).toEqual(['sagra', 'stasera', 'mostra', 'sabato', 'bimbi']));
 	it('oggi', () => expect(ids({ when: 'today' })).toEqual(['sagra', 'stasera', 'mostra']));
-	it('weekend', () => expect(ids({ when: 'weekend' })).toEqual(['mostra', 'sabato']));
+	it('weekend', () => expect(ids({ when: 'weekend' })).toEqual(['sabato', 'mostra'])); // la mostra lunga conta dal sabato e va dopo gli altri
 	it('gratis', () => expect(ids({ free: true })).toEqual(['sabato']));
 	it('bambini (categoria o tag family)', () => expect(ids({ kids: true })).toEqual(['sagra', 'bimbi']));
 	it('domani', () => expect(ids({ when: 'tomorrow' })).toEqual(['mostra']));
 	it('prossimi 7 giorni', () => expect(ids({ when: 'week' })).toEqual(['sagra', 'stasera', 'mostra', 'sabato']));
 	it('periodo: include gli eventi in corso che si sovrappongono', () => {
-		expect(ids({ when: 'range', from: '2026-11-05', to: '' })).toEqual(['mostra', 'bimbi']);
-		expect(ids({ when: 'range', from: '2026-10-31', to: '2026-11-01' })).toEqual(['mostra', 'sabato']);
+		expect(ids({ when: 'range', from: '2026-11-05', to: '' })).toEqual(['bimbi', 'mostra']);
+		expect(ids({ when: 'range', from: '2026-10-31', to: '2026-11-01' })).toEqual(['sabato', 'mostra']);
 	});
 	it('periodo e altri filtri si combinano', () => {
 		expect(ids({ when: 'range', from: '2026-10-31', to: '2026-11-06', free: true })).toEqual(['sabato']);
@@ -122,7 +122,7 @@ describe('applyFilter con il weekend', () => {
 		expect(out()).not.toContain('finito-venerdi');
 	});
 	it('l’ordine parte dall’inizio del weekend, non da oggi', () => {
-		// gli eventi già iniziati contano dal sabato 00:00: stesso giorno, poi per inizio reale (lungo, giovedì) e infine solo-sabato
-		expect(out()).toEqual(['lungo', 'giovedi-sabato', 'solo-sabato']);
+		// gli eventi già iniziati contano dal sabato 00:00: stesso giorno, poi per inizio reale (giovedì, sabato) e per ultimo il lungo (14 giorni: longRunning)
+		expect(out()).toEqual(['giovedi-sabato', 'solo-sabato', 'lungo']);
 	});
 });
