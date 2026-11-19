@@ -9,7 +9,7 @@
 	import type { Event } from '$lib/event';
 	import type { ChosenPlace } from '$lib/geo';
 	import { KEYS, readJson } from '$lib/storage';
-	import { EMPTY_FILTER, applyFilter, filterFromParams, filterToParams, type Filter } from '$lib/filters';
+	import { EMPTY_FILTER, applyFilter, filterFromParams, filterToParams, groupingFor, type Filter } from '$lib/filters';
 	import { fmtNum } from '$lib/format';
 	import { sections } from '$lib/sections';
 
@@ -53,7 +53,8 @@
 	});
 	const source = $derived<Event[] | null>(data.all ? data.events : full);
 	const partial = $derived(!data.all && !touched && full === null);
-	const flat = $derived(source ? sections(applyFilter(source, filter, now, null), now) : []);
+	const grouping = $derived(groupingFor(filter, now));
+	const flat = $derived(source ? sections(applyFilter(source, filter, now, null), now, grouping) : []);
 	const flatEvents = $derived(flat.flatMap((g) => g.events));
 	const base = $derived(touched ? 0 : (data.pagina - 1) * PAGE_SIZE);
 	const end = $derived(base + PAGE_SIZE + extra);
@@ -116,7 +117,7 @@
 	</p>
 	<p class="map-link"><a class="btn btn-sm" href={`/?luogo=${data.slug}&vista=mappa${query ? `&${query}` : ''}`}><Map size={16} aria-hidden="true" /> Vedi sulla mappa</a></p>
 	<FilterBar {filter} onchange={setFilter} showRadius={false} />
-	<EventList events={visible} {now} {counts} {origin} loading={waiting}>
+	<EventList events={visible} {now} {counts} {origin} {grouping} loading={waiting}>
 		{#snippet empty()}
 			{#if total > 0}
 				<h2>Niente con questi filtri</h2>

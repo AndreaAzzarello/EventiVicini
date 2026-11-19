@@ -18,6 +18,7 @@
 		now,
 		highlighted = false,
 		compact = false,
+		from = 0,
 		onhover
 	}: {
 		event: Event;
@@ -26,13 +27,15 @@
 		highlighted?: boolean;
 		/** Mostre e rassegne lunghe: una riga più bassa, senza data grande né immagine. */
 		compact?: boolean;
+		/** Inizio dell'intervallo scelto con un filtro di date: un evento già iniziato mostra quel giorno nel riquadro data, non oggi. */
+		from?: number;
 		onhover?: (id: string | null) => void;
 	} = $props();
 
 	const MONTHS = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
 	const WEEKDAYS = ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'];
-	// La data del riquadro è quella di oggi per gli eventi già iniziati.
-	const start = $derived(romeParts(Math.max(event.startTime, Math.min(now, event.endTime))));
+	// La data del riquadro è quella di oggi per gli eventi già iniziati (o l'inizio dell'intervallo scelto, se è dopo oggi).
+	const start = $derived(romeParts(Math.max(event.startTime, Math.min(Math.max(now, from), event.endTime))));
 	const ongoing = $derived(event.startTime < now && event.endTime > now);
 	const startedToday = $derived(shortDate(event.startTime) === shortDate(now));
 	const running = $derived(runningLabel(event));

@@ -1,6 +1,7 @@
 import { parseDay, windowRange, type DateWindow } from './dates';
 import { CATEGORIES, compareEvents, isForKids, isFree, type Category, type Event } from './event';
 import { DEFAULT_RADIUS_KM, RADII_KM, distanceKm, type LatLng } from './geo';
+import type { Grouping } from './sections';
 
 export interface Filter {
 	q: string;
@@ -68,7 +69,15 @@ const norm = (s: string) =>
 		.replace(/[̀-ͯ]/g, '')
 		.toLowerCase();
 
-/** Eventi non finiti che passano i filtri, ordinati per inizio. Come EventFilter.apply in Dart. */
+/** Intervallo da cui raggruppare la lista con un filtro di date (Domani, Weekend, 7 giorni, Scegli date); null senza filtro o con «Oggi». */
+export function groupingFor(f: Filter, now: number): Grouping | null {
+	if (f.when === 'any' || f.when === 'today') return null;
+	const range = windowRange(f.when, now, f.from, f.to);
+	return range ? { range, when: f.when } : null;
+}
+
+/** Eventi non finiti che passano i filtri, ordinati per inizio. Come EventFilter.apply in Dart.
+ *  Con un filtro di date gli eventi già iniziati contano dall'inizio dell'intervallo, non da adesso (stessa regola di `sections`). */
 export function applyFilter(events: Event[], f: Filter, now: number, origin: LatLng | null): Event[] {
 	const range = windowRange(f.when, now, f.from, f.to);
 	const q = norm(f.q.trim());
@@ -83,5 +92,5 @@ export function applyFilter(events: Event[], f: Filter, now: number, origin: Lat
 				return false;
 			return !origin || distanceKm(origin, e) <= f.radiusKm;
 		})
-		.sort(compareEvents(now));
+		.sort(compareEvents(range ? Math.max(now, range[0]) : now));
 }

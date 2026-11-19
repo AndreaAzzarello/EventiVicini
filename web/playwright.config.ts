@@ -30,7 +30,7 @@ export default defineConfig({
 		{ name: 'mobile', use: { ...devices['Pixel 7'] }, testIgnore: /desktop\.spec\.ts/ },
 		// Safari su iPhone: solo la home mobile (pulsante flottante, safe area). WebKit di Playwright non simula notch né barra di Safari: env() vale 0.
 		{ name: 'iphone', use: { ...devices['iPhone 15'] }, testMatch: /(^|[\\/])home-mobile\.spec\.ts$/ },
-		{ name: 'desktop', use: { ...devices['Desktop Chrome'] }, testMatch: /desktop\.spec\.ts/ }
+		{ name: 'desktop', use: { ...devices['Desktop Chrome'] }, testMatch: /(desktop|filtri-lista)\.spec\.ts/ }
 	],
 	webServer: {
 		command: 'npm run build && npx vite preview --port 4300 --strictPort',

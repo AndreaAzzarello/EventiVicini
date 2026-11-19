@@ -130,6 +130,9 @@ const MONTHS_LONG = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno
 const WEEKDAYS_SHORT = ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'];
 const WEEKDAYS_LONG = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
 
+/** "sabato", "domenica": il giorno della settimana per esteso, in ora italiana. */
+export const weekdayLong = (ms: number) => WEEKDAYS_LONG[romeParts(ms).weekday];
+
 /** "12 nov". */
 export const shortDate = (ms: number) => {
 	const p = romeParts(ms);

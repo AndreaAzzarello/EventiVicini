@@ -4,7 +4,7 @@
 	import type { Event } from '$lib/event';
 	import { fmtNum } from '$lib/format';
 	import type { LatLng } from '$lib/geo';
-	import { sections } from '$lib/sections';
+	import { sections, type Grouping } from '$lib/sections';
 	import ErrorMessage from './ErrorMessage.svelte';
 	import EventCard from './EventCard.svelte';
 
@@ -18,6 +18,7 @@
 		onhover,
 		onretry,
 		counts = null,
+		grouping = null,
 		empty
 	}: {
 		events: Event[];
@@ -30,6 +31,8 @@
 		onretry?: () => void;
 		/** Conteggi dell'elenco intero per sezione, quando `events` ne mostra solo l'inizio (SSR parziale). */
 		counts?: Record<string, number> | null;
+		/** Intervallo del filtro di date: i gruppi seguono quello (giorni o settimane), non il tempo da adesso. */
+		grouping?: Grouping | null;
 		empty?: Snippet;
 	} = $props();
 </script>
@@ -61,12 +64,12 @@
 		{#if empty}{@render empty()}{:else}<h2>Per ora non c’è niente da mostrare</h2>{/if}
 	</div>
 {:else}
-	{#each sections(events, now) as section (section.key)}
+	{#each sections(events, now, grouping) as section (section.key)}
 		<section class="sect" aria-labelledby="sez-{section.key}">
 			<h2 id="sez-{section.key}">{section.title} <span class="count">{fmtNum(counts?.[section.key] ?? section.events.length)}</span></h2>
 			<ul class="list">
 				{#each section.events as event (event.id)}
-					<li><EventCard {event} {now} {origin} highlighted={highlighted === event.id} compact={section.key === 'running'} {onhover} /></li>
+					<li><EventCard {event} {now} {origin} highlighted={highlighted === event.id} compact={section.key === 'running'} from={grouping?.range[0]} {onhover} /></li>
 				{/each}
 			</ul>
 		</section>
