@@ -27,6 +27,7 @@ NAME = "_ended.json"
 VERSION = 1
 FINISHED_AFTER_DAYS = 2        # "finito": fine < mezzanotte di (oggi − 2 giorni), fuso Europe/Rome
 ROTATION_DAYS = 20             # ogni giorno si rilegge 1/20 (5%) dei dettagli finiti: tutti in 20 giorni
+REREAD_DAYS = 3                # liste ASP.NET (#85): un dettaglio futuro già noto si rilegge dalla rete ogni 3 giorni (ritardo massimo: 2)
 UNSEEN_DAYS = 90               # voci non viste tra i candidati da tanto: URL spariti dal sito
 OLD_END_DAYS = 180             # fine più vecchia di tanto (e non vista oggi): si toglie
 MAX_ENTRIES = 60_000           # tetto del file; oltre, escono le voci viste meno di recente
@@ -42,6 +43,11 @@ def finished_cutoff_ms(today: date) -> int:
 def in_rotation(url: str, today: date) -> bool:
     """True per il ~5% di URL riletto oggi: deterministico per data e URL; in ROTATION_DAYS giorni passano tutti, una volta."""
     return int(hashlib.sha1(url.encode()).hexdigest(), 16) % ROTATION_DAYS == today.toordinal() % ROTATION_DAYS
+
+
+def in_reread_slot(url: str, today: date, every: int = REREAD_DAYS) -> bool:
+    """True un giorno ogni `every` per ogni URL (deterministico per data e URL): i dettagli si distribuiscono sui giorni."""
+    return int(hashlib.sha1(url.encode()).hexdigest(), 16) % every == today.toordinal() % every
 
 
 class DetailMemo:

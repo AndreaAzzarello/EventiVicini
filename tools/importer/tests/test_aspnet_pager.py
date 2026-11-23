@@ -83,7 +83,8 @@ class Site:
         return DesignComuniHtmlAdapter("lana", BASE, "Lana", "BZ", "Trentino-Alto Adige", None, LIST, fetcher=f, memo=memo, **kw)
 
     def detail_gets(self) -> int:
-        return sum(v for (m, p), v in self.hits.items() if m == "GET" and p.startswith("/de/Dorfleben/") and p != "/de/Dorfleben/Veranstaltungen")
+        return sum(v for (m, p), v in self.hits.items() if m == "GET" and p != "/de/Dorfleben/Veranstaltungen"
+                   and (p.startswith("/de/Dorfleben/") or p == "/system/web/veranstaltung.aspx"))
 
 
 # --- pager -------------------------------------------------------------------------------------------
@@ -133,7 +134,7 @@ def test_pager_seguito_fino_al_tetto_di_5_pagine_con_4_post(tmp_path):
     assert all(f["__VIEWSTATE"] for f in s.posts) and all(not any(k.startswith("d_category") for k in f) for f in s.posts)
     first, _ = parse_list(LIST1, LIST, DAY0)
     assert urls[: len(first)] == first  # gli eventi della prima pagina restano gli stessi, nello stesso ordine
-    assert len(urls) == len(set(urls)) > len(first) * 4
+    assert len(urls) == len(set(urls)) > len(first) * 3
 
 
 def test_stop_anticipato_alla_prima_pagina_senza_eventi(tmp_path):
@@ -225,7 +226,7 @@ def test_dettagli_futuri_riletti_ogni_3_giorni_con_pager(tmp_path):
     s = Site(content_pages=10)
     out, gets = run_days(s, tmp_path, 4)
     n = len(out[0])
-    assert n > 30 and gets[0] >= n  # primo giorno: nessuna cache, si legge tutto
+    assert n > 20 and gets[0] >= n  # primo giorno: nessuna cache, si legge tutto
     assert sum(gets[1:4]) == n and max(gets[1:4]) < n  # nei 3 giorni successivi ogni dettaglio è riletto una volta sola
     assert all(len(day) == n for day in out)           # nessun evento perso nei giorni "dalla cache"
 

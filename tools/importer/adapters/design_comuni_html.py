@@ -260,7 +260,8 @@ def parse_detail(page: str, url: str, today: date, fetch=None) -> dict | None:
     for sel in ('[data-element="feedback"]', ".cmp-rating"):  # "Quanto sono chiare le informazioni…": h1/h2 del widget
         while (node := tree.css_first(sel)) is not None:
             node.decompose()
-    canonical = (tree.css_first('link[rel="canonical"]') or tree.css_first("body")).attributes.get("href") or url
+    link = tree.css_first('link[rel="canonical"]')
+    canonical = (link.attributes.get("href") if link else None) or _stable_url(url)  # senza canonical: URL senza parametri di navigazione
     og = tree.css_first('meta[property="og:title"]')
     # Alcuni temi hanno più <h1> ("Seguici su" nel piè di pagina): meglio l'h1 marcato o og:title
     title_node = tree.css_first('h1[data-element="event-title"]') or tree.css_first("main h1")
@@ -394,24 +395,29 @@ class DesignComuniHtmlAdapter:
             why.append(f"HTTP {res.status_code}")
         return res.text if res.status_code < 400 else None
 
-    def _list_urls(self, f: Fetcher, now: datetime, memo: detailmemo.DetailMemo | None = None) -> tuple[list[str], set[str]]:
-        """(candidati, link datati): link ai dettagli dalla lista (con paginazione) e, se manca roba, dalla sitemap. Non si
-        tronca a max_details: il tetto vale per le richieste (events), dopo aver tolto i dettagli finiti già noti.
-        I link datati sono quelli della lista con data leggibile e non passata: non si saltano mai (#81)."""
+    def _list_urls(self, f: Fetcher, now: datetime, memo: detailmemo.DetailMemo | None = None) -> tuple[list[str], set[str], bool]:
+        """(candidati, link datati, lista a pager ASP.NET): link ai dettagli dalla lista (con paginazione) e, se manca roba, dalla
+        sitemap. Non si tronca a max_details: il tetto vale per le richieste (events), dopo aver tolto i dettagli finiti già noti.
+        I link datati sono quelli della lista con data leggibile e non passata: non si saltano mai (#81).
+        Le liste ASP.NET (form `aspnetForm`, pagine via POST, #85) si seguono fino a max_pages."""
         starts = [self.url_eventi] if self.url_eventi else [self.base + p for p in TYPICAL_PATHS]
         found: dict[str, None] = {}
         dated: set[str] = set()
         listing = ""
+        paged = False
         why: list[str] = []
         for start in starts:
             url: str | None = start
-            for _ in range(self.max_pages):
+            for i in range(self.max_pages):
                 page = self._get(f, url, why) if url else None
                 if page is None:
                     break
                 listing = listing or url
                 links, nxt = parse_list(page, url, now.astimezone(ROME).date(), dated)
                 found.update(dict.fromkeys(links))
+                if i == 0 and nxt is None and (pager := aspnet_pager(page, url)):
+                    paged = True
+                    self._follow_pager(f, pager, url, now.astimezone(ROME).date(), found, dated)
                 url = nxt
                 if not url:
                     break
@@ -427,7 +433,34 @@ class DesignComuniHtmlAdapter:
             # evento ora) si completa dalla sitemap, che non va rimandata (#81).
             for u in self._sitemap_urls(f, path, memo if found else None, now.astimezone(ROME).date()):
                 found.setdefault(u)
-        return list(found), dated
+        return list(found), dated, paged
+
+    def _follow_pager(self, f: Fetcher, pager: "AspnetPager", url: str, today: date, found: dict[str, None], dated: set[str]) -> None:
+        """Pagine 2..min(pagine del pager, max_pages) di una lista ASP.NET, una POST ciascuna. Si ferma alla prima risposta senza
+        link nuovi o con errore (la prima pagina resta); __VIEWSTATE si prende dall'ultima risposta."""
+        fields, read = dict(pager.fields), 1
+        for n in range(1, min(pager.pages, self.max_pages)):
+            fields[pager.pager] = str(n)
+            try:
+                res = f.post(pager.action, fields, headers={"Referer": url})
+            except Blocked as e:
+                log.warning("%s: robots.txt non permette %s", self.name, e)
+                break
+            except (RobotsUnknown, httpx.HTTPError) as e:
+                log.warning("%s: pagina %d della lista non letta (%s)", self.name, n + 1, e)
+                break
+            if res.status_code >= 400:
+                log.warning("%s: pagina %d della lista non letta (HTTP %d)", self.name, n + 1, res.status_code)
+                break
+            links, _ = parse_list(res.text, url, today, dated)
+            new = [u for u in links if u not in found]
+            if not new:
+                break
+            found.update(dict.fromkeys(new))
+            read += 1
+            if nxt := aspnet_pager(res.text, url):
+                fields = dict(nxt.fields)
+        log.info("%s: lista ASP.NET, pagine lette %d di %d", self.name, read, pager.pages)
 
     def _sitemap_urls(self, f: Fetcher, path: str, memo: detailmemo.DetailMemo | None = None,
                       today: date | None = None) -> list[str]:
@@ -460,9 +493,9 @@ class DesignComuniHtmlAdapter:
         f = self.fetcher or Fetcher(client, cache_dir=CACHE_DIR, retries=4, backoff=3.0)  # server comunali lenti: Fanano ha timeout a intermittenza
         memo = self.memo if self.memo is not None else detailmemo.shared(f.cache_dir)
         today = now.astimezone(ROME).date()
-        urls, dated = self._list_urls(f, now, memo)
+        urls, dated, paged = self._list_urls(f, now, memo)
         cutoff = detailmemo.finished_cutoff_ms(today)
-        found = gets = skipped = rotated = tail_reads = tail_left = 0
+        found = gets = skipped = rotated = tail_reads = tail_left = cached = 0
         for i, url in enumerate(urls):
             if ARCHIVE_RE.search(urlsplit(url).path):  # archivio e index.html sono elenchi, non eventi
                 continue
@@ -492,6 +525,16 @@ class DesignComuniHtmlAdapter:
                         tail_left += 1
                         continue
                     tail_reads += 1
+                if paged and memo.known(url) and url not in dated and memo.ended_ms(url) is not None                         and not detailmemo.in_reread_slot(url, today):
+                    # lista ASP.NET (#85): un futuro già noto si rilegge dalla rete 1 giorno su REREAD_DAYS; negli altri l'evento si
+                    # ricostruisce dal corpo già in .httpcache (0 richieste), identico a quello letto. Senza corpo si legge come prima.
+                    meta = f._cached(url)
+                    if meta and (d := parse_detail(meta["body"], url, today)) is not None:
+                        cached += 1
+                        if (ev := self._event(d, now, horizon_days)) is not None:
+                            found += 1
+                            yield ev
+                        continue
                 if gets >= self.max_details:
                     tail_left += not memo.known(url)
                     continue
@@ -512,8 +555,8 @@ class DesignComuniHtmlAdapter:
         log.info("%s: %d pagine evento lette, %d futuri", self.name, gets, found)
         if memo is not None:
             memo.set_counter(self.name, skipped=skipped, rotated=rotated, tail_left=tail_left, gets=gets)
-            log.info("%s: dettagli saltati (finiti): %d, riletti a rotazione: %d, coda da esplorare: %d",
-                     self.name, skipped, rotated, tail_left)
+            log.info("%s: dettagli saltati (finiti): %d, riletti a rotazione: %d, coda da esplorare: %d%s",
+                     self.name, skipped, rotated, tail_left, f", dettagli dalla cache: {cached}" if paged else "")
 
     def event_from_page(self, page: str, url: str, now: datetime, horizon_days: int) -> dict | None:
         d = parse_detail(page, url, now.astimezone(ROME).date())
@@ -558,9 +601,41 @@ EVENT_LINK = re.compile(r"/eventi?/[^/?#]+", re.I)
 def _event_href(href: str, host: str, here: str) -> str:
     """href se è un dettaglio evento dello stesso sito (non la lista, non una categoria), altrimenti ""."""
     p = urlsplit(href)
+    if p.netloc == host and p.path.lower().endswith("/veranstaltung.aspx") and parse_qs(p.query).get("detailonr", [""])[0].isdigit():
+        return href  # ASP.NET: dettaglio raggiunto per numero; l'URL «bello» sta nel canonical della pagina (#85)
     if p.netloc != host or p.path.rstrip("/") == here or re.search(r"/(tipi_evento|argomento|categoria)/", p.path) or p.query:
         return ""
     return href if EVENT_LINK.search(p.path) or p.path.startswith(here + "/") else ""
+
+
+def _stable_url(url: str) -> str:
+    """URL del dettaglio senza parametri di navigazione: per veranstaltung.aspx resta solo detailonr (stesso evento, stesso id)."""
+    p = urlsplit(url)
+    n = parse_qs(p.query).get("detailonr", [""])[0]
+    return f"{p.scheme}://{p.netloc}{p.path}?detailonr={n}" if p.path.lower().endswith("/veranstaltung.aspx") and n.isdigit() else url
+
+
+@dataclass(frozen=True)
+class AspnetPager:
+    action: str               # URL (assoluto) a cui il form invia la POST
+    fields: dict[str, str]    # campi hidden/text del form: __VIEWSTATE, ricerca, pager (valore = pagina corrente, da 0)
+    pager: str                # nome del campo del pager
+    pages: int                # pagine annunciate dal pager (1 se non si legge)
+
+
+def aspnet_pager(page: str, url: str) -> AspnetPager | None:
+    """Lista ASP.NET (RIS/L3G0, Trentino-Alto Adige): `form#aspnetForm` con un input `pager-<id>`; i link di pagina sono
+    `javascript:void(0)`: filter.js copia data-filterValue nell'input e invia il form (POST). I <select> (categorie) non si inviano."""
+    tree = LexborHTMLParser(page)
+    form = tree.css_first("form#aspnetForm")
+    inp = form.css_first('input[id^="pager-"]') if form is not None else None
+    if form is None or inp is None or not form.attributes.get("action"):
+        return None
+    fields = {i.attributes["name"]: i.attributes.get("value") or "" for i in form.css("input[name]")
+              if (i.attributes.get("type") or "text").lower() in ("hidden", "text")}
+    nums = [int(m[1]) for a in form.css(".pagination .page-link") if (m := re.search(r"(\d+)\s*$", _clean(a.text())))]
+    return AspnetPager(urljoin(url, html.unescape(form.attributes["action"])), fields, inp.attributes.get("name") or inp.attributes["id"],
+                       max(nums, default=1))
 
 
 def _end_ms(d: dict | None) -> int | None:
