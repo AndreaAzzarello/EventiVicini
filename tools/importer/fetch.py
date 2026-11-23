@@ -53,14 +53,14 @@ class Fetcher:
         if at > now:
             time.sleep(at - now)
 
-    def _send(self, url: str, **kw) -> httpx.Response:
+    def _send(self, url: str, method: str = "GET", **kw) -> httpx.Response:
         """Una richiesta HTTP, attraverso i limiti per IP e subnet (se ci sono) e con l'esito riportato al gate."""
         if self.gate is None:
-            return self.client.get(url, **kw)
+            return self.client.request(method, url, **kw)
         host = urlsplit(url).netloc
         with self.gate.slot(host):
             try:
-                res = self.client.get(url, **kw)
+                res = self.client.request(method, url, **kw)
             except CONNECT_FAILED:
                 self.gate.report(host, False)
                 raise
@@ -142,11 +142,33 @@ class Fetcher:
                 headers["If-None-Match"] = meta["etag"]
             if meta.get("last_modified"):
                 headers["If-Modified-Since"] = meta["last_modified"]
+        res = self._attempts(host, url, "GET", headers, extra)
+        if res.status_code == 304 and meta:
+            self.hits += 1
+            return httpx.Response(200, text=meta["body"], request=res.request)
+        if res.status_code == 200 and self.cache_dir and (res.headers.get("etag") or res.headers.get("last-modified")):
+            self._store(url, res)
+        return res
+
+    def post(self, url: str, data: dict[str, str], headers: dict | None = None,
+             timeout: httpx.Timeout | float | None = None) -> httpx.Response:
+        """POST di un form (paginatori ASP.NET, #85): stessi robots.txt, attese per host e limiti per IP/subnet di get(); niente cache."""
+        ok = self.allowed(url)
+        if ok is None:
+            raise RobotsUnknown(f"{url} [{self.why_unknown(url)}]")
+        if not ok:
+            raise Blocked(url)
+        extra: dict = {"data": data}
+        if timeout is not None:
+            extra["timeout"] = timeout
+        return self._attempts(urlsplit(url).netloc, url, "POST", dict(headers or {}), extra)
+
+    def _attempts(self, host: str, url: str, method: str, headers: dict, extra: dict) -> httpx.Response:
         for attempt in range(self.retries + 1):
             self._wait(host)
             self.requests += 1
             try:
-                res = self._send(url, headers=headers, **extra)
+                res = self._send(url, method, headers=headers, **extra)
             except httpx.TransportError as e:
                 if attempt == self.retries or isinstance(e, CONNECT_FAILED):
                     raise
@@ -154,11 +176,6 @@ class Fetcher:
                 if res.status_code not in RETRY_STATUS or attempt == self.retries:
                     break
             time.sleep(self.backoff * 2 ** attempt)
-        if res.status_code == 304 and meta:
-            self.hits += 1
-            return httpx.Response(200, text=meta["body"], request=res.request)
-        if res.status_code == 200 and self.cache_dir and (res.headers.get("etag") or res.headers.get("last-modified")):
-            self._store(url, res)
         return res
 
     def _path(self, url: str) -> Path:
