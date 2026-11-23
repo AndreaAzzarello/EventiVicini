@@ -25,7 +25,7 @@ from registry import read_rows
 JOB = re.compile(r"^import \(([a-z0-9-]+),")
 SOURCE_REQ = re.compile(r"Z (\S+): ([\d,]+) s, (\d+) richieste")
 SOURCE_DET = re.compile(r"Z (\S+): (\d+) pagine evento lette, (\d+) futuri")
-SOURCE_SKIP = re.compile(r"Z (\S+): dettagli saltati \(finiti\): (\d+), riletti a rotazione: (\d+), coda da esplorare: (\d+)")
+SOURCE_SKIP = re.compile(r"Z (\S+): dettagli saltati \(finiti\): (\d+), riletti a rotazione: (\d+), coda da esplorare: (\d+)(?:, dettagli dalla cache: (\d+))?")
 NET = re.compile(r"Z Rete: (\d+) IP, (\d+) s di attesa per i limiti \((\d+) pause di subnet\); più colpiti: (.*)$")
 IP_ENTRY = re.compile(r"(\d+\.\d+\.\d+\.\d+) (\d+) ric\., picco (\d+)/min")
 DETAILS_LINE = re.compile(r"Z Dettagli \(([^)]+)\): richieste di dettaglio (\d+), saltati \(finiti\) (\d+), riletti a rotazione (\d+), "
@@ -51,6 +51,8 @@ def parse_log(text: str) -> dict[str, dict]:
             r["sources"].setdefault(m2[1], {}).update(details=int(m2[2]), future=int(m2[3]))
         elif m2 := SOURCE_SKIP.search(rest):
             r["sources"].setdefault(m2[1], {}).update(skipped=int(m2[2]), rotated=int(m2[3]), tail=int(m2[4]))
+            if m2[5]:  # liste ASP.NET (#85): dettagli ricostruiti dal corpo in cache, senza richiesta
+                r["sources"][m2[1]]["cached"] = int(m2[5])
         elif m2 := DETAILS_LINE.search(rest):
             r["details"] = {"gets": int(m2[2]), "skipped": int(m2[3]), "rotated": int(m2[4]), "tail": int(m2[5]),
                             "tail_sources": int(m2[6]), "sitemap_skipped": int(m2[7])}
@@ -67,7 +69,7 @@ def by_vendor(region: str, sources: dict[str, dict], vend: dict[tuple[str, str],
     for name, s in sources.items():
         v = out.setdefault(vend.get((region, name), "?"), {"sources": 0})
         v["sources"] += 1
-        for k in ("requests", "seconds", "details", "future", "skipped", "rotated", "tail"):
+        for k in ("requests", "seconds", "details", "future", "skipped", "rotated", "tail", "cached"):
             v[k] = v.get(k, 0) + s.get(k, 0)
     return dict(sorted(out.items(), key=lambda kv: -kv[1].get("requests", 0)))
 
@@ -114,7 +116,8 @@ def render(report: dict[str, dict], minutes: dict[str, float], vend: dict, only:
             lines.append(f"   IP {ip}: {n} ric., picco {peak}/min")
         for v, a in by_vendor(region, r["sources"], vend).items():
             lines.append(f"   {v}: {a['sources']} fonti, {a['requests']} ric., {_num(round(a['seconds']))} s, dettagli {a['details']} "
-                         f"(futuri {a['future']}), saltati {a['skipped']}, ruotati {a['rotated']}, coda {a['tail']}")
+                         f"(futuri {a['future']}), saltati {a['skipped']}, ruotati {a['rotated']}, coda {a['tail']}"
+                         + (f", dalla cache {a['cached']}" if a.get("cached") else ""))
         if r["details"]:
             d = r["details"]
             lines.append(f"   Dettagli: {d['gets']} richieste, saltati {d['skipped']}, ruotati {d['rotated']}, coda {d['tail']} "

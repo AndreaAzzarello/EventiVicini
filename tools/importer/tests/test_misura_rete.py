@@ -33,6 +33,13 @@ def test_righe_nuove_dei_dettagli_saltati():
     assert rep["piemonte"]["details"] == {"gets": 700, "skipped": 900, "rotated": 40, "tail": 5000, "tail_sources": 80, "sitemap_skipped": 3}
 
 
+def test_riga_con_dettagli_dalla_cache_delle_liste_aspnet():
+    line = ("import (trentino-alto-adige, 3931, false)	UNKNOWN STEP	2026-11-24T08:34:40.0000000Z lana: dettagli saltati (finiti): 2, "
+            "riletti a rotazione: 0, coda da esplorare: 0, dettagli dalla cache: 21")
+    src = m.parse_log(line)["trentino-alto-adige"]["sources"]["lana"]
+    assert src == {"skipped": 2, "rotated": 0, "tail": 0, "cached": 21}
+
+
 def test_render_e_confronto_prima_dopo():
     before = m.parse_log(FIXTURE.read_text(encoding="utf-8"))
     after = m.parse_log(FIXTURE.read_text(encoding="utf-8").replace("2227 ric.", "600 ric.").replace("44 richieste", "11 richieste"))
