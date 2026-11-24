@@ -14,6 +14,7 @@
 	import Link2 from '@lucide/svelte/icons/link-2';
 	import MapPin from '@lucide/svelte/icons/map-pin';
 	import Navigation from '@lucide/svelte/icons/navigation';
+	import Plus from '@lucide/svelte/icons/plus';
 	import Share2 from '@lucide/svelte/icons/share-2';
 	import Ticket from '@lucide/svelte/icons/ticket';
 	import { CATEGORIES, PRICE_TYPES, cityPath, eventPath, eventSource, isForKids, runningLabel, ticketLabel, ticketsOffSale, ticketVendor } from '$lib/event';
@@ -199,7 +200,10 @@
 		{#if vendor && !offSale}I biglietti li vende {vendor}: il pulsante apre il suo sito, dove valgono le sue condizioni.{/if}
 	</p>
 
-	<div class="report-row"><ReportDialog eventId={e.id} title={e.title} contact={data.contact} /></div>
+	<div class="report-row">
+		<ReportDialog eventId={e.id} title={e.title} contact={data.contact} />
+		<a class="btn btn-sm" href="/proponi?da=social"><Plus size={16} aria-hidden="true" /> Segnala un evento trovato sui social</a>
+	</div>
 </article>
 
 <style>
@@ -322,6 +326,9 @@
 		margin: 0 0 var(--space-3);
 	}
 	.report-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
 		margin: 0 0 var(--space-3);
 	}
 	.source {

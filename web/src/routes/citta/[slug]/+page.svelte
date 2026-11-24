@@ -4,6 +4,7 @@
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import EventList from '$lib/components/EventList.svelte';
+	import SocialReportRow from '$lib/components/SocialReportRow.svelte';
 	import FilterBar from '$lib/components/FilterBar.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import type { Event } from '$lib/event';
@@ -118,6 +119,7 @@
 	<p class="map-link"><a class="btn btn-sm" href={`/?luogo=${data.slug}&vista=mappa${query ? `&${query}` : ''}`}><Map size={16} aria-hidden="true" /> Vedi sulla mappa</a></p>
 	<FilterBar {filter} onchange={setFilter} showRadius={false} />
 	<EventList events={visible} {now} {counts} {origin} {grouping} loading={waiting}>
+		{#snippet inline()}<SocialReportRow />{/snippet}
 		{#snippet empty()}
 			{#if total > 0}
 				<h2>Niente con questi filtri</h2>
@@ -125,7 +127,7 @@
 				<button class="btn" onclick={() => setFilter(EMPTY_FILTER)}>Azzera i filtri</button>
 			{:else}
 				<h2>Per ora niente in programma</h2>
-				<p class="muted">Conosci un evento a {data.city}? <a href="/proponi">Proponilo</a>.</p>
+				<p class="muted">Conosci un evento a {data.city}? <a href="/proponi?da=social">Segnalalo</a>.</p>
 			{/if}
 		{/snippet}
 	</EventList>

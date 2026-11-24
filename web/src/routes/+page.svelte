@@ -10,6 +10,7 @@
 	import { goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import EventList from '$lib/components/EventList.svelte';
+	import SocialReportRow from '$lib/components/SocialReportRow.svelte';
 	import EventsMap from '$lib/components/EventsMap.svelte';
 	import FilterBar from '$lib/components/FilterBar.svelte';
 	import SearchBox from '$lib/components/SearchBox.svelte';
@@ -343,7 +344,8 @@
 					onhover={(id) => (hovered = id)}
 					onretry={load}
 				>
-					{#snippet empty()}
+					{#snippet inline()}<SocialReportRow />{/snippet}
+						{#snippet empty()}
 						{#if placeHit}
 							<h2>Nessun evento con «{filter.q.trim()}» qui vicino</h2>
 							<p class="muted">Cercavi il luogo? Vai a {placeHit.place.label}.</p>
@@ -384,7 +386,7 @@
 										Cerca più lontano
 									</button>
 								{/if}
-								<a class="btn" href="/proponi">Proponi un evento</a>
+								<a class="btn" href="/proponi?da=social">Segnala un evento</a>
 							</div>
 						{/if}
 					{/snippet}

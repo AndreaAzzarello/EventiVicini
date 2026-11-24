@@ -20,7 +20,8 @@
 		onretry,
 		counts = null,
 		grouping = null,
-		empty
+		empty,
+		inline
 	}: {
 		events: Event[];
 		now: number;
@@ -35,12 +36,15 @@
 		/** Intervallo del filtro di date: i gruppi seguono quello (giorni o settimane), non il tempo da adesso. */
 		grouping?: Grouping | null;
 		empty?: Snippet;
+		/** Riga a larghezza piena dentro l'elenco, dopo la INLINE_AFTER-esima card (o in fondo se sono meno): raggiungibile anche con 200+ eventi. */
+		inline?: Snippet;
 	} = $props();
 
 	// Render a blocchi: montare 200+ card in un colpo è un long task (TBT). Le prime INITIAL card (≥ quelle dell'HTML del server: nessun
 	// hydration_mismatch) subito, il resto a passi di CHUNK card nei momenti liberi del thread. Sezioni, titoli e conteggi
 	// si calcolano sempre sull'elenco intero; a riempimento finito il DOM è identico a prima.
-	const INITIAL = 24;
+	const INITIAL = 24; // ≥ INLINE_AFTER: la card che ospita la riga è sempre già montata
+	const INLINE_AFTER = 8;
 	const CHUNK = 12;
 	let limit = $state(INITIAL);
 	const groups = $derived(sections(events, now, grouping));
@@ -50,6 +54,8 @@
 	// solo la prima con immagine ha priorità alta di rete. Le altre restano lazy.
 	const aboveFold = $derived(shown.flatMap((s) => s.events).slice(0, 2));
 	const firstWithImage = $derived(aboveFold.find((e) => e.imageUrl)?.id);
+	// Card dopo cui sta la riga `inline`: calcolata sull'elenco intero, quindi non si sposta mentre il render a blocchi riempie la pagina.
+	const inlineAfterId = $derived(groups.flatMap((g) => g.events)[Math.min(INLINE_AFTER, total) - 1]?.id);
 	/** Cambia quando la lista è un'altra (filtro, luogo), non a ogni minuto in cui `now` ricalcola gli stessi eventi. */
 	const signature = $derived(`${total}|${events[0]?.id}|${events.at(-1)?.id}|${grouping?.when ?? ''}`);
 
@@ -126,6 +132,7 @@
 			<ul class="list">
 				{#each section.events as event (event.id)}
 					<li><EventCard {event} {now} {origin} highlighted={highlighted === event.id} compact={section.key === 'running'} from={grouping?.range[0]} eager={aboveFold.includes(event)} high={event.id === firstWithImage} {onhover} /></li>
+					{#if inline && event.id === inlineAfterId}<li class="inline">{@render inline()}</li>{/if}
 				{/each}
 			</ul>
 		</section>
@@ -139,6 +146,19 @@
 		padding: 0;
 		display: grid;
 		gap: var(--space-3);
+	}
+	.inline {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2) var(--space-3);
+		padding: var(--space-3);
+		background: var(--surface-2);
+		border-radius: var(--radius);
+	}
+	.inline :global(p) {
+		margin: 0;
 	}
 	.sect + .sect {
 		margin-top: var(--space-5);

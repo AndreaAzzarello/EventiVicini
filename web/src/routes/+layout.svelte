@@ -126,6 +126,7 @@
 		</div>
 		<nav aria-label="Informazioni">
 			<a href="/proponi">Proponi un evento</a>
+			<a href="/proponi?da=social">Segnala un evento</a>
 			<a href="/privacy">Privacy</a>
 			<a href="/cookie">Cookie</a>
 			<a href="/termini">Termini</a>
