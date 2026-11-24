@@ -71,7 +71,9 @@ type Entry = { at: number; value: unknown };
 const memo = new Map<string, Entry>();
 const inflight = new Map<string, Promise<unknown>>();
 const HOUR = 3_600_000;
-const FRESH = { list: 6 * HOUR, one: HOUR, sitemap: 12 * HOUR };
+// list: 3 ore. La chiave delle liste porta la versione dei dati (bundles/coverage), quindi dopo un import si rileggono comunque;
+// il TTL protegge solo da modifiche fuori import (admin) e dal costo in letture: ogni miss legge una cella per documento.
+const FRESH = { list: 3 * HOUR, one: HOUR, sitemap: 12 * HOUR };
 const KEEP_S = 2 * 86_400; // quanto resta una copia nella Cache API, anche scaduta, per servirla in emergenza
 const BLOCK_MS = 10 * 60_000; // dopo un 429 non si interroga Firestore per 10 minuti
 let blockedUntil = 0;
@@ -98,7 +100,11 @@ function remember(key: string, entry: Entry) {
 	memo.set(key, entry);
 }
 
-async function cached<T>(key: string, load: () => Promise<T>, fresh: number = FRESH.one): Promise<T> {
+/**
+ * `keep`: decide se il valore letto è completo. Un valore incompleto (parte di bundle mancante, query fallita, vuoto sospetto)
+ * non entra né nel memo né nella Cache API: si serve la copia precedente se c'è, altrimenti il valore così com'è.
+ */
+async function cached<T>(key: string, load: () => Promise<T>, fresh: number = FRESH.one, keep?: (value: T) => boolean): Promise<T> {
 	let hit = memo.get(key);
 	if (hit && Date.now() - hit.at < fresh) return hit.value as T;
 	const shared = await edgeGet(key);
@@ -115,6 +121,7 @@ async function cached<T>(key: string, load: () => Promise<T>, fresh: number = FR
 	if (!run) {
 		run = load()
 			.then(async (value) => {
+				if (keep && !keep(value)) return hit ? (hit.value as T) : value;
 				const entry = { at: Date.now(), value };
 				remember(key, entry);
 				await edgePut(key, entry);
@@ -173,24 +180,29 @@ const TRUE: Value = { booleanValue: true };
  * proprio le mostre che finiscono tardi. Query a parte; se l'indice non c'è ancora (firestore.indexes.json
  * non pubblicato) si degrada al comportamento precedente invece di rompere la lista.
  */
-async function longRunningQuery(where: Filter[], orderBy: string[]): Promise<Event[]> {
+async function longRunningQuery(where: Filter[], orderBy: string[]): Promise<{ events: Event[]; ok: boolean }> {
 	try {
-		return await runQuery([...where, f('longRunning', 'EQUAL', TRUE)], orderBy, LONG_LIMIT);
+		return { events: await runQuery([...where, f('longRunning', 'EQUAL', TRUE)], orderBy, LONG_LIMIT), ok: true };
 	} catch (err) {
 		if (String(err).includes('Firestore 429')) throw err; // quota esaurita: non è un indice mancante, niente lista vuota in cache
 		console.warn('query longRunning non riuscita (indice mancante?):', err);
-		return [];
+		return { events: [], ok: false }; // la lista si serve ma non si memorizza: manca una parte
 	}
 }
 
 // Liste precalcolate dall'importer (collezione bundles, vedi bundles.ts): una lettura per cella o città invece di una per
 // evento. Finché il primo import non li ha creati (bundles/coverage assente) si ricade sulle query sulla collezione events.
-// bundles/coverage è scritto dallo stesso import: se c'è, ci sono anche le liste. Lo legge comunque ogni pagina (è la copertura).
+// bundles/coverage è scritto dallo stesso import, per ultimo: se c'è, ci sono anche le liste. Lo legge comunque ogni pagina (è la copertura).
+// La sua `version` entra nelle chiavi di cache delle liste: una versione nuova è visibile solo a bundle completi.
 const bundlesReady = async () => (await coverageBundle()) !== null;
 
-/** Righe dei bundle richiesti (una richiesta; una seconda solo per quelli divisi in più documenti). Un bundle assente è vuoto. */
-async function readBundles(names: string[]): Promise<unknown[][]> {
-	if (!names.length) return [];
+/**
+ * Righe dei bundle richiesti (una richiesta; una seconda solo per quelli divisi in più documenti). Un bundle assente è vuoto
+ * (celle senza eventi: normale). `complete` è falso se manca una parte `~k` dichiarata dalla testa: l'importer le scrive
+ * prima della testa, quindi succede solo con dati davvero a metà.
+ */
+async function readBundles(names: string[]): Promise<{ rows: unknown[][]; complete: boolean }> {
+	if (!names.length) return { rows: [], complete: true };
 	const r = root();
 	const batchGet = async (ids: string[]) => {
 		readCount += ids.length;
@@ -203,8 +215,16 @@ async function readBundles(names: string[]): Promise<unknown[][]> {
 		first.set(name, [d.json ?? '[]']);
 		for (let k = 1; k < (d.parts ?? 1); k++) more.push(`${name}~${k}`);
 	}
-	if (more.length) for (const [name, d] of await batchGet(more)) first.get(name.split('~')[0])?.push(d.json ?? '[]');
-	return [...first.values()].flatMap(parseRows);
+	let complete = true;
+	if (more.length) {
+		const got = await batchGet(more);
+		for (const name of more) {
+			const d = got.get(name);
+			if (d) first.get(name.split('~')[0])?.push(d.json ?? '[]');
+			else complete = false;
+		}
+	}
+	return { rows: [...first.values()].flatMap(parseRows), complete };
 }
 
 /** Più cache di liste ripetono lo stesso evento: id unico, finito escluso. */
@@ -213,15 +233,31 @@ const liveEvents = (rows: unknown[][], now: number) => {
 	return rows.map(rowToEvent).filter((e) => e.endTime >= now && !seen.has(e.id) && seen.add(e.id));
 };
 
+export interface Listing {
+	events: Event[];
+	/** Falso se la lista può essere parziale (parte di bundle mancante, query fallita, vuoto sospetto): non si memorizza. */
+	complete: boolean;
+}
+export type NearList = Listing & { version: string };
+
+const isComplete = (l: Listing) => l.complete;
+
+/** Una lista vuota è sospetta se la copertura dice che lì ci sono eventi: bundle non ancora scritto, non cella senza eventi. */
+const emptyIsSuspect = (cov: Coverage[] | null, near: (c: CoverageComune) => boolean) =>
+	!!cov?.some((r) => r.comuni.some((c) => c.events > 0 && near(c)));
+
 /** Eventi non finiti entro km dal centro: una query per intervallo di geohash, mai l'intera collezione. */
-export function eventsNear(center: LatLng, km: number): Promise<Event[]> {
-	return cached(`near:${center.lat},${center.lng},${km}`, async () => {
+export async function eventsNearList(center: LatLng, km: number): Promise<NearList> {
+	const cov = await coverageBundle();
+	const version = cov?.version ?? 'q';
+	const list = await cached<Listing>(`near:${version}:${center.lat},${center.lng},${km}`, async () => {
 		const now = nowMinute();
-		if (await bundlesReady()) {
+		if (cov) {
 			const cells = cellsAround(center, km);
 			if (cells.length > MAX_CELLS) throw new Error(`Troppe celle: ${cells.length}`);
-			const rows = await readBundles(cells);
-			return liveEvents(rows, now).filter((e) => distanceKm(center, e) <= km).sort(compareEvents(now));
+			const { rows, complete } = await readBundles(cells);
+			const events = liveEvents(rows, now).filter((e) => distanceKm(center, e) <= km).sort(compareEvents(now));
+			return { events, complete: complete && (events.length > 0 || !emptyIsSuspect(cov.regions, (c) => distanceKm(center, c) <= km)) };
 		}
 		const batches = await Promise.all(
 			radiusBounds(center, km).flatMap(([start, end]) => {
@@ -234,50 +270,65 @@ export function eventsNear(center: LatLng, km: number): Promise<Event[]> {
 					// Cella densa: il limite taglia per fine più vicina (imminenti e in corso), non per geohash.
 					// Richiede l'indice (endTime, geohash) in firestore.indexes.json.
 					// shortcut: a parità di endTime vale il geohash, non la distanza vera dal centro.
-					runQuery(where, ['endTime', 'geohash'], PER_CELL_LIMIT),
+					runQuery(where, ['endTime', 'geohash'], PER_CELL_LIMIT).then((events) => ({ events, ok: true })),
 					// Indice (longRunning, endTime, geohash).
 					longRunningQuery(where, ['endTime', 'geohash'])
 				];
 			})
 		);
 		const seen = new Set<string>();
-		return batches
-			.flat()
+		const events = batches
+			.flatMap((b) => b.events)
 			.filter((e) => !seen.has(e.id) && seen.add(e.id) && distanceKm(center, e) <= km)
 			.sort(compareEvents(now));
-	}, FRESH.list);
+		return { events, complete: batches.every((b) => b.ok) };
+	}, FRESH.list, isComplete);
+	return { ...list, version };
 }
+
+export const eventsNear = (center: LatLng, km: number): Promise<Event[]> => eventsNearList(center, km).then((l) => l.events);
 
 /**
  * Eventi attorno a un luogo, dal punto della griglia di ~5 km più vicino (come /api/events): la home e il browser
  * condividono la stessa chiave di cache. Chi chiama rifiltra sulla distanza vera e `fetched` dice cosa è coperto.
+ * `version`: versione dei dati usata; il browser la rimanda a /api/events per leggere la stessa lista.
  */
 export function eventsAround(place: LatLng, radiusKm: number) {
 	const center = { lat: snapCoord(place.lat), lng: snapCoord(place.lng) };
 	const km = radiusKm + SNAP_MARGIN_KM;
-	return eventsNear(center, km).then((events) => ({ events, fetched: { ...center, km } }));
+	return eventsNearList(center, km).then((l) => ({ ...l, fetched: { ...center, km } }));
 }
 
-export function eventsInCity(citySlug: string, limit = 100): Promise<Event[]> {
-	return cached(`city:${citySlug}:${limit}`, async () => {
-		if (/^[a-z0-9-]{1,80}$/.test(citySlug) && (await bundlesReady())) {
+export async function eventsInCityList(citySlug: string, limit = 100): Promise<NearList> {
+	const cov = await coverageBundle();
+	const version = cov?.version ?? 'q';
+	const list = await cached<Listing>(`city:${version}:${citySlug}:${limit}`, async () => {
+		if (/^[a-z0-9-]{1,80}$/.test(citySlug) && cov) {
 			// Niente controllo sulla copertura: una città può avere eventi (manuali, regionali) senza stare in coverage.
-			return liveEvents(await readBundles([`c_${citySlug}`]), nowMinute()).sort(compareEvents(Date.now())).slice(0, limit);
+			const { rows, complete } = await readBundles([`c_${citySlug}`]);
+			const events = liveEvents(rows, nowMinute()).sort(compareEvents(Date.now())).slice(0, limit);
+			return { events, complete: complete && (events.length > 0 || !emptyIsSuspect(cov.regions, (c) => c.slug === citySlug)) };
 		}
 		const where = [f('citySlug', 'EQUAL', { stringValue: citySlug }), f('endTime', 'GREATER_THAN_OR_EQUAL', int(nowMinute()))];
 		// Indice (citySlug, longRunning, endTime) per la seconda query.
 		const [list, long] = await Promise.all([runQuery(where, ['endTime'], limit), longRunningQuery(where, ['endTime'])]);
 		const seen = new Set<string>();
-		return [...list, ...long].filter((e) => !seen.has(e.id) && seen.add(e.id)).sort(compareEvents(Date.now()));
-	}, FRESH.list);
+		return {
+			events: [...list, ...long.events].filter((e) => !seen.has(e.id) && seen.add(e.id)).sort(compareEvents(Date.now())),
+			complete: long.ok
+		};
+	}, FRESH.list, isComplete);
+	return { ...list, version };
 }
+
+export const eventsInCity = (citySlug: string, limit = 100): Promise<Event[]> => eventsInCityList(citySlug, limit).then((l) => l.events);
 
 export function upcomingEvents(limit: number): Promise<Event[]> {
 	return cached(
 		`upcoming:${limit}`,
 		async () =>
 			(await bundlesReady())
-				? liveEvents(await readBundles(['sitemap']), nowMinute()).sort((a, b) => a.endTime - b.endTime).slice(0, limit)
+				? liveEvents((await readBundles(['sitemap'])).rows, nowMinute()).sort((a, b) => a.endTime - b.endTime).slice(0, limit)
 				: runQuery([f('endTime', 'GREATER_THAN_OR_EQUAL', int(nowMinute()))], ['endTime'], limit),
 		FRESH.sitemap
 	);
@@ -305,12 +356,13 @@ const toCoverage = (d: Doc): Coverage => {
 };
 
 /** Copertura di tutte le regioni in un documento (bundles/coverage): una lettura invece di una per regione. Null finché non esiste. */
-const coverageBundle = (): Promise<Coverage[] | null> =>
-	cached('coverage-bundle', async () => {
+const coverageBundle = (): Promise<{ regions: Coverage[]; version: string } | null> =>
+	cached('coverage-bundle:v2', async () => {
 		readCount++;
 		const doc = await call<Doc>('/bundles/coverage');
-		const json = doc && (decodeFields(doc.fields) as { json?: string }).json;
-		return json ? (JSON.parse(json) as Coverage[]) : null;
+		const d = doc && (decodeFields(doc.fields) as { json?: string; version?: number; hash?: string });
+		// version: scritta dall'importer a ogni giro; prima del primo import nuovo si ripiega sull'hash del contenuto.
+		return d?.json ? { regions: JSON.parse(d.json) as Coverage[], version: String(d.version ?? d.hash ?? 'q') } : null;
 	});
 
 /**
@@ -319,7 +371,7 @@ const coverageBundle = (): Promise<Coverage[] | null> =>
  */
 export async function coverage(): Promise<Coverage[]> {
 	const bundle = await coverageBundle();
-	if (bundle) return bundle;
+	if (bundle) return bundle.regions;
 	return cached('coverage', async () => {
 		const res = await call<{ documents?: Doc[] }>('/coverage?pageSize=50');
 		const docs = res?.documents ?? [];
@@ -332,7 +384,7 @@ export function regionCoverage(slug: string): Promise<Coverage | null> {
 	if (!/^[a-z0-9-]{1,70}$/.test(slug)) return Promise.resolve(null);
 	return cached(`region:${slug}`, async () => {
 		const bundle = await coverageBundle();
-		if (bundle) return bundle.find((r) => r.slug === slug) ?? null; // bundle presente: una regione assente non esiste, niente lettura
+		if (bundle) return bundle.regions.find((r) => r.slug === slug) ?? null; // bundle presente: una regione assente non esiste, niente lettura
 		readCount++;
 		const doc = await call<Doc>(`/coverage/${slug}`);
 		return doc ? toCoverage(doc) : null;
