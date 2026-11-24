@@ -798,6 +798,12 @@ def skipped_sources(collected: dict[str, dict], previous: dict[str, dict]) -> li
     return out
 
 
+def source_events(collected: dict[str, dict]) -> dict[str, int]:
+    """Eventi tenuti oggi per fonte, solo per le fonti che hanno risposto: una a zero qui è a zero senza errore dichiarato.
+    Li legge `ci_report.py check-drop` (#89)."""
+    return {name: int(st["events"]) for name, st in sorted(collected.items()) if not st["error"]}
+
+
 def summary(stats: dict[str, dict], sources: dict) -> str:
     """Tabella eventi per comune, errori e comuni a zero; va anche nel riepilogo del job GitHub."""
     lines = ["| comune | eventi | senza coordinate | errore |", "|---|---|---|---|"]
@@ -1010,7 +1016,7 @@ def _main(argv: list[str] | None = None) -> int:
         args.stats_out.write_text(json.dumps(stats | {
             "region": "+".join(sorted({slugify(SOURCES[n].region) for n in names})), "events": len(events), "excluded": len(excluded),
             "sources": len(names), "geocode": geocoder.requests, "deferred": len(geocoder.deferred),
-            "skipped_sources": skipped_sources(collected, previous), "net": net,
+            "skipped_sources": skipped_sources(collected, previous), "source_events": source_events(collected), "net": net,
             "coverage": coverage_metrics(collected, coverage_docs, state, health, now.date()),
             "retried_ok": sorted(SOURCES[n].city for n, st in collected.items() if st.get("retry") == "ok")}), encoding="utf-8")
     return 0

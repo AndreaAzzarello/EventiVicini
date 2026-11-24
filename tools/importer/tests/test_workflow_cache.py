@@ -87,3 +87,22 @@ def test_cache_dell_import_resta_compatibile_con_quelle_di_main_e_health_ha_la_s
 def test_dry_run_limita_il_geocoding():
     text = WORKFLOW.read_text(encoding="utf-8").replace("\r\n", "\n")
     assert "--max-geocode ${{ inputs.dry_run && 20 || needs.plan.outputs.geocode }}" in text
+
+
+def test_avviso_calo_cache_a_parte_ultimo_passo_e_job_che_fallisce():
+    """#89: lo storico del calo ha una cache sua (sizes.json e le altre invariate); il passo di controllo non fallisce e
+    viene dopo sitemap e pulizia; il fallimento è di un job a parte che parte solo se c'è un calo."""
+    text = WORKFLOW.read_text(encoding="utf-8").replace("\r\n", "\n")
+    calo = steps_with(text, "tools/importer/calo.json")
+    assert len(calo) == 1 and paths_of(calo[0]) == ["tools/importer/calo.json"]
+    assert "key: importer-calo-${{ github.run_id }}" in calo[0] and "restore-keys: importer-calo-" in calo[0]
+    assert not any("calo.json" in b for b in steps_with(text, "tools/importer/sizes.json"))
+    cleanup = text.split("\n  cleanup:\n", 1)[1].split("\n  avviso-calo:\n", 1)[0]
+    assert cleanup.index("sitemap.py build") < cleanup.index("check-drop") and "continue-on-error" not in cleanup.split("id: calo", 1)[1]
+    assert "drop: ${{ steps.calo.outputs.drop }}" in cleanup and "report: ${{ steps.calo.outputs.report }}" in cleanup
+    job = text.split("\n  avviso-calo:\n", 1)[1]
+    assert "needs: cleanup" in job and "needs.cleanup.outputs.drop == 'true'" in job and "exit 1" in job
+    assert "working-directory: ." in job, "il job non fa checkout: il working-directory globale non esiste"
+    assert "REPORT: ${{ needs.cleanup.outputs.report }}" in job and "${{ needs.cleanup.outputs.report }}" not in job.split("run: |", 1)[1]
+    marker = chr(10) + "  cleanup:" + chr(10)
+    assert "!inputs.dry_run" in text.split(marker, 1)[1].split("steps:", 1)[0]  # il dry-run salta cleanup, quindi anche il calo

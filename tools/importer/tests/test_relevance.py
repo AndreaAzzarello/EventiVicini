@@ -202,3 +202,33 @@ def test_edizione_passata_dall_anno_nel_titolo():
     assert exclusion_reason("Natale 2023", 2026) == "edizione passata"
     assert exclusion_reason("Sagra 2024-2026", 2026) is None and exclusion_reason("Natale 2026", 2026) is None
     assert exclusion_reason("Natale 2023") is None  # senza anno di inizio non si decide
+
+
+# #88: un anno nel titolo fa scartare l'evento solo se è un'edizione passata davvero
+@pytest.mark.parametrize("title,start", [
+    ("Ski Kids Merano 2000", 2026),  # Merano 2000 è il comprensorio
+    ("Camminate invernali guidate a Merano 2000", 2026),
+    ("Skishow della Scuola Sci & Snowboard 2000", 2026),
+    ("Avvento in Musica 2026/27 - BeBo", 2027),  # stagione: vale l'anno più alto
+    ("Il matrimonio perfetto | Stagione Teatrale 2026/27", 2027),
+    ("Avvento in Musica 2026-27", 2027),
+    ("Rassegna 2026/2027", 2027),
+    ("Omaggio a Piergiorgio Rebesco (1936-2020)", 2026),  # anni di vita, non un'edizione
+    ("Natale 2027", 2026),  # anno futuro
+])
+def test_anno_nel_titolo_non_scarta_eventi_veri(title, start):
+    assert exclusion_reason(title, start) is None
+
+
+@pytest.mark.parametrize("title,start", [
+    ("San Nicolò e i Krampus 2025", 2026),
+    ("Natale 2023", 2026),
+    ("Presepi Frazzanò 2024", 2026),
+    ("Epifania 2024", 2026),
+    ("Natale a Catania 2025", 2026),
+    ("Avvento in Musica 2025/26", 2027),  # stagione conclusa
+    ("Festa Nuovi Nati 2025 in Biblioteca", 2026),
+    ("Rassegna 2016", 2026),  # entro la finestra di 10 anni: passata
+])
+def test_anno_passato_nel_titolo_resta_escluso(title, start):
+    assert exclusion_reason(title, start) == "edizione passata"
