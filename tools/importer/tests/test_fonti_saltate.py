@@ -198,3 +198,10 @@ def test_avviso_su_una_riga_e_fonti_recuperate_nel_riepilogo():
 def test_il_riepilogo_unico_include_la_sezione():
     text = summary([stat(100, [skip("Modena", 82)])], None)
     assert "Fonti saltate: 1 su 100" in text and "| Modena |" in text
+
+
+def test_source_events_solo_fonti_che_hanno_risposto():
+    from run import source_events
+    out = source_events({"modena": {"error": None, "events": 12}, "carpi": {"error": None, "events": 0},
+                         "mirandola": {"error": "timed out", "events": 0}})
+    assert out == {"carpi": 0, "modena": 12}
