@@ -61,6 +61,14 @@ const isAlphaMask = (t: string) => {
 };
 
 describe('design system', () => {
+	it('z-index solo dai livelli dei token (ammessi -1, 0 e 1 per l’ordine locale)', () =>
+		none(
+			scan((t) => {
+				const m = t.match(/(?<![\w-])z-index:\s*([^;]+);/);
+				return m && !/^(-1|0|1|var\(--z-[a-z]+\))$/.test(m[1].trim()) ? m[0] : null;
+			})
+		));
+
 	it('spaziature, raggi e dimensioni solo da token (ammessi 0, 1px e 2px per i filetti)', () =>
 		none(
 			scan((t) => {

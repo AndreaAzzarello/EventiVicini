@@ -1,5 +1,5 @@
 import { error, isHttpError, json } from '@sveltejs/kit';
-import { placeFromNominatim } from '$lib/geo';
+import { shapeResults, type Hit } from '$lib/geocodeResults';
 import { siteUrl } from '$lib/config';
 import type { GeoResult } from '$lib/geocode';
 import type { RequestHandler } from './$types';
@@ -23,14 +23,6 @@ function throttle<T>(fn: () => Promise<T>): Promise<T> {
 	});
 	chain = run.catch(() => undefined);
 	return run;
-}
-
-type Hit = { lat: string; lon: string; name?: string; display_name: string; address?: Record<string, string> };
-
-function label(h: Hit, kind: string): string {
-	const place = placeFromNominatim(h.address);
-	if (kind === 'city' && place) return place.province ? `${place.city} (${place.province})` : place.city;
-	return h.display_name.split(', ').slice(0, 4).join(', ');
 }
 
 export const GET: RequestHandler = async ({ url, setHeaders }) => {
@@ -68,12 +60,8 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 		error(502, 'Geocoding non disponibile'); // rete assente, timeout o risposta non JSON: Nominatim non è raggiungibile
 	}
 	const hits = Array.isArray(body) ? body : 'lat' in body ? [body] : [];
-	const results: GeoResult[] = hits.map((h) => ({
-		label: label(h, kind),
-		lat: Number(h.lat),
-		lng: Number(h.lon),
-		place: placeFromNominatim(h.address)
-	}));
+	// reverse: un solo risultato, etichetta «Comune (PR)»; ricerca: scarto delle aree ampie, etichette distinguibili, duplicati fuori
+	const results: GeoResult[] = shapeResults(hits, endpoint === 'reverse' ? 'city' : kind, q);
 	setHeaders({ 'cache-control': 'public, max-age=86400, s-maxage=86400' });
 	return json(results);
 };

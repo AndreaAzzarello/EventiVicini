@@ -123,7 +123,7 @@
 		lng = r.lng;
 		place = r.place;
 		candidates = [];
-		geoMsg = r.place ? `Trovato: ${r.label}` : 'Trovato. Controlla il segnaposto sulla mappa.';
+		geoMsg = r.place ? `Trovato: ${r.label}${r.detail ? ` · ${r.detail}` : ''}` : 'Trovato. Controlla il segnaposto sulla mappa.';
 	}
 
 	async function find() {
@@ -305,7 +305,7 @@
 		{#if candidates.length}
 			<ul class="candidates">
 				{#each candidates as c (c.lat + ',' + c.lng)}
-					<li><button type="button" class="btn btn-sm" onclick={() => setFrom(c)}><MapPin size={16} aria-hidden="true" /> {c.label}</button></li>
+					<li><button type="button" class="btn btn-sm" onclick={() => setFrom(c)}><MapPin size={16} aria-hidden="true" /><span class="cand"><span class="cand-name">{c.label}</span>{#if c.detail}<span class="cand-detail">{c.detail}</span>{/if}</span></button></li>
 				{/each}
 			</ul>
 		{/if}
@@ -388,6 +388,23 @@
 		display: grid;
 		gap: var(--space-1);
 		justify-items: start;
+	}
+	/* Nome e dettaglio su due righe, a capo anche a 320 px: i risultati con lo stesso nome si distinguono dal dettaglio */
+	.candidates button {
+		max-width: 100%;
+		justify-content: flex-start;
+		text-align: left;
+	}
+	.cand {
+		display: grid;
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+	.cand-name {
+		font-weight: var(--fw-strong);
+	}
+	.cand-detail {
+		color: var(--muted);
 	}
 	.summary ul {
 		margin: var(--space-2) 0 0;

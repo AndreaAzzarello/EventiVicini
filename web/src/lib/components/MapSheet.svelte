@@ -117,7 +117,7 @@
 <style>
 	.sheet {
 		position: absolute;
-		z-index: 1100;
+		z-index: var(--z-sheet);
 		left: 0;
 		right: 0;
 		bottom: 0;

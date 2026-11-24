@@ -544,12 +544,12 @@
 	.hint:empty {
 		display: none;
 	}
-	/* Selettore Lista/Mappa (< 960 px): sempre raggiungibile, agganciato sotto l'header. Sotto header e dialog (1000), sopra la lista;
+	/* Selettore Lista/Mappa (< 960 px): sempre raggiungibile, agganciato sotto l'header. Sotto header e dialog (--z-header), sopra la lista e sotto il menu della ricerca (--z-menu);
 	   i z-index di Leaflet restano dentro la mappa (isolation in EventsMap), quindi non lo coprono. */
 	.toolbar {
 		position: sticky;
 		top: var(--header-offset);
-		z-index: 900;
+		z-index: var(--z-sticky);
 		margin: var(--space-3) 0 0;
 		padding: var(--space-2) 0;
 		background: var(--bg);

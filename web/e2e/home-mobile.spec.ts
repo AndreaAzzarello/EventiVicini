@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openMapSheet } from './helpers';
+import { openMapSheet, openSuggestions, suggestions, suggestionsOnTop } from './helpers';
 
 // Home mobile (#22): selettore Lista/Mappa (controllo segmentato sticky), filtri. Gira su Pixel 7 (Chromium) e iPhone 15 (WebKit).
 // Limite noto: Playwright non simula la barra di Safari né la notch, quindi env(safe-area-inset-*) vale 0:
@@ -171,3 +171,59 @@ test('filtri: la riga scorre in orizzontale con la sfumatura e non allarga la pa
 	expect(m.mask).toContain('linear-gradient');
 	expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
+
+// Ricerca luoghi (#bug iPhone): il menu dei suggerimenti sta sopra il selettore sticky e resta nell'area visibile sopra la tastiera.
+// La tastiera di iOS non si prova qui: si simula riducendo il viewport (visualViewport.height) a menu aperto.
+for (const width of [320, 360]) {
+	test.describe(`suggerimenti a ${width} px`, () => {
+		test.use({ viewport: { width, height: 640 } });
+
+		test('ogni suggerimento è in primo piano, mai coperto dal selettore Lista/Mappa', async ({ page }) => {
+			await openSuggestions(page);
+			const hits = await suggestionsOnTop(page);
+			expect(hits.filter((h) => h.checked).length).toBeGreaterThanOrEqual(3);
+			expect(hits.filter((h) => !h.ok)).toEqual([]);
+			const z = await page.evaluate(() => ({ pop: Number(getComputedStyle(document.querySelector('.pop')!).zIndex), bar: Number(getComputedStyle(document.querySelector('.toolbar')!).zIndex), header: Number(getComputedStyle(document.querySelector('.site-header')!).zIndex) }));
+			expect(z.pop).toBeGreaterThan(z.bar);
+			expect(z.pop).toBeLessThan(z.header);
+		});
+
+		test('con la tastiera aperta (viewport ridotto) si arriva all’ultimo suggerimento con le frecce e lo si sceglie', async ({ page }) => {
+			await openSuggestions(page);
+			await page.setViewportSize({ width, height: 340 }); // tastiera simulata: resta l'area sopra di essa
+			const options = suggestions(page);
+			const n = await options.count();
+			expect(n).toBeGreaterThanOrEqual(4);
+			const header = (await page.locator('.site-header').boundingBox())!;
+			await expect.poll(async () => (await page.locator('#q').boundingBox())!.y).toBeGreaterThanOrEqual(header.y + header.height - 1); // il campo non finisce sotto l'header
+			for (let i = 0; i < n; i++) await page.keyboard.press('ArrowDown');
+			const last = options.nth(n - 1);
+			await expect(last).toHaveAttribute('aria-selected', 'true');
+			const where = await page.evaluate(() => {
+				const vv = window.visualViewport!;
+				const pop = document.querySelector('.pop')!.getBoundingClientRect();
+				return { popBottom: pop.bottom, bottom: vv.offsetTop + vv.height };
+			});
+			expect(where.popBottom).toBeLessThanOrEqual(where.bottom + 1); // il menu finisce sopra la tastiera
+			const hits = await suggestionsOnTop(page);
+			expect(hits.filter((h) => !h.ok)).toEqual([]);
+			const box = (await last.boundingBox())!;
+			expect(box.y + box.height / 2).toBeLessThanOrEqual(where.bottom); // l'ultimo suggerimento è nella parte visibile
+			await last.click(); // toccabile
+			await expect(page).not.toHaveURL(/luogo=modena/);
+		});
+
+		test('Invio sceglie il suggerimento attivo, Esc chiude il menu', async ({ page }) => {
+			await openSuggestions(page);
+			await page.keyboard.press('ArrowDown');
+			await page.keyboard.press('ArrowDown');
+			await expect(suggestions(page).nth(1)).toHaveAttribute('aria-selected', 'true');
+			await page.keyboard.press('Escape');
+			await expect(page.locator('.pop')).toBeHidden();
+			await page.keyboard.press('ArrowDown');
+			await expect(page.locator('.pop')).toBeVisible();
+			await page.keyboard.press('Enter');
+			await expect(page).not.toHaveURL(/luogo=modena/);
+		});
+	});
+}
