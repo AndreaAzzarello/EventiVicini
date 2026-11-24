@@ -46,6 +46,7 @@
 	let selected = $state<string | null>(null);
 	const highlighted = $derived(hovered ?? selected);
 	let search: SearchBox | undefined = $state();
+	let list: EventList | undefined = $state();
 	/** Primo accesso senza posizione salvata né permesso di geolocalizzazione: si sceglie il luogo dalla ricerca. */
 	let needsPlace = $state(untrack(() => data.noPlace)); // senza luogo nell'URL si parte dalla scelta, anche nell'HTML del server
 	/** Senza luogo nell'URL il server non ha caricato eventi: finché il browser non sa dove cercare non si scarica nulla. */
@@ -181,6 +182,7 @@
 	/** «Vedi nella lista» dall'anteprima della mappa: porta alla card (su mobile prima cambia vista) e le dà il focus. */
 	async function showInList(id: string) {
 		if (view !== 'list' && !wide) setView('list');
+		list?.revealAll(); // la card può essere oltre le prime montate a blocchi
 		await flush();
 		const card = document.querySelector<HTMLElement>(`[data-ev-id="${CSS.escape(id)}"]`);
 		card?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -329,6 +331,7 @@
 					</p>
 				{/if}
 				<EventList
+					bind:this={list}
 					events={visible}
 					{now}
 					origin={place}
@@ -498,6 +501,7 @@
 		}
 		.intro h1 {
 			margin-bottom: var(--space-1);
+			font-size: var(--text-2xl);
 		}
 	}
 	.popular {
@@ -655,6 +659,28 @@
 		flex-wrap: wrap;
 		justify-content: center;
 		gap: var(--space-2);
+	}
+	/* Più eventi sopra la piega (#22), schermi stretti: riepilogo in --text-sm (il pulsante «Usa la mia posizione» tiene il testo e va a capo
+	   sotto, alto --control-sm) e meno aria tra testata, filtri, selettore e prima sezione. Dopo le regole base: a parità di peso vince l'ordine. */
+	@media (max-width: 399px) {
+		.summary {
+			font-size: var(--text-sm);
+			line-height: var(--lh-tight);
+		}
+		.where {
+			gap: var(--space-1) var(--space-3);
+		}
+		/* Il link del luogo resta alto --control-sm (bersaglio), ma non allunga la riga: il margine negativo lo fa sporgere sopra e sotto */
+		.place-link {
+			margin-block: calc(var(--space-1) * -1);
+		}
+		.toolbar {
+			margin-top: 0;
+			padding-top: var(--space-1);
+		}
+		.split {
+			margin-top: 0;
+		}
 	}
 	@media (min-width: 960px) {
 		.toolbar {

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { signInByEmail } from './helpers';
 
-for (const [width, height] of [[360, 740], [390, 844]]) {
+for (const [width, height] of [[320, 640], [360, 740], [390, 844]]) {
 	test(`header e pagine senza overflow orizzontale a ${width}px`, async ({ page }) => {
 		await page.setViewportSize({ width, height });
 		for (const path of [

@@ -20,6 +20,8 @@
 		highlighted = false,
 		compact = false,
 		from = 0,
+		eager = false,
+		high = false,
 		onhover
 	}: {
 		event: Event;
@@ -30,6 +32,10 @@
 		compact?: boolean;
 		/** Inizio dell'intervallo scelto con un filtro di date: un evento già iniziato mostra quel giorno nel riquadro data, non oggi. */
 		from?: number;
+		/** Card sopra la piega: l'immagine si scarica subito invece di aspettare il lazy-loading. Tutte le altre restano lazy. */
+		eager?: boolean;
+		/** Solo la prima immagine sopra la piega: priorità alta di rete (`fetchpriority`). */
+		high?: boolean;
 		onhover?: (id: string | null) => void;
 	} = $props();
 
@@ -106,7 +112,8 @@
 						srcset={img.srcset}
 						sizes={img.sizes}
 						alt=""
-						loading="lazy"
+						loading={eager ? 'eager' : 'lazy'}
+						fetchpriority={high ? 'high' : undefined}
 						decoding="async"
 						width="96"
 						height="96"

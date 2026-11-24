@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { openMapSheet, pickFirstEvent } from './helpers';
 
 // Liste lunghe (Torino, 60 eventi nel seed grande): l'HTML del server ha solo le prime 12 card, il resto arriva da /api/events (#51).
 const URL_TORINO = '/?luogo=torino';
@@ -22,6 +23,50 @@ test('HTML grezzo: 12 card, conteggi dell’elenco intero, nessuno scheletro; po
 	await expect(page.getByText('Carico gli altri eventi')).toHaveCount(0);
 	await expect(page.getByText('60 eventi')).toBeVisible();
 	expect(await page.evaluate(() => (window as unknown as { __sk: number }).__sk)).toBe(0);
+});
+
+// Render a blocchi (EventList): 12 card dal server, 24 al primo render del client, poi +12 per volta nei momenti liberi.
+test('render a blocchi: passi di al più 12 card, conteggi interi, nessun hydration_mismatch', async ({ page }) => {
+	const problems: string[] = [];
+	page.on('console', (m) => /Content Security Policy|violates the following|hydration_mismatch/i.test(m.text()) && problems.push(m.text()));
+	await page.addInitScript(() => {
+		const w = window as unknown as { __n: number[] };
+		w.__n = [];
+		new MutationObserver(() => {
+			const n = document.querySelectorAll('article').length;
+			if (n !== w.__n.at(-1)) w.__n.push(n);
+		}).observe(document, { childList: true, subtree: true });
+	});
+	await page.goto(URL_TORINO);
+	await expect(page.locator('article')).toHaveCount(60);
+	const seq = await page.evaluate(() => (window as unknown as { __n: number[] }).__n);
+	for (let i = 1; i < seq.length; i++) expect(seq[i] - seq[i - 1], `passi: ${seq.join(' → ')}`).toBeLessThanOrEqual(12);
+	expect(seq.at(-1)).toBe(60);
+	// titoli di sezione: i conteggi sono quelli dell'elenco intero
+	const counts = await page.locator('.sect h2 .count').allTextContents();
+	expect(counts.reduce((n, c) => n + Number(c.replace(/\D/g, '')), 0)).toBe(60);
+	expect(problems).toEqual([]);
+});
+
+test('un filtro riparte dalle prime card e la lista si riempie di nuovo a blocchi', async ({ page }) => {
+	const sum = async () => (await page.locator('.sect h2 .count').allTextContents()).reduce((n, c) => n + Number(c.replace(/\D/g, '')), 0);
+	await page.goto(URL_TORINO);
+	await expect(page.locator('article')).toHaveCount(60);
+	await page.getByRole('button', { name: 'Gratis', exact: true }).click();
+	await expect.poll(sum).toBeLessThan(60); // i titoli dicono subito il totale filtrato
+	const free = await sum();
+	await expect(page.locator('article')).toHaveCount(free); // e le card lo raggiungono, né una di più né una di meno
+	await page.getByRole('button', { name: /Azzera/ }).click();
+	await expect(page.locator('article')).toHaveCount(60);
+});
+
+test('«Vedi nella lista» dalla mappa porta alla card (lista a blocchi) e le dà il focus', async ({ page }) => {
+	await page.goto('/?luogo=torino&vista=mappa');
+	const { sheet } = await openMapSheet(page);
+	await pickFirstEvent(sheet);
+	const id = (await sheet.getByRole('link', { name: 'Apri scheda' }).getAttribute('href'))!.split('-').pop()!;
+	await sheet.getByRole('button', { name: 'Vedi nella lista' }).click();
+	await expect(page.locator(`[data-ev-id="${id}"] a`).first()).toBeFocused();
 });
 
 test('senza JavaScript: 12 card e il link a /citta', async ({ browser }) => {

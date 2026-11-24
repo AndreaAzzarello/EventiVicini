@@ -215,6 +215,11 @@
 		justify-content: flex-end;
 		gap: var(--space-2);
 	}
+	@media (max-width: 399px) {
+		.filters {
+			gap: var(--space-2);
+		}
+	}
 	@media (min-width: 900px) {
 		.row {
 			flex-wrap: wrap;

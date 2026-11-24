@@ -110,6 +110,51 @@ test('da tastiera: la freccia destra porta da Lista a Mappa e cambia vista', asy
 	await expect(tab(page, 'Mappa')).toBeFocused();
 });
 
+// Sopra la piega (#22): a 360×640 la prima card è intera, senza togliere il testo di «Usa la mia posizione».
+test('a 360×640 la prima card è intera sopra la piega', async ({ page }) => {
+	await page.setViewportSize({ width: 360, height: 640 });
+	await home(page);
+	const box = (await page.locator('[data-ev-id]').first().boundingBox())!;
+	expect(box.y).toBeGreaterThanOrEqual(0);
+	expect(box.y + box.height).toBeLessThanOrEqual(640);
+	await expect(page.getByRole('button', { name: 'Usa la mia posizione' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Usa la mia posizione' })).toContainText('Usa la mia posizione'); // testo visibile, non solo etichetta
+});
+
+for (const [width, height] of [[360, 640], [320, 640]]) {
+	test(`a ${width}px: nessun overflow orizzontale e bersagli di testata, filtri e selettore ≥ 24 px`, async ({ page }) => {
+		await page.setViewportSize({ width, height });
+		await home(page);
+		expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+		const small = await page.evaluate(() =>
+			[...document.querySelectorAll<HTMLElement>('.intro button, .tabs button, .filters .chip, .filters select, .filters input')]
+				.map((el) => ({ el, r: el.getBoundingClientRect() }))
+				.filter(({ r }) => r.width && (r.width < 24 || r.height < 24))
+				.map(({ el, r }) => `${el.tagName.toLowerCase()} «${(el.textContent ?? '').trim().slice(0, 20)}» ${Math.round(r.width)}×${Math.round(r.height)}`)
+		);
+		expect(small).toEqual([]);
+	});
+}
+
+// Immagini sopra la piega: eager solo nelle prime due card, priorità alta di rete al massimo sulla prima immagine, il resto lazy.
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+test('immagini: eager nelle prime due card, fetchpriority alta solo sulla prima, le altre lazy', async ({ page }) => {
+	await page.route('https://example.org/**', (r) => r.fulfill({ contentType: 'image/png', body: PNG })); // immagini che caricano: nessun ripiego
+	await page.goto('/?luogo=torino'); // seed grande: card con immagine
+	await expect(page.locator('[data-ev-id]')).toHaveCount(60);
+	const imgs = await page.$$eval('[data-ev-id]', (cards) =>
+		cards.map((c) => {
+			const i = c.querySelector('img');
+			return i ? { loading: i.loading, fp: i.getAttribute('fetchpriority') } : null;
+		})
+	);
+	expect(imgs.filter(Boolean).length).toBeGreaterThan(0);
+	imgs.forEach((im, i) => im && expect(im.loading, `card ${i}`).toBe(i < 2 ? 'eager' : 'lazy'));
+	const high = imgs.map((im, i) => (im?.fp === 'high' ? i : -1)).filter((i) => i >= 0);
+	expect(high.length).toBe(1); // esattamente una, sulla prima con immagine
+	expect(high[0]).toBeLessThan(2);
+});
+
 test('filtri: il select della distanza è alto quanto i chip', async ({ page }) => {
 	await home(page);
 	const select = (await page.locator('.filters select').boundingBox())!;

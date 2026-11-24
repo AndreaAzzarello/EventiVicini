@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { romeTime, windowRange } from './dates';
-import { sections, type Grouping } from './sections';
+import { sections, takeFlat, type Grouping } from './sections';
 
 const ev = (id: string, start: number, endH = 2, longRunning = false) => ({
 	id,
@@ -152,5 +152,35 @@ describe('sections con un filtro di date', () => {
 
 	it('senza raggruppamento il comportamento è quello di prima', () => {
 		expect(titled([ev('x', romeTime(2026, 10, 28, 16))], null)).toEqual(['Oggi:x']);
+	});
+});
+
+describe('takeFlat', () => {
+	const wed = romeTime(2026, 10, 28, 15);
+	const list = [
+		ev('a', romeTime(2026, 10, 28, 16)),
+		ev('b', romeTime(2026, 10, 28, 17)),
+		ev('c', romeTime(2026, 10, 28, 21)),
+		ev('d', romeTime(2026, 10, 31, 20)),
+		ev('e', romeTime(2026, 11, 2, 11))
+	];
+	const groups = sections(list, wed); // today:a,b · tonight:c · weekend:d · later:e
+	const flat = (n: number) => takeFlat(groups, n).flatMap((s) => s.events.map((e) => e.id));
+
+	it('rispetta l’ordine della lista e taglia a metà una sezione', () => {
+		expect(flat(1)).toEqual(['a']);
+		expect(flat(3)).toEqual(['a', 'b', 'c']);
+		expect(takeFlat(groups, 1).map((s) => `${s.key}:${s.events.length}/${s.total}`)).toEqual(['today:1/2']);
+	});
+
+	it('le sezioni oltre il limite non compaiono; i conteggi restano quelli interi', () => {
+		expect(takeFlat(groups, 4).map((s) => s.key)).toEqual(['today', 'tonight', 'weekend']);
+		expect(takeFlat(groups, 4).map((s) => s.total)).toEqual([2, 1, 1]);
+	});
+
+	it('con un limite oltre il totale, o senza eventi, non perde né inventa nulla', () => {
+		expect(flat(99)).toEqual(['a', 'b', 'c', 'd', 'e']);
+		expect(takeFlat(groups, 0)).toEqual([]);
+		expect(takeFlat([], 24)).toEqual([]);
 	});
 });
