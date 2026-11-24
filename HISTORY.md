@@ -1,5 +1,6 @@
 # Cronologia
 
+- 2026-11-24: PR (fix/web-geocode-cache), /api/geocode: la versione del formato (`GEOCODE_FORMAT`, ora 3) è il parametro `v` di ogni richiesta e il prefisso della chiave locale `ev:geocode`. In produzione il bordo Cloudflare e la cache del browser tenevano per 24 h la risposta vecchia sotto lo stesso URL (due righe «Modena» e segnaposto sulla provincia). L'handler accetta `v` e lo ignora; TTL invariati.
 - 2026-11-24: PR (fix/web-ricerca-mobile-geocoder), ricerca luoghi della home: il menu dei suggerimenti sta sopra il selettore Lista/Mappa (livelli `--z-*` nei token) e nell'area visibile sopra la tastiera (visualViewport); geocoder di /proponi: niente province/aree ampie, etichette con dettaglio, duplicati entro 1 km tolti, il comune per primo. Chiavi della cache locale `ev:geocode` ora `v2:`.
 - 2026-11-24: PR #96, immagini più leggere su /citta, /?luogo e dettaglio evento (variante piccola derivata in lettura, ripiego all'originale; seguito importer #95).
 - 2026-11-24: PR #97, home più compatta sotto 400 px (una card intera a 360x640), lista renderizzata a blocchi (TBT 220 → 14 ms in locale), immagini sopra la piega in eager.
