@@ -34,6 +34,8 @@
 	const listId = `${uid}-list`;
 
 	let input: HTMLInputElement | undefined = $state();
+	let box: HTMLDivElement | undefined = $state();
+	let pop: HTMLDivElement | undefined = $state();
 	let typed = $state<string | null>(null); // testo digitato, prima che il filtro lo recepisca
 	let open = $state(false);
 	let active = $state(-1);
@@ -166,12 +168,45 @@
 		}
 	}
 
+	/**
+	 * Altezza del menu = area realmente visibile sotto il campo. Con la tastiera di iOS il layout viewport non si ridimensiona:
+	 * conta il visualViewport (ripiego: innerHeight, e il valore di default del CSS). Se restano meno di 3 righe, il campo sale
+	 * sotto l'header (scroll-margin-top) per far posto ai suggerimenti.
+	 */
+	function fit() {
+		if (!pop || !box || !input) return;
+		const row = input.offsetHeight || 48;
+		const vv = window.visualViewport;
+		const room = () => (vv ? vv.offsetTop + vv.height : innerHeight) - pop!.getBoundingClientRect().top - 8;
+		if (room() < 3 * row) box.scrollIntoView({ block: 'start' });
+		pop.style.setProperty('--pop-max', `${Math.max(2 * row, Math.floor(room()))}px`);
+	}
+
+	$effect(() => {
+		if (!expanded) return;
+		fit();
+		const vv = window.visualViewport;
+		vv?.addEventListener('resize', fit);
+		vv?.addEventListener('scroll', fit);
+		addEventListener('resize', fit);
+		return () => {
+			vv?.removeEventListener('resize', fit);
+			vv?.removeEventListener('scroll', fit);
+			removeEventListener('resize', fit);
+		};
+	});
+
+	// Con le frecce l'opzione attiva resta dentro il menu che scorre.
+	$effect(() => {
+		if (expanded && active >= 0) document.getElementById(`${uid}-opt-${active}`)?.scrollIntoView({ block: 'nearest' });
+	});
+
 	function onfocusout(e: FocusEvent) {
 		if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) close();
 	}
 </script>
 
-<div class="box" onfocusout={onfocusout}>
+<div class="box" bind:this={box} onfocusout={onfocusout}>
 	<label for={placesOnly ? `q-${uid}` : 'q'} class="visually-hidden">{label}</label>
 	<Search size={20} aria-hidden="true" />
 	<input
@@ -192,7 +227,7 @@
 		enterkeyhint="search"
 	/>
 	<p class="visually-hidden" role="status">{status}</p>
-	<div class="pop" hidden={!expanded}>
+	<div class="pop" bind:this={pop} hidden={!expanded}>
 		<ul id={listId} role="listbox" aria-label="Suggerimenti">
 			{#if places.length}
 				<li role="presentation" class="group">
@@ -252,6 +287,7 @@
 		position: relative;
 		display: flex;
 		align-items: center;
+		scroll-margin-top: calc(var(--header-offset) + var(--space-2));
 	}
 	.box > :global(svg) {
 		position: absolute;
@@ -272,8 +308,11 @@
 		right: 0;
 		z-index: var(--z-menu);
 		margin-top: var(--space-1);
-		max-height: var(--w-dialog);
+		/* --pop-max: area visibile sotto il campo (la imposta fit() in px); di partenza il 60% dell'altezza minima dello schermo */
+		--pop-max: 60svh;
+		max-height: min(var(--w-dialog), var(--pop-max));
 		overflow-y: auto;
+		overscroll-behavior: contain;
 		padding: var(--space-2);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
