@@ -165,6 +165,7 @@ test('admin: link visibile e cliccabile, duplicati segnalati, «Fonte» dopo l�
 	await expect(page.getByRole('heading', { level: 1, name: TITLE_A })).toBeVisible();
 	const fonte = page.locator('dd', { hasText: 'segnalato da un utente e approvato dalla redazione' });
 	await expect(fonte).toBeVisible();
+	await expect(fonte).toHaveText(/instagram\.com · segnalato da un utente e approvato dalla redazione/);
 	const a = fonte.getByRole('link', { name: 'instagram.com' });
 	await expect(a).toHaveAttribute('href', LINK);
 	await expect(a).toHaveAttribute('target', '_blank');
