@@ -23,6 +23,7 @@
 	import { eventPath } from '$lib/event';
 	import { session } from '$lib/session.svelte';
 	import { STATUS_LABEL, mySubmissions, withdraw, type Submission } from '$lib/submissions';
+	import { errorMessage } from '$lib/errors';
 	import { toast } from '$lib/toast.svelte';
 
 	let name = $state('');
@@ -43,7 +44,7 @@
 			toast('File scaricato.');
 		} catch (e) {
 			console.error(e);
-			toast('Non sono riuscito a preparare il file. Riprova tra poco.');
+			toast(errorMessage(e, 'Non sono riuscito a preparare il file. Riprova tra poco.'));
 		} finally {
 			exporting = false;
 		}
@@ -87,7 +88,7 @@
 			subs = await mySubmissions();
 		} catch (e) {
 			console.error(e);
-			subsError = 'Non riesco a caricare le tue proposte.';
+			subsError = errorMessage(e, 'Non riesco a caricare le tue proposte.');
 		}
 	}
 
@@ -100,8 +101,8 @@
 				city: city.trim().slice(0, 80)
 			});
 			profileMsg = 'Profilo salvato.';
-		} catch {
-			profileMsg = 'Salvataggio non riuscito.';
+		} catch (e) {
+			profileMsg = errorMessage(e, 'Salvataggio non riuscito.');
 		}
 	}
 
@@ -111,8 +112,8 @@
 			await withdraw(s.id);
 			subs = subs?.filter((x) => x.id !== s.id) ?? null;
 			toast('Proposta ritirata.');
-		} catch {
-			toast('Non sono riuscito a ritirare la proposta.');
+		} catch (e) {
+			toast(errorMessage(e, 'Non sono riuscito a ritirare la proposta.'));
 		}
 	}
 

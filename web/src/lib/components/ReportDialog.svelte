@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Flag from '@lucide/svelte/icons/flag';
 	import { REASONS, REPORT_LIMITS, alreadyReported, sendReport, validateReport, type Reason } from '$lib/reports';
+	import { errorMessage } from '$lib/errors';
 	import { toast } from '$lib/toast.svelte';
 	import ErrorMessage from './ErrorMessage.svelte';
 
@@ -36,7 +37,7 @@
 			toast('Grazie, la segnalazione è arrivata. La esaminiamo e ti rispondiamo se hai lasciato l’email.');
 		} catch (err) {
 			console.error(err);
-			error = 'Non sono riuscito a inviare la segnalazione. Riprova tra poco, oppure scrivici all’indirizzo qui sotto.';
+			error = errorMessage(err, 'Non sono riuscito a inviare la segnalazione. Riprova tra poco, oppure scrivici all’indirizzo qui sotto.');
 		} finally {
 			busy = false;
 		}

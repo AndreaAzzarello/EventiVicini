@@ -8,6 +8,7 @@
 	import X from '@lucide/svelte/icons/x';
 	import { CATEGORIES, LISTING_NOTE, PRICE_TYPES, eventPath } from '$lib/event';
 	import type { Submission } from '$lib/submissions';
+	import { errorMessage } from '$lib/errors';
 	import { toast } from '$lib/toast.svelte';
 
 	let subs = $state<Submission[] | null>(null);
@@ -24,7 +25,7 @@
 			subs = await pendingSubmissions();
 		} catch (e) {
 			console.error(e);
-			error = 'Non riesco a caricare le proposte.';
+			error = errorMessage(e, 'Non riesco a caricare le proposte.');
 		}
 	}
 	load();
@@ -37,7 +38,7 @@
 			toast(`Pubblicato “${s.title}”. ${LISTING_NOTE}`, { label: 'Vedi', href: eventPath({ id, title: s.title }) }, 12000);
 		} catch (e) {
 			console.error(e);
-			toast('Approvazione non riuscita.');
+			toast(errorMessage(e, 'Approvazione non riuscita.'));
 		} finally {
 			busy = false;
 		}
@@ -60,7 +61,7 @@
 			dialog.close();
 		} catch (err) {
 			console.error(err);
-			toast('Rifiuto non riuscito.');
+			toast(errorMessage(err, 'Rifiuto non riuscito.'));
 		} finally {
 			busy = false;
 		}

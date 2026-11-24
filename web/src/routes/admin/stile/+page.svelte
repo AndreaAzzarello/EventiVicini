@@ -264,10 +264,19 @@
 	.space-row,
 	.type-row {
 		display: grid;
-		grid-template-columns: calc(var(--space-7) * 2) 1fr;
+		/* minmax(0, 1fr): senza, la colonna non scende sotto la parola più lunga del campione e, con un font di sistema largo
+		   (DejaVu su Linux), la pagina sfora a 360 px (#48). */
+		grid-template-columns: calc(var(--space-7) * 2) minmax(0, 1fr);
 		align-items: center;
 		gap: var(--space-3);
 		padding-block: var(--space-1);
+	}
+	@media (max-width: 479px) {
+		/* il campione a 48 px ha bisogno di tutta la larghezza: l'etichetta va sopra */
+		.type-row {
+			grid-template-columns: minmax(0, 1fr);
+			gap: var(--space-1);
+		}
 	}
 	.bar {
 		height: var(--space-3);

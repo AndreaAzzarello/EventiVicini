@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { compareEvents, type Event } from '$lib/event';
+	import { errorMessage } from '$lib/errors';
 	import { favorites, session } from '$lib/session.svelte';
 	import EventList from './EventList.svelte';
 
@@ -33,8 +34,8 @@
 				})
 			);
 			events = lists.flat();
-		} catch {
-			error = 'Non riesco a caricare i preferiti.';
+		} catch (e) {
+			error = errorMessage(e, 'Non riesco a caricare i preferiti.');
 			loadedKey = null;
 		} finally {
 			loading = false;

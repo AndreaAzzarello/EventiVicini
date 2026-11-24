@@ -1,6 +1,7 @@
 // Popola l'emulatore Firestore con eventi di prova sparsi in Italia (solo sviluppo e test E2E).
 // Uso: node scripts/seed-emulator.mjs   (con `npm run emulators` attivo)
 import { geohashForLocation } from 'geofire-common';
+import { H, makeAt, places, seedEvents } from './seed-events.mjs';
 import { randomBytes } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 
@@ -11,146 +12,16 @@ if (!/^(127\.0\.0\.1|localhost|\[::1\])(:|$)/.test(HOST)) {
 }
 const PROJECT = process.env.PUBLIC_FIREBASE_PROJECT_ID || 'demo-eventi';
 const BASE = `http://${HOST}/v1/projects/${PROJECT}/databases/(default)/documents`;
-const H = 3600_000;
 const now = Date.now();
-const day0 = new Date(now);
-day0.setHours(0, 0, 0, 0);
-const at = (days, hour) => day0.getTime() + days * 24 * H + hour * H;
+const at = makeAt(now);
 
-const places = {
-	modena: { city: 'Modena', citySlug: 'modena', province: 'MO', region: 'Emilia-Romagna', lat: 44.6458, lng: 10.9256 },
-	formigine: { city: 'Formigine', citySlug: 'formigine', province: 'MO', region: 'Emilia-Romagna', lat: 44.5733, lng: 10.8466 },
-	bologna: { city: 'Bologna', citySlug: 'bologna', province: 'BO', region: 'Emilia-Romagna', lat: 44.4939, lng: 11.3428 },
-	// Città con eventi ma senza riga attiva nel registro CSV (come Bolzano da Open Data Hub): la copertura la ricava dagli eventi
-	cesena: { city: 'Cesena', citySlug: 'cesena', province: 'FC', region: 'Emilia-Romagna', lat: 44.1391, lng: 12.2431 },
-	roma: { city: 'Roma', citySlug: 'roma', province: 'RM', region: 'Lazio', lat: 41.8986, lng: 12.4769 },
-	lecce: { city: 'Lecce', citySlug: 'lecce', province: 'LE', region: 'Puglia', lat: 40.3529, lng: 18.1743 },
-	// Comuni bilingui: city col nome ufficiale italiano, alias in cityAlt (come scrive l'importer)
-	bolzano: { city: 'Bolzano', citySlug: 'bolzano', cityAlt: 'Bozen', province: 'BZ', region: 'Trentino-Alto Adige', lat: 46.4983, lng: 11.3548 },
-	aosta: { city: 'Aosta', citySlug: 'aosta', cityAlt: 'Aoste', province: 'AO', region: "Valle d'Aosta", lat: 45.7375, lng: 7.3203 }
-};
-
-const ev = (id, place, over) => {
-	const p = places[place];
-	const lat = p.lat + (Math.random() - 0.5) * 0.01;
-	const lng = p.lng + (Math.random() - 0.5) * 0.01;
-	return {
-		id,
-		data: {
-			title: 'Evento',
-			shortDescription: '',
-			category: 'other',
-			priceType: 'free',
-			venueName: '',
-			address: `Centro, ${p.city}`,
-			imageUrl: '',
-			ticketUrl: '',
-			tags: [],
-			source: 'manual',
-			sourceUrl: '',
-			createdAt: now,
-			updatedAt: now,
-			...p,
-			lat,
-			lng,
-			geohash: geohashForLocation([lat, lng]),
-			...over
-		}
-	};
-};
-
-const events = [
-	ev('seedJazz', 'modena', {
-		title: 'Jazz in Piazza Grande',
-		shortDescription: 'Quartetto dal vivo sotto la Ghirlandina. Porta una sedia pieghevole!',
-		category: 'music',
-		// sempre in corso o di stasera: i test non dipendono dall'ora in cui girano
-		startTime: Math.min(at(0, 21), now - H),
-		endTime: Math.max(at(0, 23), now + 2 * H),
-		venueName: 'Piazza Grande',
-		address: 'Piazza Grande, 41121 Modena',
-		ticketUrl: 'https://example.org/biglietti',
-		source: 'scraper',
-		sourceUrl: 'https://www.comune.modena.it/eventi/jazz-in-piazza'
-	}),
-	ev('seedMercato', 'modena', {
-		title: 'Mercato dell’antiquariato',
-		category: 'market',
-		startTime: at(1, 8),
-		endTime: at(1, 18),
-		venueName: 'Parco Novi Sad',
-		priceType: 'free',
-		// immagine volutamente irraggiungibile: e2e/broken-image.spec.ts verifica il ripiego sul motivo di categoria
-		imageUrl: 'https://example.org/immagine-rotta.jpg'
-	}),
-	ev('seedBimbi', 'formigine', {
-		title: 'Letture animate per bambini al castello',
-		shortDescription: 'Storie e laboratori per bambini dai 4 agli 8 anni.',
-		category: 'kids',
-		startTime: at(2, 16),
-		endTime: at(2, 18),
-		venueName: 'Castello di Formigine',
-		tags: ['kids']
-	}),
-	ev('seedSagra', 'formigine', {
-		title: 'Sagra del gnocco fritto',
-		category: 'food',
-		priceType: 'low',
-		startTime: at(3, 18),
-		endTime: at(3, 23, 59),
-		tags: ['family']
-	}),
-	ev('seedMostra', 'bologna', {
-		title: 'Mostra: la Bologna dei portici',
-		category: 'culture',
-		priceType: 'premium',
-		startTime: at(-2, 10),
-		endTime: at(20, 19),
-		venueName: 'Palazzo d’Accursio'
-	}),
-	ev('seedRoma', 'roma', { title: 'Concerto all’Auditorium', category: 'music', priceType: 'premium', startTime: at(4, 20), endTime: at(4, 23) }),
-	ev('seedLecce', 'lecce', { title: 'Festa del barocco leccese', category: 'culture', startTime: at(5, 18), endTime: at(5, 23) }),
-	ev('seedBolzano', 'bolzano', { title: 'Mercatino di Natale in Piazza Walther', category: 'market', startTime: at(2, 10), endTime: at(2, 20) }),
-	ev('seedCesena', 'cesena', { title: 'Sagra della piadina', category: 'food', approxLocation: true, startTime: at(2, 12), endTime: at(2, 22) }),
-	ev('seedAosta', 'aosta', { title: 'Concerto al Teatro Romano', category: 'music', startTime: at(3, 20), endTime: at(3, 22) }),
-	ev('seedFinito', 'modena', { title: 'Evento già concluso', startTime: at(-3, 10), endTime: at(-3, 12) })
-];
-
-// SEED_XSS=1: eventi con contenuto ostile, come potrebbe arrivare da una fonte importata (scrittura Admin, quindi senza le
-// regole). Servono ai test di sicurezza dinamici (Strix) sul rendering di HTML, JSON-LD e .ics. Solo emulatore: fuori dal
-// seed normale perché gli e2e non devono vederli nelle liste.
-if (process.env.SEED_XSS) {
-	const evil = ['<img src=x onerror=alert(1)>', '</script><script>alert(2)</script>', '"><svg onload=alert(3)>', '{{7*7}}${7*7}'];
-	events.push(
-		ev('xssUno', 'modena', {
-			title: `Prova ${evil[0]} ${evil[1]}`,
-			shortDescription: `${evil[2]} <b>grassetto</b> ${evil[3]} \u2028 \u0000 fine`,
-			venueName: `<script>alert(4)</script>${evil[0]}`,
-			address: `Via "Roma" 1, <i>Modena</i> ${evil[1]}`,
-			tags: ['family', `<script>alert(5)</script>`],
-			category: 'music',
-			startTime: at(1, 20),
-			endTime: at(1, 23),
-			imageUrl: 'javascript:alert(6)',
-			ticketUrl: 'javascript:alert(7)',
-			source: 'scraper',
-			sourceUrl: 'javascript:alert(8)'
-		}),
-		ev('xssDue', 'modena', {
-			title: 'Titolo\r\nBEGIN:VEVENT\r\nSUMMARY:iniettato\r\nEND:VEVENT',
-			shortDescription: 'Riga1\r\nATTENDEE:mailto:x@example.test\\;,;',
-			venueName: 'Luogo; con, virgole\\e\nnuova riga',
-			address: 'data:text/html,<script>alert(9)</script>',
-			category: 'culture',
-			startTime: at(1, 18),
-			endTime: at(1, 19),
-			imageUrl: 'https://example.org/x.jpg" onerror="alert(10)',
-			ticketUrl: 'data:text/html;base64,PHNjcmlwdD5hbGVydCgxMSk8L3NjcmlwdD4=',
-			source: 'scraper',
-			sourceUrl: 'https://example.org/a b"><script>alert(12)</script>'
-		})
-	);
-}
+// Eventi: tutti in scripts/seed-events.mjs (date relative a oggi; provati per ogni giorno della settimana da src/lib/seed.test.ts).
+//   SEED_XSS=1    eventi con contenuto ostile (scrittura Admin, quindi senza le regole): test di sicurezza dinamici (Strix) su HTML,
+//                 JSON-LD e .ics. Fuori dal seed normale perché gli e2e non devono vederli nelle liste.
+//   SEED_BIG=1    60 eventi a Torino (oltre 100 km da Modena, fuori dal raggio massimo): per gli e2e sulle liste lunghe.
+//   SEED_BENCH=1  103 eventi in più attorno a Modena (114 in tutto, come in produzione) e una copertura sintetica di tutta Italia:
+//                 serve a npm run bench:cpu / bench:workerd, non ai test.
+const events = seedEvents(now, { xss: !!process.env.SEED_XSS, big: !!process.env.SEED_BIG, bench: !!process.env.SEED_BENCH });
 
 const enc = (v) => {
 	if (typeof v === 'string') return { stringValue: v };
@@ -160,30 +31,6 @@ const enc = (v) => {
 	if (v && typeof v === 'object') return { mapValue: { fields: Object.fromEntries(Object.entries(v).map(([k, x]) => [k, enc(x)])) } };
 	return { nullValue: null };
 };
-
-// Dati «grandi», solo su richiesta (additivi: i test e2e di base non li vedono).
-//   SEED_BIG=1    60 eventi a Torino (oltre 100 km da Modena, fuori dal raggio massimo): per gli e2e sulle liste lunghe.
-//   SEED_BENCH=1  103 eventi in più attorno a Modena (114 in tutto, come in produzione) e una copertura sintetica di tutta Italia:
-//                 serve a npm run bench:cpu / bench:workerd, non ai test.
-places.torino = { city: 'Torino', citySlug: 'torino', province: 'TO', region: 'Piemonte', lat: 45.0703, lng: 7.6869 };
-const CATS = ['music', 'food', 'art', 'sport', 'family', 'theatre', 'market', 'other'];
-const bigEvent = (prefix, place, i) =>
-	ev(`${prefix}${i}`, place, {
-		title: `Evento di prova numero ${i} con un titolo abbastanza lungo da occupare spazio`,
-		shortDescription: 'Descrizione breve di esempio per riempire la scheda con un testo realistico di circa centocinquanta caratteri, come negli eventi veri.',
-		category: CATS[i % CATS.length],
-		priceType: i % 3 ? 'free' : 'paid',
-		startTime: at(1 + (i % 6), 10 + (i % 8)),
-		endTime: at(1 + (i % 6), 12 + (i % 8)),
-		venueName: `Luogo ${i}`,
-		address: `Via di prova ${i}, ${places[place].city}`,
-		imageUrl: `https://example.org/img/${i}.jpg`,
-		tags: i % 4 ? [] : ['kids'],
-		source: 'scraper',
-		sourceUrl: `https://example.org/eventi/${i}`
-	});
-if (process.env.SEED_BIG) for (let i = 0; i < 60; i++) events.push(bigEvent('torino', 'torino', i));
-if (process.env.SEED_BENCH) for (let i = 0; i < 103; i++) events.push(bigEvent('big', 'modena', i));
 
 for (const { id, data } of events) {
 	const res = await fetch(`${BASE}/events/${id}`, {
@@ -204,7 +51,7 @@ const coverage = {
 			{ name: 'Bologna', slug: 'bologna', province: 'BO', lat: 44.4939, lng: 11.3428, events: 1 },
 			{ name: 'Cesena', slug: 'cesena', province: 'FC', lat: 44.1391, lng: 12.2431, events: 1 },
 			{ name: 'Formigine', slug: 'formigine', province: 'MO', lat: 44.5733, lng: 10.8466, events: 2 },
-			{ name: 'Modena', slug: 'modena', province: 'MO', lat: 44.6458, lng: 10.9256, events: 2 }
+			{ name: 'Modena', slug: 'modena', province: 'MO', lat: 44.6458, lng: 10.9256, events: 4 }
 		]
 	},
 	'trentino-alto-adige': {
