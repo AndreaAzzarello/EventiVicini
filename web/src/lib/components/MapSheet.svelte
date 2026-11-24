@@ -10,6 +10,7 @@
 	import { formatWhen } from '$lib/dates';
 	import { CATEGORIES, eventPath, PRICE_TYPES, type Event } from '$lib/event';
 	import { fmtNum } from '$lib/format';
+	import { imageFallback } from '$lib/imageFallback';
 	import { imageSources } from '$lib/images';
 	import { sheet } from '$lib/motion';
 	import CategoryArt from './CategoryArt.svelte';
@@ -39,7 +40,7 @@
 	let root = $state<HTMLElement>();
 	let heading = $state<HTMLElement>();
 	let broken = $state(false);
-	const img = $derived(active?.imageUrl ? imageSources(active.imageUrl) : null);
+	const img = $derived(active?.imageUrl ? imageSources(active.imageUrl, 'thumb') : null);
 	const Icon = $derived(active ? CATEGORY_ICONS[active.category] : null);
 
 	// Il focus passa al titolo a ogni cambio di contenuto: chi usa la tastiera o lo screen reader sente cosa si è aperto.
@@ -52,12 +53,6 @@
 		root?.scrollIntoView({ block: 'nearest' });
 	});
 
-	function watchBroken(el: HTMLImageElement) {
-		if (el.complete && el.naturalWidth === 0) broken = true;
-		const fail = () => (broken = true);
-		el.addEventListener('error', fail);
-		return () => el.removeEventListener('error', fail);
-	}
 </script>
 
 <!-- |local: si anima solo quando la scheda compare o sparisce da sola, non quando la mappa se ne va con la pagina. In uscita è inert: niente clic su un pannello che sta sparendo. -->
@@ -87,7 +82,7 @@
 			</div>
 			<div class="media" aria-hidden="true">
 				{#if img && !broken}
-					<img src={img.src} srcset={img.srcset} sizes="64px" alt="" width="64" height="64" loading="lazy" decoding="async" referrerpolicy="no-referrer" {@attach watchBroken} />
+					<img src={img.src} srcset={img.srcset} sizes={img.sizes} alt="" width="64" height="64" loading="lazy" decoding="async" referrerpolicy="no-referrer" {@attach imageFallback(img.original, () => (broken = true))} />
 				{:else}
 					<CategoryArt category={active.category} />
 				{/if}

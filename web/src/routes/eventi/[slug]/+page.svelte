@@ -19,6 +19,7 @@
 	import { CATEGORIES, PRICE_TYPES, cityPath, eventPath, eventSource, isForKids, runningLabel, ticketLabel, ticketsOffSale, ticketVendor } from '$lib/event';
 	import { fmtNum } from '$lib/format';
 	import { distanceKm, type ChosenPlace } from '$lib/geo';
+	import { imageFallback } from '$lib/imageFallback';
 	import { imageSources } from '$lib/images';
 	import { buildIcs } from '$lib/ics';
 	import { eventJsonLd, safeJson } from '$lib/jsonld';
@@ -50,7 +51,8 @@
 	const fromOpenData = $derived(source.href === 'https://opendatahub.com/');
 	const vendor = $derived(e.ticketUrl ? ticketVendor(e.ticketUrl) : null);
 	const offSale = $derived(ticketsOffSale(e));
-	const img = $derived(e.imageUrl ? imageSources(e.imageUrl) : null);
+	const img = $derived(e.imageUrl ? imageSources(e.imageUrl, 'hero') : null);
+	let heroBroken = $state(false);
 	const km = $derived(origin ? distanceKm(origin, e) : null);
 	const away = $derived(
 		km == null || !origin
@@ -100,11 +102,11 @@
 	{/if}
 
 	<div class="hero">
-		{#if img}
+		{#if img && !heroBroken}
 			<img
 				src={img.src}
 				srcset={img.srcset}
-				sizes="(min-width: 800px) 760px, 100vw"
+				sizes={img.sizes}
 				alt=""
 				width="760"
 				height="380"
@@ -112,6 +114,7 @@
 				decoding="async"
 				fetchpriority="high"
 				referrerpolicy="no-referrer"
+				{@attach imageFallback(img.original, () => (heroBroken = true))}
 			/>
 		{:else}
 			<CategoryArt category={e.category} size="hero" />

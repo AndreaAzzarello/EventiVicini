@@ -84,6 +84,8 @@ export function seedEvents(now, { xss = false, big = false, bench = false } = {}
 			venueName: 'Piazza Grande',
 			address: 'Piazza Grande, 41121 Modena',
 			ticketUrl: 'https://example.org/biglietti',
+			// URL a schema Plone (come le fonti reali): e2e/broken-image.spec.ts prova il ripiego dalla variante piccola all'originale
+			imageUrl: 'https://example.org/ev/jazz/@@images/image-800-0123456789abcdef0123456789abcdef.png',
 			source: 'scraper',
 			sourceUrl: 'https://www.comune.modena.it/eventi/jazz-in-piazza'
 		}),

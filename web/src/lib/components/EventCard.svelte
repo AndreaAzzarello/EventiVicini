@@ -8,6 +8,7 @@
 	import { CATEGORIES, eventPath, isForKids, isFree, PRICE_TYPES, runningLabel, type Event } from '$lib/event';
 	import { fmtNum } from '$lib/format';
 	import { distanceKm, type LatLng } from '$lib/geo';
+	import { imageFallback } from '$lib/imageFallback';
 	import { imageSources } from '$lib/images';
 	import CategoryArt from './CategoryArt.svelte';
 	import FavoriteButton from './FavoriteButton.svelte';
@@ -50,16 +51,8 @@
 	);
 	// Senza nome del luogo l'indirizzo grezzo («Via …, CAP città») è lungo e poco utile in una card: meglio la località.
 	const place = $derived(event.venueName || event.locality || event.address);
-	const img = $derived(event.imageUrl ? imageSources(event.imageUrl) : null);
+	const img = $derived(event.imageUrl ? imageSources(event.imageUrl, 'thumb') : null);
 	let broken = $state(false);
-
-	// Niente onerror inline (la CSP lo blocca): se l'errore è avvenuto prima dell'idratazione lo si legge da complete/naturalWidth.
-	function watchBroken(img: HTMLImageElement) {
-		if (img.complete && img.naturalWidth === 0) broken = true;
-		const fail = () => (broken = true);
-		img.addEventListener('error', fail);
-		return () => img.removeEventListener('error', fail);
-	}
 </script>
 
 <article
@@ -111,14 +104,14 @@
 					<img
 						src={img.src}
 						srcset={img.srcset}
-						sizes="96px"
+						sizes={img.sizes}
 						alt=""
 						loading="lazy"
 						decoding="async"
 						width="96"
 						height="96"
 						referrerpolicy="no-referrer"
-						{@attach watchBroken}
+						{@attach imageFallback(img.original, () => (broken = true))}
 					/>
 				{:else}
 					<CategoryArt category={event.category} />
