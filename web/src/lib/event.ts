@@ -132,6 +132,37 @@ export function safeUrl(s: string): string {
 	}
 }
 
+/**
+ * Link alla fonte di una proposta (un post sui social o una pagina web): solo https, host presente, niente credenziali.
+ * Restituisce l'indirizzo normalizzato (host in minuscolo) oppure null. Lavora solo sul testo: non apre mai il link.
+ */
+export function normalizeLink(s: string): string | null {
+	try {
+		const u = new URL(s.trim());
+		return u.protocol === 'https:' && u.host && !u.username && !u.password ? u.href : null;
+	} catch {
+		return null;
+	}
+}
+
+/** Chiave per riconoscere lo stesso link scritto in modi diversi: host senza www, percorso senza «/» finale, senza query né #. */
+export function linkKey(s: string): string {
+	const link = normalizeLink(s);
+	if (!link) return '';
+	const u = new URL(link);
+	return `${u.hostname.replace(/^www\./, '')}${u.pathname.replace(/\/+$/, '')}`;
+}
+
+/** Messaggio d'errore per il campo «Link al post o alla pagina», o undefined se va bene (vuoto ammesso se non obbligatorio). */
+export function validateSourceLink(raw: string, required: boolean): string | undefined {
+	const v = raw.trim();
+	if (!v) return required ? 'Campo obbligatorio' : undefined;
+	const link = normalizeLink(v);
+	if (!link) return 'Inserisci un link che inizi con https://';
+	if (link.length > LIMITS.url) return `Massimo ${LIMITS.url} caratteri`;
+	return undefined;
+}
+
 export const isFree = (e: Pick<Event, 'priceType'>) => e.priceType === 'free';
 export const isForKids = (e: Pick<Event, 'category' | 'tags'>) =>
 	e.category === 'kids' || e.tags.includes('kids') || e.tags.includes('family');
@@ -153,7 +184,16 @@ export const eventPath = (e: Pick<Event, 'id' | 'title'>) =>
 export const idFromSlug = (slug: string) => slug.slice(slug.lastIndexOf('-') + 1);
 export const cityPath = (citySlug: string) => `/citta/${citySlug}`;
 
-export type SourceInfo = { text: string; href?: string; license?: { text: string; href: string } };
+export type SourceInfo = {
+	text: string;
+	href?: string;
+	license?: { text: string; href: string };
+	/** Link scritto da un utente: va con rel="ugc nofollow" e con la nota «segnalato da un utente…». */
+	ugc?: boolean;
+	note?: string;
+};
+
+export const USER_SOURCE_NOTE = 'segnalato da un utente e approvato dalla redazione';
 
 const CC_BY_4 = { text: 'CC BY 4.0', href: 'https://creativecommons.org/licenses/by/4.0/deed.it' };
 const CC0 = { text: 'CC0', href: 'https://creativecommons.org/publicdomain/zero/1.0/deed.it' };
@@ -161,7 +201,11 @@ const CC0 = { text: 'CC0', href: 'https://creativecommons.org/publicdomain/zero/
 /** Fonte da mostrare nel dettaglio. Le fonti regionali sono citate col loro nome e la licenza dei dati: Open Data Hub (CC0) ed
  * Emilia Romagna Turismo (CC BY 4.0, con nome della fonte e URL dell'evento). */
 export function eventSource(e: Pick<Event, 'source' | 'sourceUrl'>): SourceInfo {
-	if (e.source === 'user') return { text: 'Segnalato da un utente e verificato dalla redazione' };
+	if (e.source === 'user') {
+		const link = e.sourceUrl ? normalizeLink(e.sourceUrl) : null;
+		if (!link) return { text: 'Segnalato da un utente e approvato dalla redazione' };
+		return { text: new URL(link).hostname.replace(/^www\./, ''), href: link, ugc: true, note: USER_SOURCE_NOTE };
+	}
 	if (!e.sourceUrl) return { text: 'Redazione di Eventi Vicini' };
 	const host = new URL(e.sourceUrl).hostname.replace(/^www\./, '');
 	if (host === 'app.ticketmaster.com') return { text: 'Ticketmaster', href: 'https://www.ticketmaster.it/' };
@@ -199,7 +243,7 @@ export const parseTags = (raw: string) => [
 	)
 ];
 
-export type EventErrors = Partial<Record<keyof EventInput | 'place', string>>;
+export type EventErrors = Partial<Record<keyof EventInput | 'place' | 'sourceUrl', string>>;
 
 /** Validazione del form: messaggi in italiano, vuoto = valido. Rispecchia le regole Firestore. */
 export function validateEvent(e: EventInput): EventErrors {

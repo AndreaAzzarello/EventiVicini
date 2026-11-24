@@ -69,7 +69,7 @@ export async function approve(s: Submission): Promise<string> {
 	const now = Date.now();
 	const data = Object.fromEntries(EVENT_KEYS.map((k) => [k, s[k]]));
 	const b = fs.writeBatch(db);
-	b.set(eventRef, { ...data, source: 'user', sourceUrl: '', createdAt: now, updatedAt: now });
+	b.set(eventRef, { ...data, source: 'user', sourceUrl: s.sourceUrl ?? '', createdAt: now, updatedAt: now });
 	b.update(fs.doc(db, 'submissions', s.id), { status: 'approved', eventId: eventRef.id, reviewedAt: fs.serverTimestamp() });
 	b.update(fs.doc(db, 'users', s.ownerId), { pendingCount: fs.increment(-1) });
 	await b.commit();
