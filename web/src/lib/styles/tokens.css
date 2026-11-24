@@ -23,6 +23,14 @@
 	/* Dove si agganciano gli elementi sticky sotto l'header (che ha anche il padding della safe area in alto) */
 	--header-offset: calc(var(--header-h) + env(safe-area-inset-top));
 
+	/* Livelli (z-index): l'ordine vale nel contesto radice; Leaflet resta isolato dentro la mappa. Valori nuovi solo qui. */
+	--z-skip: 100;
+	--z-sticky: 900; /* selettore Lista/Mappa agganciato sotto l'header */
+	--z-menu: 950; /* menu a tendina (suggerimenti della ricerca): sopra gli sticky della pagina, sotto l'header */
+	--z-header: 1000;
+	--z-sheet: 1100; /* scheda della mappa: vale dentro la mappa isolata */
+	--z-toast: 2000;
+
 	/* Larghezze dei contenitori */
 	--w-prose: 760px;
 	--w-page: 1200px;

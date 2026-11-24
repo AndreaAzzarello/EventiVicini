@@ -270,7 +270,7 @@
 		top: 100%;
 		left: 0;
 		right: 0;
-		z-index: 900;
+		z-index: var(--z-menu);
 		margin-top: var(--space-1);
 		max-height: var(--w-dialog);
 		overflow-y: auto;

@@ -10,7 +10,7 @@
 html {
 	-webkit-text-size-adjust: 100%;
 	text-size-adjust: 100%;
-	scroll-padding-top: calc(var(--header-h) + var(--space-3));
+	scroll-padding-top: calc(var(--header-offset) + var(--space-2));
 }
 
 body {

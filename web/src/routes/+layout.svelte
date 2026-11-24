@@ -161,7 +161,7 @@
 		position: absolute;
 		left: var(--space-2);
 		top: calc(-1 * var(--header-h));
-		z-index: 100;
+		z-index: var(--z-skip);
 		padding: var(--space-2) var(--space-3);
 		background: var(--text);
 		color: var(--bg);
@@ -173,7 +173,7 @@
 	.site-header {
 		position: sticky;
 		top: 0;
-		z-index: 1000;
+		z-index: var(--z-header);
 		padding-top: env(safe-area-inset-top); /* iPhone in orizzontale o a schermo intero: sotto la notch */
 		background: var(--bg);
 		border-bottom: 1px solid var(--border);
@@ -347,7 +347,7 @@
 		left: 50%;
 		bottom: max(var(--space-3), env(safe-area-inset-bottom));
 		transform: translateX(-50%);
-		z-index: 2000;
+		z-index: var(--z-toast);
 		display: grid;
 		gap: var(--space-2);
 		width: min(var(--w-dialog), 100% - 2 * var(--space-3));
