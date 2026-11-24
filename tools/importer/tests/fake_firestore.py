@@ -65,8 +65,8 @@ class Batch:
     def __init__(self, fs):
         self.fs, self.ops = fs, []
 
-    def set(self, ref, data):
-        self.ops.append(("set", ref.path, data))
+    def set(self, ref, data, merge=False):
+        self.ops.append(("merge" if merge else "set", ref.path, data))
 
     def update(self, ref, data):
         self.ops.append(("update", ref.path, data))
@@ -80,6 +80,8 @@ class Batch:
             self.fs.writes += 1
             if kind == "set":
                 self.fs.data[path] = dict(data)
+            elif kind == "merge":
+                self.fs.data.setdefault(path, {}).update(data)
             elif kind == "update":
                 if path not in self.fs.data:
                     raise NotFound(path)  # come Firestore: update di un documento che non esiste
