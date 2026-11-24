@@ -136,6 +136,25 @@ for (const [width, height] of [[360, 640], [320, 640]]) {
 	});
 }
 
+// Immagini sopra la piega: eager solo nelle prime due card, priorità alta di rete al massimo sulla prima immagine, il resto lazy.
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+test('immagini: eager nelle prime due card, fetchpriority alta solo sulla prima, le altre lazy', async ({ page }) => {
+	await page.route('https://example.org/**', (r) => r.fulfill({ contentType: 'image/png', body: PNG })); // immagini che caricano: nessun ripiego
+	await page.goto('/?luogo=torino'); // seed grande: card con immagine
+	await expect(page.locator('[data-ev-id]')).toHaveCount(60);
+	const imgs = await page.$$eval('[data-ev-id]', (cards) =>
+		cards.map((c) => {
+			const i = c.querySelector('img');
+			return i ? { loading: i.loading, fp: i.getAttribute('fetchpriority') } : null;
+		})
+	);
+	expect(imgs.filter(Boolean).length).toBeGreaterThan(0);
+	imgs.forEach((im, i) => im && expect(im.loading, `card ${i}`).toBe(i < 2 ? 'eager' : 'lazy'));
+	const high = imgs.map((im, i) => (im?.fp === 'high' ? i : -1)).filter((i) => i >= 0);
+	expect(high.length).toBe(1); // esattamente una, sulla prima con immagine
+	expect(high[0]).toBeLessThan(2);
+});
+
 test('filtri: il select della distanza è alto quanto i chip', async ({ page }) => {
 	await home(page);
 	const select = (await page.locator('.filters select').boundingBox())!;

@@ -46,6 +46,10 @@
 	const groups = $derived(sections(events, now, grouping));
 	const total = $derived(events.length);
 	const shown = $derived(takeFlat(groups, limit));
+	// Sopra la piega (a 360 px una card intera, la seconda spunta sugli schermi alti): le prime due si caricano subito,
+	// solo la prima con immagine ha priorità alta di rete. Le altre restano lazy.
+	const aboveFold = $derived(shown.flatMap((s) => s.events).slice(0, 2));
+	const firstWithImage = $derived(aboveFold.find((e) => e.imageUrl)?.id);
 	/** Cambia quando la lista è un'altra (filtro, luogo), non a ogni minuto in cui `now` ricalcola gli stessi eventi. */
 	const signature = $derived(`${total}|${events[0]?.id}|${events.at(-1)?.id}|${grouping?.when ?? ''}`);
 
@@ -121,7 +125,7 @@
 			<h2 id="sez-{section.key}">{section.title} <span class="count">{fmtNum(counts?.[section.key] ?? section.total)}</span></h2>
 			<ul class="list">
 				{#each section.events as event (event.id)}
-					<li><EventCard {event} {now} {origin} highlighted={highlighted === event.id} compact={section.key === 'running'} from={grouping?.range[0]} {onhover} /></li>
+					<li><EventCard {event} {now} {origin} highlighted={highlighted === event.id} compact={section.key === 'running'} from={grouping?.range[0]} eager={aboveFold.includes(event)} high={event.id === firstWithImage} {onhover} /></li>
 				{/each}
 			</ul>
 		</section>
