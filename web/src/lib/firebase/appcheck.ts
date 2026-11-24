@@ -1,6 +1,8 @@
 // Provider App Check personalizzato: Cloudflare Turnstile (widget "managed", invisibile finché non serve una verifica)
 // → /api/appcheck → token App Check. Si carica solo insieme all'SDK Firebase (client.ts), mai per chi naviga e basta.
 // Cosa scrive nel browser: vedi /cookie (src/lib/cookies.ts).
+import { noteAppCheck } from '../errors';
+
 const SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 const TIMEOUT_MS = 30_000;
 
@@ -68,8 +70,11 @@ export function turnstileProvider(sitekey: string) {
 					body: JSON.stringify({ token: await turnstileToken(sitekey) })
 				});
 				if (!res.ok) throw new Error(`appcheck-${res.status}`);
-				return (await res.json()) as AppCheckToken;
+				const token = (await res.json()) as AppCheckToken;
+				noteAppCheck(true);
+				return token;
 			} catch (e) {
+				noteAppCheck(false); // errors.ts: da qui un permission-denied delle richieste dipende dalla verifica, non dalle regole
 				// L'SDK inghiotte gli errori del provider: così si vedono durante il monitoraggio (solo codici, mai token).
 				console.warn('appcheck:', e instanceof Error ? e.message : 'errore');
 				throw e;
@@ -81,6 +86,13 @@ export function turnstileProvider(sitekey: string) {
 /** Provider di sviluppo con gli emulatori: nessuna rete, token finto (gli emulatori non applicano App Check). */
 export const emulatorProvider = {
 	async getToken(): Promise<AppCheckToken> {
+		// Solo nella build dei test e2e (__E2E_HOOKS__ è falso in produzione e il ramo sparisce dal bundle): un test può simulare
+		// il fallimento della verifica impostando globalThis.__appCheckFail prima del caricamento della pagina.
+		if (__E2E_HOOKS__ && (globalThis as { __appCheckFail?: boolean }).__appCheckFail) {
+			noteAppCheck(false);
+			throw new Error('turnstile-load');
+		}
+		noteAppCheck(true);
 		return { token: 'emulator-app-check-token', expireTimeMillis: Date.now() + 1_800_000 };
 	}
 };

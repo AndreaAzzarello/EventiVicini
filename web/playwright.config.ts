@@ -35,6 +35,7 @@ export default defineConfig({
 	webServer: {
 		command: 'npm run build && npx vite preview --port 4300 --strictPort',
 		port: 4300,
+		env: { E2E_HOOKS: '1' }, // build di prova con il gancio di App Check (non c'è nella build di produzione)
 		reuseExistingServer: !process.env.CI,
 		timeout: 180_000
 	}

@@ -13,6 +13,7 @@
 		type PriceType
 	} from '$lib/event';
 	import { geohashOf, type Place } from '$lib/geo';
+	import { errorMessage } from '$lib/errors';
 	import { reversePlace, searchPlaces, type GeoResult } from '$lib/geocode';
 	import Search from '@lucide/svelte/icons/search';
 	import MapPin from '@lucide/svelte/icons/map-pin';
@@ -155,7 +156,7 @@
 		try {
 			await onsubmit(input);
 		} catch (err) {
-			saveError = (err as Error).message || 'Salvataggio non riuscito. Riprova.';
+			saveError = errorMessage(err, (err as Error).message || 'Salvataggio non riuscito. Riprova.');
 		} finally {
 			saving = false;
 		}

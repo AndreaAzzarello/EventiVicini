@@ -4,6 +4,7 @@
 	import { formatWhen } from '$lib/dates';
 	import { eventPath, type Event } from '$lib/event';
 	import { REASONS, REPORT_LIMITS, type Report } from '$lib/reports';
+	import { errorMessage } from '$lib/errors';
 	import { toast } from '$lib/toast.svelte';
 
 	type Item = Report & { event: Event | null };
@@ -21,7 +22,7 @@
 			items = await Promise.all(reports.map(async (r) => ({ ...r, event: await loadEvent(r.eventId).catch(() => null) })));
 		} catch (e) {
 			console.error(e);
-			error = 'Non riesco a caricare le segnalazioni.';
+			error = errorMessage(e, 'Non riesco a caricare le segnalazioni.');
 		}
 	}
 	load();
@@ -43,7 +44,7 @@
 			dialog.close();
 		} catch (err) {
 			console.error(err);
-			toast('Decisione non registrata.');
+			toast(errorMessage(err, 'Decisione non registrata.'));
 		} finally {
 			busy = false;
 		}
