@@ -101,6 +101,14 @@ describe('events', () => {
     await assertFails(updateDoc(doc(fs, 'events', 'e1'), { locality: 'a'.repeat(81) }));
     await assertFails(updateDoc(doc(fs, 'events', 'e1'), { locality: 5 }));
   });
+  it('cityAlt (altra lingua, #46): ammesso fino a 80 caratteri, solo stringa', async () => {
+    const fs = db('adm', ADMIN);
+    await assertSucceeds(setDoc(doc(fs, 'events', 'x'), { ...event(), source: 'manual', cityAlt: 'Bozen' }));
+    await assertSucceeds(updateDoc(doc(fs, 'events', 'e1'), { cityAlt: 'a'.repeat(80) }));
+    await assertFails(updateDoc(doc(fs, 'events', 'e1'), { cityAlt: 'a'.repeat(81) }));
+    await assertFails(updateDoc(doc(fs, 'events', 'e1'), { cityAlt: 5 }));
+    await assertFails(updateDoc(doc(fs, 'events', 'e1'), { cityAlt: null }));
+  });
   it('priceType: unknown (prezzo sul sito del venditore) ammesso, valori inventati no', async () => {
     const fs = db('adm', ADMIN);
     await assertSucceeds(updateDoc(doc(fs, 'events', 'e1'), { priceType: 'unknown' }));
@@ -385,6 +393,7 @@ describe('submissions', () => {
   it('rifiuta ownerId di un altro', () => assertFails(submit(db('alice'), 'alice', 's1', { ownerId: 'bob' })));
   it('rifiuta dati non validi', () => assertFails(submit(db('alice'), 'alice', 's1', { imageUrl: 'data:image/png;base64,AAA' })));
   it('rifiuta locality (solo importer/admin)', () => assertFails(submit(db('alice'), 'alice', 's1', { locality: 'Frazione' })));
+  it('rifiuta cityAlt (solo importer/admin)', () => assertFails(submit(db('alice'), 'alice', 's1', { cityAlt: 'Bozen' })));
   it('rifiuta longRunning (solo importer/admin)', () => assertFails(submit(db('alice'), 'alice', 's1', { longRunning: true })));
   it('rifiuta campi interni (submittedBy)', () => assertFails(submit(db('alice'), 'alice', 's1', { submittedBy: 'alice' })));
   it('tag: stringhe di 1-30 caratteri, al massimo 10', async () => {

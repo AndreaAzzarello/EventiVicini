@@ -5,6 +5,7 @@
 	import { CATEGORY_ICONS } from '$lib/categoryIcons';
 	import { CATEGORIES, eventPath, type Event } from '$lib/event';
 	import { fmtNum } from '$lib/format';
+	import { errorMessage } from '$lib/errors';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Trash from '@lucide/svelte/icons/trash';
@@ -25,7 +26,7 @@
 			more = page.length === PAGE_SIZE;
 		} catch (e) {
 			console.error(e);
-			error = 'Non riesco a caricare gli eventi.';
+			error = errorMessage(e, 'Non riesco a caricare gli eventi.');
 		}
 	}
 	load();
@@ -46,8 +47,8 @@
 			await deleteEvent(e.id);
 			events = events?.filter((x) => x.id !== e.id) ?? null;
 			toast(`Eliminato “${e.title}”.`);
-		} catch {
-			toast('Eliminazione non riuscita.');
+		} catch (err) {
+			toast(errorMessage(err, 'Eliminazione non riuscita.'));
 		}
 		dialog.close();
 	}

@@ -45,6 +45,7 @@
     "sourceUrl",
     "approxLocation",
     "locality",
+    "cityAlt",
     "longRunning",
     "createdAt",
     "updatedAt",
@@ -53,10 +54,8 @@
     "missingRuns",
     "removedAt"
   ],
-  "importerOnlyKeys": [
-    "cityAlt"
-  ],
-  "_importerOnlyNota": "Scritte dall'importer (Admin SDK) ma non ammesse da hasOnly delle regole: da risolvere in #46.",
+  "importerOnlyKeys": [],
+  "_importerOnlyNota": "Scritte dall'importer (Admin SDK) ma non ammesse da hasOnly delle regole. Oggi nessuna: cityAlt è passato tra gli opzionali con #46.",
   "hashSkip": [
     "id",
     "createdAt",

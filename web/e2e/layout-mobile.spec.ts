@@ -53,6 +53,16 @@ for (const width of [360, 390]) {
 const overflow = (page: Page) =>
 	page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
+/** Nodi che escono a destra dal viewport (solo diagnostica: nel messaggio del test compare il colpevole, non un numero). */
+const offenders = (page: Page) =>
+	page.evaluate(() => {
+		const cw = document.documentElement.clientWidth;
+		return [...document.querySelectorAll('body *')]
+			.filter((el) => el.getBoundingClientRect().width && el.getBoundingClientRect().right > cw + 0.5)
+			.slice(0, 5)
+			.map((el) => `${el.tagName.toLowerCase()}.${(el as HTMLElement).className} «${(el.textContent ?? '').slice(0, 30)}»`);
+	});
+
 test('accedi, proponi, account e tutte le viste admin senza scroll orizzontale a 360px', async ({ page }) => {
 	await page.setViewportSize({ width: 360, height: 740 });
 	for (const path of ['/accedi', '/proponi']) {
@@ -65,6 +75,16 @@ test('accedi, proponi, account e tutte le viste admin senza scroll orizzontale a
 		await page.goto(path);
 		await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 		await page.waitForLoadState('networkidle');
-		expect(await overflow(page), path).toBeLessThanOrEqual(0);
+		expect(await overflow(page), `${path}: ${(await offenders(page)).join(' | ')}`).toBeLessThanOrEqual(0);
 	}
+});
+
+// Su Linux (CI) system-ui è DejaVu Sans, più largo di Segoe UI: con Verdana (stessa larghezza) il difetto si vede anche su Windows (#48).
+test('/admin/stile senza scroll orizzontale a 360px anche con un font di sistema largo', async ({ page }) => {
+	await page.setViewportSize({ width: 360, height: 740 });
+	await signInByEmail(page, 'eventivicini.info@gmail.com', '/admin/stile');
+	await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+	await page.waitForLoadState('networkidle');
+	await page.addStyleTag({ content: ':root { --font-body: Verdana, sans-serif !important; } body { font-family: Verdana, sans-serif !important; }' });
+	expect(await overflow(page), (await offenders(page)).join(' | ')).toBeLessThanOrEqual(0);
 });

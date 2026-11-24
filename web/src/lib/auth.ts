@@ -1,5 +1,6 @@
 // Login con Google o con link via email (Firebase email-link), riautenticazione ed eliminazione dell'account.
 import type { Firebase } from './firebase/client';
+import { isVerifyError, VERIFY_MESSAGE } from './errors';
 import { session } from './session.svelte';
 import { KEYS, readJson, writeJson } from './storage';
 
@@ -20,6 +21,7 @@ const MESSAGES: Record<string, string> = {
 };
 
 export function authMessage(e: unknown): string {
+	if (isVerifyError(e)) return VERIFY_MESSAGE;
 	const code = (e as { code?: string })?.code ?? '';
 	return MESSAGES[code] ?? 'Qualcosa è andato storto. Riprova tra poco.';
 }

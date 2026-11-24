@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Heart from '@lucide/svelte/icons/heart';
+	import { errorMessage } from '$lib/errors';
 	import { favorites } from '$lib/session.svelte';
 	import { toast } from '$lib/toast.svelte';
 
@@ -15,9 +16,9 @@
 		beat = adding;
 		try {
 			if (!(await favorites.toggle(id))) beat = false; // limite raggiunto o rimosso: niente battito
-		} catch {
+		} catch (e) {
 			beat = false;
-			toast('Non sono riuscito a salvare il preferito. Riprova.');
+			toast(errorMessage(e, 'Non sono riuscito a salvare il preferito. Riprova.'));
 		}
 	}
 </script>

@@ -126,6 +126,33 @@ Il riepilogo del job `cleanup` ha una sezione **Copertura** per regione (`ci_rep
 
 Se una subnet è giù compare anche l'elenco dei cluster non raggiungibili, con la data di inizio. Confrontando due giorni si guarda **eventi visibili**: gli «eventi oggi» calano quando le fonti saltano, anche se i loro eventi restano in Firestore.
 
+### Filtro anti-avvisi: anni nel titolo (`relevance.py`)
+
+Un titolo con un anno passato («Natale 2023») è un'edizione vecchia la cui data, scritta senza anno, l'adapter ha portato al prossimo: si scarta come «edizione passata». Non ogni «20xx» è un anno (#88):
+
+- **Stagioni**: «2026/27», «2026-27», «2026/2027» valgono per l'anno più alto (2027): «Avvento in Musica 2026/27» con inizio nel 2027 non è passato.
+- **Anni di vita**: un intervallo che parte dal Novecento («1936-2020») non conta.
+- **Finestra di 10 anni** (`PAST_EDITION_YEARS`): conta solo un anno non più vecchio di 10 anni rispetto all'inizio dell'evento. Motivo: un numero come «2000» in «Merano 2000» (il comprensorio) o «Scuola Sci 2000» è un nome, e una soglia sull'anno non lo distingue da un'edizione del 2000. Le edizioni davvero scadute che il filtro deve prendere sono quelle dell'anno prima o poco prima («Natale 2025», «Epifania 2024»): dieci anni le coprono con ampio margine.
+- **Soglia arbitraria, caso limite noto**: dieci è una scelta, non un dato. Un titolo con un anno più vecchio di 10 anni («Sagra del 2014») **resta visibile** anche se è un'edizione scaduta; è il prezzo accettato per non nascondere eventi veri. Se comparissero casi reali, si abbassa o alza la costante e si aggiunge il titolo ai test.
+- Un anno futuro o uguale a quello di inizio non esclude mai. Le altre esclusioni (sedute, avvisi, titoli generici…) non cambiano.
+
+### Avviso di calo (`ci_report.py check-drop`, #89)
+
+Un import verde con molti meno eventi non manda email. Dopo sitemap e pulizia, il job `cleanup` aggiorna lo storico e confronta oggi con la **media dei 7 giorni precedenti** (la media assorbe il calo del fine settimana, −10% circa). Se c'è un calo parte il job `avviso-calo`, che **fallisce**: GitHub manda la sua email standard e l'errore elenca regione o fonte, valore di oggi e media. Gli eventi sono già scritti e le cache già salvate (il passo di controllo esce sempre 0): il calo non blocca nulla.
+
+Soglie, tutte in `ci_report.py` (costanti `DROP_*`, un solo punto):
+
+| costante | valore | significato |
+|---|---|---|
+| `DROP_WINDOW` | 7 giorni | giorni precedenti che fanno la media; oggi non ne fa parte (rilanciare lo stesso giorno dà lo stesso esito) |
+| `DROP_MIN_DAYS` | 3 | storico minimo: prima l'avviso tace (anche dopo un cache miss) |
+| `DROP_REGION_PCT` | 20% | una regione con più del 20% di eventi in meno della media avvisa |
+| `DROP_REGION_MIN_AVG` | 30 | sotto questa media il numero è rumore (Molise, Basilicata) |
+| `DROP_SOURCE_MIN` | 10 | una fonte con almeno 10 eventi in **ognuno** dei giorni della finestra che oggi ha risposto con 0 eventi |
+| `DROP_HISTORY_DAYS` | 14 | storico conservato |
+
+Una fonte in errore non avvisa qui: c'è già l'avviso delle fonti saltate. La fonte a zero vale solo se ha risposto (`source_events` in `--stats-out`: solo fonti senza errore). Lo storico (`calo.json`, per giorno: eventi per regione e per fonte, solo fonti con almeno 5 eventi in un giorno) sta in una cache a parte (`importer-calo-<run>`), senza toccare `sizes.json` né le altre. Il dry-run non lancia `cleanup`, quindi non aggiorna né controlla. Il primo giorno dopo il rilascio e a cache persa l'avviso tace per almeno 3 giorni.
+
 ### Pulizia automatica
 
 `cleanup.py` gira ogni giorno dopo l'import. Le query usano solo indici a campo singolo, con proiezione dei campi.
@@ -243,7 +270,7 @@ Lo schema dell'evento è scritto a mano in tre posti: l'importer (`mapping.py`, 
 Come aggiornarlo:
 1. **Nuova categoria o tipo di prezzo**: aggiungila nello stesso commit a `parity.json`, `CATEGORIES`/`PRICE_TYPES` in `event.ts` (con l'etichetta), alle liste `d.category in [...]` / `d.priceType in [...]` di `firestore.rules` e al punto dell'importer che la produce (`CATEGORY_BY_TYPE`, `KEYWORDS`, adapter). Poi i tre comandi della tabella.
 2. **Nuovo campo dell'evento**: `parity.json` (`eventKeys`, oppure `eventOptionalKeys` se facoltativo), `EventInput` e `EVENT_KEY_MAP` in `event.ts` (`npm run check` ricorda di tenerli uguali), `eventKeys()` o `hasOnly(...)` in `firestore.rules`, l'adapter o `run.py` che lo scrive. Se il campo cambia a ogni giro e non fa parte del contenuto, aggiungilo anche a `HASH_SKIP` e a `hashSkip`.
-3. **Campo scritto solo dall'importer** (Admin SDK, senza passare dalle regole): mettilo in `importerOnlyKeys`. Oggi c'è `cityAlt` (vedi #46): l'admin non lo riscrive e le regole non lo ammettono.
+3. **Campo scritto solo dall'importer** (Admin SDK, senza passare dalle regole): mettilo in `importerOnlyKeys`. Oggi nessuno: `cityAlt` (nome nell'altra lingua dei comuni bilingui) è un campo opzionale ammesso dalle regole (stringa fino a 80 caratteri, #46) e `saveEvent` lo conserva finché il comune non cambia.
 4. **Nuovo caso di `slugify`**: aggiungi `{ "in": ..., "out": ... }` calcolando `out` con `geo.slugify` (Python); se TypeScript dà un risultato diverso, il test web fallisce e va allineata l'implementazione.
 
 I test delle regole estraggono le liste dal testo con espressioni regolari: se riscrivi la forma di `eventKeys()` o dei controlli `in [...]` e un'espressione non trova più nulla, il test fallisce con un messaggio esplicito (aggiornala), non passa in silenzio.

@@ -42,6 +42,8 @@ export async function saveEvent(id: string | null, input: EventInput): Promise<s
 		updatedAt: now,
 		// La frazione vale solo se l'admin non ha spostato il luogo in un altro comune.
 		...(old?.locality && input.city === old.city ? { locality: old.locality } : {}),
+		// Il nome nell'altra lingua (comuni bilingui, scritto dall'importer) segue lo stesso criterio: stesso comune, si tiene (#46).
+		...(typeof old?.cityAlt === 'string' && old.cityAlt && input.city === old.city ? { cityAlt: old.cityAlt } : {}),
 		...(long ? { longRunning: true } : {})
 	}); // niente submittedBy: un evento vecchio che lo aveva lo perde alla prima modifica
 	return ref.id;
