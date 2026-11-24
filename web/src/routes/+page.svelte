@@ -157,7 +157,10 @@
 		const lng = snapCoord(place.lng);
 		const r = filter.radiusKm;
 		try {
-			const res = await fetch(`/api/events?lat=${lat}&lng=${lng}&r=${r}`);
+			// `v`: la versione dei dati con cui il server ha disegnato la pagina. Stesso URL → stessa lista nella cache del bordo e del
+			// browser, quindi il conteggio dell'HTML e quello mostrato dopo l'idratazione coincidono; dati nuovi → URL nuovo.
+			const v = data.version ? `&v=${encodeURIComponent(data.version)}` : '';
+			const res = await fetch(`/api/events?lat=${lat}&lng=${lng}&r=${r}${v}`);
 			if (!res.ok) throw new Error(String(res.status));
 			const list = await res.json();
 			if (mine !== seq) return; // nel frattempo l'utente ha cambiato zona: risposta vecchia, la scarto
