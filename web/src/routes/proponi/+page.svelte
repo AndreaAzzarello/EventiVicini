@@ -1,12 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import EventForm from '$lib/components/EventForm.svelte';
 	import LoginPanel from '$lib/components/LoginPanel.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import { session } from '$lib/session.svelte';
 	import { submitEvent } from '$lib/submissions';
 	import { toast } from '$lib/toast.svelte';
+
+	// /proponi?da=social: «Segnala un evento trovato sui social», con il link al post in testa e obbligatorio.
+	const social = $derived(page.url.searchParams.get('da') === 'social');
 
 	// Proporre richiede l'account: qui (e solo qui) Firebase parte anche per chi non aveva mai fatto login.
 	onMount(() => {
@@ -20,26 +24,39 @@
 	}
 </script>
 
-<Seo title="Proponi un evento" noindex />
+<Seo title={social ? 'Segnala un evento trovato sui social' : 'Proponi un evento'} noindex />
 
 <div class="container narrow page">
-	<h1>Proponi un evento</h1>
-	<p class="muted lead">
-		Conosci un concerto, una sagra o un mercatino che manca? Segnalalo: lo controlliamo e, se è tutto in ordine, lo
-		pubblichiamo. Il tuo nome non comparirà nell’evento.
-	</p>
+	{#if social}
+		<h1>Segnala un evento trovato sui social</h1>
+		<p class="muted lead">
+			Hai visto un evento su Instagram, Facebook o su un altro sito? Incolla il link e scrivi titolo, data e luogo con
+			parole tue. Lo valutiamo e, se è tutto in ordine, lo pubblichiamo con il link come fonte. Il tuo nome non comparirà
+			nell’evento.
+		</p>
+	{:else}
+		<h1>Proponi un evento</h1>
+		<p class="muted lead">
+			Conosci un concerto, una sagra o un mercatino che manca? Segnalalo: lo controlliamo e, se è tutto in ordine, lo
+			pubblichiamo. Il tuo nome non comparirà nell’evento.
+		</p>
+	{/if}
 
 	{#if session.status !== 'ready'}
 		<div class="skeleton" style="height: var(--w-dialog)" aria-hidden="true"></div>
 		<p class="visually-hidden" role="status">Caricamento…</p>
 	{:else if !session.user}
 		<LoginPanel
-			next="/proponi"
-			title="Accedi per proporre"
+			next={social ? '/proponi?da=social' : '/proponi'}
+			title={social ? 'Accedi per segnalare' : 'Accedi per proporre'}
 			intro="Ci serve sapere chi propone per evitare spam. Bastano Google o un link via email."
 		/>
 	{:else}
-		<EventForm submitLabel="Invia la proposta" onsubmit={send} />
+		<EventForm
+			submitLabel={social ? 'Invia la segnalazione' : 'Invia la proposta'}
+			sourceLink={social ? 'required' : 'optional'}
+			onsubmit={send}
+		/>
 		<p class="hint">Puoi avere fino a 5 proposte in attesa di revisione.</p>
 		<p class="hint">Inviando accetti i <a href="/termini">Termini</a>; leggi come trattiamo i dati nella <a href="/privacy">Privacy</a>.</p>
 	{/if}

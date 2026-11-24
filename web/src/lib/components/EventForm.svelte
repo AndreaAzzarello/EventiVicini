@@ -5,13 +5,16 @@
 		CATEGORIES,
 		LIMITS,
 		PRICE_TYPES,
+		normalizeLink,
 		parseTags,
 		validateEvent,
+		validateSourceLink,
 		type Category,
 		type EventErrors,
 		type EventInput,
 		type PriceType
 	} from '$lib/event';
+	import type { SubmissionInput } from '$lib/submissions';
 	import { geohashOf, type Place } from '$lib/geo';
 	import { errorMessage } from '$lib/errors';
 	import { reversePlace, searchPlaces, type GeoResult } from '$lib/geocode';
@@ -23,9 +26,15 @@
 	let {
 		initial = {},
 		submitLabel = 'Salva',
+		sourceLink = 'off',
 		onsubmit
-	}: { initial?: Partial<EventInput>; submitLabel?: string; onsubmit: (input: EventInput) => Promise<void> } =
-		$props();
+	}: {
+		initial?: Partial<EventInput>;
+		submitLabel?: string;
+		/** Link alla fonte (post sui social o pagina web): off = non c'è (admin), optional = facoltativo, required = in testa e obbligatorio. */
+		sourceLink?: 'off' | 'optional' | 'required';
+		onsubmit: (input: SubmissionInput) => Promise<void>;
+	} = $props();
 
 	// Copia iniziale una tantum: il form poi vive di stato proprio.
 	const init = untrack(() => ({ ...initial }));
@@ -45,6 +54,7 @@
 	let imageUrl = $state(init.imageUrl ?? '');
 	let ticketUrl = $state(init.ticketUrl ?? '');
 	let tags = $state((init.tags ?? []).join(', '));
+	let sourceUrl = $state('');
 
 	let errors = $state<EventErrors>({});
 	let submitted = $state(false);
@@ -67,10 +77,11 @@
 		place: 'f-find',
 		imageUrl: 'f-image',
 		ticketUrl: 'f-ticket',
+		sourceUrl: 'f-source',
 		tags: 'f-tags'
 	} as Record<string, string>;
 
-	function build(): EventInput {
+	function build(): SubmissionInput {
 		return {
 			title: title.trim(),
 			shortDescription: shortDescription.trim(),
@@ -89,13 +100,22 @@
 			city: place?.city ?? '',
 			citySlug: place?.citySlug ?? '',
 			province: place?.province ?? '',
-			region: place?.region ?? ''
+			region: place?.region ?? '',
+			...(sourceLink === 'off' ? {} : { sourceUrl: normalizeLink(sourceUrl) ?? sourceUrl.trim() })
 		};
+	}
+
+	// Il link si controlla solo come testo: nessuna richiesta all'indirizzo. Se è obbligatorio il suo errore va in testa al riepilogo.
+	function validate(input: SubmissionInput): EventErrors {
+		const e = validateEvent(input);
+		const msg = sourceLink === 'off' ? undefined : validateSourceLink(sourceUrl, sourceLink === 'required');
+		if (!msg) return e;
+		return sourceLink === 'required' ? { sourceUrl: msg, ...e } : { ...e, sourceUrl: msg };
 	}
 
 	// Dopo il primo invio la validazione segue la digitazione.
 	$effect(() => {
-		if (submitted) errors = validateEvent(build());
+		if (submitted) errors = validate(build());
 	});
 
 	function setFrom(r: GeoResult) {
@@ -146,7 +166,7 @@
 		submitted = true;
 		saveError = '';
 		const input = build();
-		errors = validateEvent(input);
+		errors = validate(input);
 		if (Object.keys(errors).length) {
 			await tick();
 			summaryEl?.focus();
@@ -173,6 +193,7 @@
 		place: 'Posizione sulla mappa',
 		imageUrl: 'Immagine',
 		ticketUrl: 'Biglietti',
+		sourceUrl: 'Link al post o alla pagina',
 		tags: 'Tag',
 		category: 'Categoria',
 		priceType: 'Prezzo'
@@ -189,6 +210,35 @@
 				{/each}
 			</ul>
 		</div>
+	{/if}
+
+	{#snippet sourceField()}
+		<div class="field">
+			<label for="f-source">Link al post o alla pagina{sourceLink === 'required' ? ' *' : ''}</label>
+			<input
+				id="f-source"
+				type="url"
+				bind:value={sourceUrl}
+				maxlength={LIMITS.url}
+				placeholder="https://"
+				inputmode="url"
+				autocomplete="off"
+				required={sourceLink === 'required'}
+				aria-invalid={!!err('sourceUrl')}
+				aria-describedby="h-source e-source"
+			/>
+			<span id="h-source" class="hint">
+				Incolla il link del post (Instagram, Facebook o altro sito). Non lo apriamo: lo controlla una persona. Scrivi titolo, data e luogo con parole tue, senza copiare testo o immagini del post.
+			</span>
+			{#if err('sourceUrl')}<ErrorMessage id="e-source">{err('sourceUrl')}</ErrorMessage>{/if}
+		</div>
+	{/snippet}
+
+	{#if sourceLink === 'required'}
+		<fieldset>
+			<legend>Dove l’hai visto</legend>
+			{@render sourceField()}
+		</fieldset>
 	{/if}
 
 	<fieldset>
@@ -274,12 +324,16 @@
 			<input id="f-ticket" type="url" bind:value={ticketUrl} placeholder="https://" inputmode="url" aria-invalid={!!err('ticketUrl')} aria-describedby="e-ticket" />
 			{#if err('ticketUrl')}<ErrorMessage id="e-ticket">{err('ticketUrl')}</ErrorMessage>{/if}
 		</div>
-		<div class="field">
-			<label for="f-image">Immagine (link)</label>
-			<input id="f-image" type="url" bind:value={imageUrl} placeholder="https://…/foto.jpg" inputmode="url" aria-invalid={!!err('imageUrl')} aria-describedby="h-image e-image" />
-			<span id="h-image" class="hint">Solo un link a un’immagine già online, che hai il diritto di usare.</span>
-			{#if err('imageUrl')}<ErrorMessage id="e-image">{err('imageUrl')}</ErrorMessage>{/if}
-		</div>
+		{#if sourceLink === 'optional'}{@render sourceField()}{/if}
+		<!-- Dal post dei social non si prende nessuna immagine: sono del suo autore e i loro indirizzi scadono. -->
+		{#if sourceLink !== 'required'}
+			<div class="field">
+				<label for="f-image">Immagine (link)</label>
+				<input id="f-image" type="url" bind:value={imageUrl} placeholder="https://…/foto.jpg" inputmode="url" aria-invalid={!!err('imageUrl')} aria-describedby="h-image e-image" />
+				<span id="h-image" class="hint">Solo un link a un’immagine già online, che hai il diritto di usare.</span>
+				{#if err('imageUrl')}<ErrorMessage id="e-image">{err('imageUrl')}</ErrorMessage>{/if}
+			</div>
+		{/if}
 		<div class="field">
 			<label for="f-tags">Tag</label>
 			<input id="f-tags" type="text" bind:value={tags} placeholder="all'aperto, family" aria-describedby="h-tags e-tags" />
