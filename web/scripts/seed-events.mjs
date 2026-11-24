@@ -11,6 +11,9 @@ export function makeAt(now) {
 	return (/** @type {number} */ days, /** @type {number} */ hour) => day0.getTime() + days * 24 * H + hour * H;
 }
 
+/** @typedef {{ city: string, citySlug: string, cityAlt?: string, province: string, region: string, lat: number, lng: number }} Place */
+
+/** @type {Record<string, Place>} */
 export const places = {
 	modena: { city: 'Modena', citySlug: 'modena', province: 'MO', region: 'Emilia-Romagna', lat: 44.6458, lng: 10.9256 },
 	formigine: { city: 'Formigine', citySlug: 'formigine', province: 'MO', region: 'Emilia-Romagna', lat: 44.5733, lng: 10.8466 },
@@ -21,9 +24,10 @@ export const places = {
 	lecce: { city: 'Lecce', citySlug: 'lecce', province: 'LE', region: 'Puglia', lat: 40.3529, lng: 18.1743 },
 	// Comuni bilingui: city col nome ufficiale italiano, alias in cityAlt (come scrive l'importer)
 	bolzano: { city: 'Bolzano', citySlug: 'bolzano', cityAlt: 'Bozen', province: 'BZ', region: 'Trentino-Alto Adige', lat: 46.4983, lng: 11.3548 },
-	aosta: { city: 'Aosta', citySlug: 'aosta', cityAlt: 'Aoste', province: 'AO', region: "Valle d'Aosta", lat: 45.7375, lng: 7.3203 }
+	aosta: { city: 'Aosta', citySlug: 'aosta', cityAlt: 'Aoste', province: 'AO', region: "Valle d'Aosta", lat: 45.7375, lng: 7.3203 },
+	// lontana da ogni altro luogo di prova: solo con il seed grande
+	torino: { city: 'Torino', citySlug: 'torino', province: 'TO', region: 'Piemonte', lat: 45.0703, lng: 7.6869 }
 };
-places.torino = { city: 'Torino', citySlug: 'torino', province: 'TO', region: 'Piemonte', lat: 45.0703, lng: 7.6869 };
 
 /**
  * @param {number} now
@@ -39,7 +43,7 @@ export function seedEvents(now, { xss = false, big = false, bench = false } = {}
 	const running = (/** @type {number} */ d, /** @type {number} */ h1, /** @type {number} */ h2) =>
 		d === 0 ? { startTime: Math.min(at(0, h1), now - H), endTime: Math.max(at(0, h2), now + 2 * H) } : { startTime: at(d, h1), endTime: at(d, h2) };
 
-	/** @param {string} id @param {keyof typeof places} place @param {Record<string, any>} over */
+	/** @param {string} id @param {string} place @param {Record<string, any>} over */
 	const ev = (id, place, over) => {
 		const p = places[place];
 		const lat = p.lat + (Math.random() - 0.5) * 0.01;
@@ -107,7 +111,7 @@ export function seedEvents(now, { xss = false, big = false, bench = false } = {}
 			category: 'food',
 			priceType: 'low',
 			startTime: at(3, 18),
-			endTime: at(3, 23, 59),
+			endTime: at(3, 23),
 			tags: ['family']
 		}),
 		ev('seedMostra', 'bologna', {
