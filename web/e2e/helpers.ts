@@ -103,3 +103,38 @@ export async function pickFirstEvent(sheet: ReturnType<Page['getByTestId']>) {
 	if (await first.isVisible()) await first.click();
 	await expect(sheet.getByRole('link', { name: 'Apri scheda' })).toBeVisible();
 }
+
+/** Home con la ricerca aperta su `text`: aspetta che compaiano i suggerimenti. */
+export async function openSuggestions(page: Page, text = 'civ') {
+	await page.goto('/?luogo=modena');
+	await page.waitForLoadState('networkidle');
+	const q = page.locator('#q');
+	await q.click();
+	await q.pressSequentially(text, { delay: 30 });
+	await expect(suggestions(page).first()).toBeVisible();
+}
+
+/** I suggerimenti della ricerca (non le <option> del select della distanza). */
+export const suggestions = (page: Page) => page.getByRole('listbox', { name: 'Suggerimenti' }).getByRole('option');
+
+/**
+ * Per ogni suggerimento il cui centro sta dentro il menu e nell'area visibile (sopra la tastiera, se simulata):
+ * l'elemento in primo piano in quel punto deve essere il suggerimento stesso, non il selettore sticky né altro.
+ */
+export function suggestionsOnTop(page: Page) {
+	return page.evaluate(() => {
+		const vv = window.visualViewport!;
+		const bottom = vv.offsetTop + vv.height;
+		const pop = document.querySelector<HTMLElement>('.pop:not([hidden])')!.getBoundingClientRect();
+		return [...document.querySelectorAll<HTMLElement>('[role=option]')]
+			.filter((o) => o.offsetParent)
+			.map((o) => {
+				const r = o.getBoundingClientRect();
+				const x = r.left + r.width / 2;
+				const y = r.top + r.height / 2;
+				const checked = y >= Math.max(0, pop.top) && y <= Math.min(bottom, pop.bottom);
+				const el = checked ? document.elementFromPoint(x, y) : null;
+				return { name: (o.textContent ?? '').trim().slice(0, 30), checked, ok: !checked || (!!el && o.contains(el)), covered: el && !o.contains(el) ? `${el.tagName}.${el.className}` : '' };
+			});
+	});
+}

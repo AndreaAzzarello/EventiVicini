@@ -154,7 +154,7 @@
 			e.preventDefault();
 			open = true;
 			const step = e.key === 'ArrowDown' ? 1 : -1;
-			active = (active + step + options.length) % options.length;
+			active = active < 0 && step < 0 ? options.length - 1 : (active + step + options.length) % options.length; // ArrowUp senza voce attiva: l'ultima
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
 			if (expanded && active >= 0) pick(active);
