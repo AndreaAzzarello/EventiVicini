@@ -5,6 +5,8 @@ import { KEYS, readJson, writeJson } from './storage';
 
 export interface GeoResult {
 	label: string;
+	/** Dettaglio che distingue risultati con lo stesso nome (tipo di luogo, comune, provincia, CAP). */
+	detail?: string;
 	lat: number;
 	lng: number;
 	place: Place | null;
@@ -49,7 +51,7 @@ async function cachedCall(key: string, params: URLSearchParams): Promise<GeoResu
 
 export function searchPlaces(q: string, kind: 'city' | 'address' = 'city') {
 	const query = q.trim().replace(/\s+/g, ' ');
-	return cachedCall(`${kind}:${query.toLowerCase()}`, new URLSearchParams({ q: query, kind }));
+	return cachedCall(`v2:${kind}:${query.toLowerCase()}`, new URLSearchParams({ q: query, kind }));
 }
 
 export async function reversePlace(lat: number, lng: number): Promise<GeoResult | null> {
