@@ -131,7 +131,7 @@ def write_bucket(db, ops: list, name: str, parts: list[str], prev: dict | None, 
     return len(group)
 
 
-def commit(db, groups: list[list]) -> None:
+def commit(db, groups: list) -> None:
     """Un gruppo (un bundle) non si spezza tra due batch: se ci sta, entra intero in uno; se da solo supera BATCH, si scrive
     a pezzi nell'ordine del gruppo (parti, poi testa), quindi la testa è sempre l'ultima a diventare visibile."""
     pending: list = []
@@ -145,6 +145,8 @@ def commit(db, groups: list[list]) -> None:
             pending.clear()
 
     for group in groups:
+        if callable(group):  # operazione singola (sitemap.py)
+            group = [group]
         if len(group) > BATCH:
             flush()
             for i in range(0, len(group), BATCH):
