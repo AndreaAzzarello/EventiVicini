@@ -192,6 +192,17 @@
 		syncUrl(filter, v);
 	}
 
+	/** Tastiera dei tab (ARIA tabs): frecce scambiano le due viste, Home = Lista, Fine = Mappa; l'attivazione segue il focus. */
+	function tabKey(e: KeyboardEvent) {
+		if (e.altKey || e.ctrlKey || e.metaKey) return;
+		const other = view === 'list' ? 'map' : 'list';
+		const next = e.key === 'Home' ? 'list' : e.key === 'End' ? 'map' : e.key === 'ArrowLeft' || e.key === 'ArrowRight' ? other : null;
+		if (!next) return;
+		e.preventDefault();
+		setView(next);
+		document.getElementById(`tab-${next}`)?.focus();
+	}
+
 	/** Scelta dell'utente (ricerca, "Usa la mia posizione"): salva, naviga e il resto segue l'URL. */
 	function choosePlace(p: ChosenPlace, opts: { radiusKm?: number; profile?: ChosenPlace | null } = {}) {
 		// Una località senza slug mette le sue coordinate nell'URL: a ~1 km bastano. La posizione del dispositivo no, mai.
@@ -299,10 +310,10 @@
 
 		<div class="toolbar">
 			<div class="tabs" role="tablist" aria-label="Vista">
-				<button role="tab" id="tab-list" aria-controls="panel-list" aria-selected={view === 'list'} onclick={() => setView('list')}>
+				<button role="tab" id="tab-list" aria-controls="panel-list" aria-selected={view === 'list'} tabindex={view === 'list' ? 0 : -1} onclick={() => setView('list')} onkeydown={tabKey}>
 					<List size={20} aria-hidden="true" /> Lista
 				</button>
-				<button role="tab" id="tab-map" aria-controls="panel-map" aria-selected={view === 'map'} onclick={() => setView('map')}>
+				<button role="tab" id="tab-map" aria-controls="panel-map" aria-selected={view === 'map'} tabindex={view === 'map' ? 0 : -1} onclick={() => setView('map')} onkeydown={tabKey}>
 					<Map size={20} aria-hidden="true" /> Mappa
 				</button>
 			</div>
