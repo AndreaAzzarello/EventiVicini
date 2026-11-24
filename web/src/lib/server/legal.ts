@@ -6,7 +6,7 @@ export function legalInfo() {
 	return {
 		controller: env.CONTROLLER_NAME || 'il gestore di Eventi Vicini',
 		email: env.CONTACT_EMAIL || 'eventivicini.info@gmail.com',
-		updated: '3 novembre 2026',
+		updated: '24 novembre 2026',
 		// Le pagine dichiarano le statistiche solo se il token di Cloudflare Web Analytics è configurato.
 		analytics: Boolean(pub.PUBLIC_CF_BEACON_TOKEN),
 		// Idem per la verifica anti-abuso (App Check con Cloudflare Turnstile).
