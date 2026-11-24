@@ -17,7 +17,21 @@ const z2 = (n: number) => String(n).padStart(2, '0');
 export type Grouping = { range: [number, number]; when: DateWindow };
 
 type Timed = Pick<Event, 'startTime' | 'endTime' | 'longRunning'>;
-type Group<T> = { key: SectionKey; title: string; events: T[] };
+export type Group<T> = { key: SectionKey; title: string; events: T[] };
+/** Una sezione tagliata da `takeFlat`: `events` ne ha solo l'inizio, `total` il numero vero (per titoli e conteggi). */
+export type Slice<T> = Group<T> & { total: number };
+
+/** Le prime `n` card nell'ordine in cui la lista le mostra. Le sezioni oltre `n` non compaiono; `total` conserva il conteggio intero. */
+export function takeFlat<T>(groups: Group<T>[], n: number): Slice<T>[] {
+	const out: Slice<T>[] = [];
+	let left = Math.max(0, n);
+	for (const g of groups) {
+		if (left <= 0) break;
+		out.push({ ...g, events: g.events.slice(0, left), total: g.events.length });
+		left -= g.events.length;
+	}
+	return out;
+}
 
 /**
  * Divide una lista (già filtrata e ordinata) in sezioni, in ora italiana. Ogni evento sta in una sola sezione;

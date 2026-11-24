@@ -1,10 +1,11 @@
 <script lang="ts">
 	import CalendarSearch from '@lucide/svelte/icons/calendar-search';
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
+	import { afterNavigate } from '$app/navigation';
 	import type { Event } from '$lib/event';
 	import { fmtNum } from '$lib/format';
 	import type { LatLng } from '$lib/geo';
-	import { sections, type Grouping } from '$lib/sections';
+	import { sections, takeFlat, type Grouping } from '$lib/sections';
 	import ErrorMessage from './ErrorMessage.svelte';
 	import EventCard from './EventCard.svelte';
 
@@ -35,6 +36,57 @@
 		grouping?: Grouping | null;
 		empty?: Snippet;
 	} = $props();
+
+	// Render a blocchi: montare 200+ card in un colpo è un long task (TBT). Le prime INITIAL card (≥ quelle dell'HTML del server: nessun
+	// hydration_mismatch) subito, il resto a passi di CHUNK card nei momenti liberi del thread. Sezioni, titoli e conteggi
+	// si calcolano sempre sull'elenco intero; a riempimento finito il DOM è identico a prima.
+	const INITIAL = 24;
+	const CHUNK = 12;
+	let limit = $state(INITIAL);
+	const groups = $derived(sections(events, now, grouping));
+	const total = $derived(events.length);
+	const shown = $derived(takeFlat(groups, limit));
+	/** Cambia quando la lista è un'altra (filtro, luogo), non a ogni minuto in cui `now` ricalcola gli stessi eventi. */
+	const signature = $derived(`${total}|${events[0]?.id}|${events.at(-1)?.id}|${grouping?.when ?? ''}`);
+
+	let cancel: (() => void) | null = null;
+	function stop() {
+		cancel?.();
+		cancel = null;
+	}
+	function fill() {
+		stop();
+		if (limit >= total) return;
+		const step = () => {
+			cancel = null;
+			limit = Math.min(limit + CHUNK, total);
+			fill();
+		};
+		if ('requestIdleCallback' in window) {
+			const id = requestIdleCallback(step, { timeout: 250 });
+			cancel = () => cancelIdleCallback(id);
+		} else {
+			const id = setTimeout(step, 16); // Safari
+			cancel = () => clearTimeout(id);
+		}
+	}
+	$effect(() => {
+		void signature;
+		untrack(() => {
+			limit = INITIAL;
+			fill();
+		});
+		return stop;
+	});
+
+	/** Tutte le card subito: serve a chi deve raggiungerne una («Vedi nella lista» dalla mappa) o ritrovare lo scroll. */
+	export function revealAll() {
+		stop();
+		limit = total;
+	}
+	afterNavigate(({ type }) => {
+		if (type === 'popstate') revealAll(); // indietro/avanti: il ripristino dello scroll vuole la pagina già lunga
+	});
 </script>
 
 {#if loading}
@@ -64,9 +116,9 @@
 		{#if empty}{@render empty()}{:else}<h2>Per ora non c’è niente da mostrare</h2>{/if}
 	</div>
 {:else}
-	{#each sections(events, now, grouping) as section (section.key)}
+	{#each shown as section (section.key)}
 		<section class="sect" aria-labelledby="sez-{section.key}">
-			<h2 id="sez-{section.key}">{section.title} <span class="count">{fmtNum(counts?.[section.key] ?? section.events.length)}</span></h2>
+			<h2 id="sez-{section.key}">{section.title} <span class="count">{fmtNum(counts?.[section.key] ?? section.total)}</span></h2>
 			<ul class="list">
 				{#each section.events as event (event.id)}
 					<li><EventCard {event} {now} {origin} highlighted={highlighted === event.id} compact={section.key === 'running'} from={grouping?.range[0]} {onhover} /></li>

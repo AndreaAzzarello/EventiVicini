@@ -46,6 +46,7 @@
 	let selected = $state<string | null>(null);
 	const highlighted = $derived(hovered ?? selected);
 	let search: SearchBox | undefined = $state();
+	let list: EventList | undefined = $state();
 	/** Primo accesso senza posizione salvata né permesso di geolocalizzazione: si sceglie il luogo dalla ricerca. */
 	let needsPlace = $state(untrack(() => data.noPlace)); // senza luogo nell'URL si parte dalla scelta, anche nell'HTML del server
 	/** Senza luogo nell'URL il server non ha caricato eventi: finché il browser non sa dove cercare non si scarica nulla. */
@@ -181,6 +182,7 @@
 	/** «Vedi nella lista» dall'anteprima della mappa: porta alla card (su mobile prima cambia vista) e le dà il focus. */
 	async function showInList(id: string) {
 		if (view !== 'list' && !wide) setView('list');
+		list?.revealAll(); // la card può essere oltre le prime montate a blocchi
 		await flush();
 		const card = document.querySelector<HTMLElement>(`[data-ev-id="${CSS.escape(id)}"]`);
 		card?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -329,6 +331,7 @@
 					</p>
 				{/if}
 				<EventList
+					bind:this={list}
 					events={visible}
 					{now}
 					origin={place}
