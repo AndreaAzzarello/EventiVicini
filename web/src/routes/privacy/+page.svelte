@@ -100,7 +100,8 @@
 			browser scarica direttamente dai server che le ospitano: Ticketmaster, il sito del Comune o dell’ente che
 			pubblica l’evento (sono centinaia), Open Data Hub Alto Adige e, per gli eventi proposti dagli utenti, l’indirizzo
 			https indicato nella proposta. Il browser non invia l’indirizzo della pagina (niente Referer), ma il server che
-			fornisce l’immagine vede il tuo indirizzo IP. Dopo il clic sei sul sito del venditore, che può impostare i propri cookie e
+			fornisce l’immagine vede il tuo indirizzo IP. Quei server possono impostare un proprio cookie tecnico (per esempio di
+				bilanciamento del carico): non lo impostiamo né lo leggiamo noi. Dopo il clic sei sul sito del venditore, che può impostare i propri cookie e
 		trattare i tuoi dati con la propria informativa. Non riceviamo commissioni e non
 		sappiamo se acquisti.
 	</p>
