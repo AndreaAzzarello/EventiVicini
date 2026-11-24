@@ -72,7 +72,8 @@ describe('/api/geocode: URL senza versione (vecchio client) e con versione', () 
 		vi.stubGlobal('fetch', fetchMock);
 		const headers: Record<string, string>[] = [];
 		const setHeaders = (h: Record<string, string>) => void headers.push(h);
-		const call = (qs: string) => GET({ url: new URL(`https://example.test/api/geocode?${qs}`), setHeaders } as unknown as Parameters<typeof GET>[0]).then((r) => r.json());
+		const call = async (qs: string) =>
+			(await GET({ url: new URL(`https://example.test/api/geocode?${qs}`), setHeaders } as unknown as Parameters<typeof GET>[0])).json();
 		const [senza, con] = [await call('q=modena&kind=address'), await call('q=modena&kind=address&v=3')];
 		expect(con).toEqual(senza);
 		expect(String(fetchMock.mock.calls[1][0])).toBe(String(fetchMock.mock.calls[0][0]));

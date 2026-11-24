@@ -43,7 +43,7 @@ describe('geocode: la versione del formato è parte dell’URL richiesto', () =>
 		await run(reversePlace(44.6459, 10.9256));
 		expect(asked().searchParams.get('v')).toBe(String(GEOCODE_FORMAT));
 	});
-	it('la versione è più alta di 2: la #100 ha già salvato in v2 risposte vecchie arrivate dal bordo', async () => {
+	it('la versione è più alta di 2: il client precedente ha già salvato in v2 risposte vecchie arrivate dal bordo', async () => {
 		const { GEOCODE_FORMAT } = await load();
 		expect(GEOCODE_FORMAT).toBeGreaterThan(2);
 	});
