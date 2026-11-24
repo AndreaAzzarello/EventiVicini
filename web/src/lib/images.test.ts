@@ -11,7 +11,7 @@ describe('imageSources: Plone', () => {
 		expect(r.src).toBe(`${B}/mini`);
 		expect(r.srcset).toBe(`${B}/thumb 128w, ${B}/mini 200w, ${B}/preview 400w`);
 		expect(r.original).toBe(PLONE_800);
-		expect(r.sizes).toContain('102px');
+		expect(r.sizes).toContain('100px');
 	});
 	it('hero da URL con hash 800: preview, teaser e originale', () => {
 		const r = imageSources(PLONE_800, 'hero');

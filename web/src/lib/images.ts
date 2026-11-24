@@ -6,9 +6,9 @@ export type ImageUse = 'thumb' | 'hero';
 export type ImageSources = { src: string; srcset?: string; sizes: string; original: string };
 
 // Miniature: riquadro 64 px (96 da 520 px). Le immagini sono per lo più orizzontali (~1,6:1) e il riquadro è quadrato con
-// object-fit: cover, quindi la larghezza deve coprire l'altezza: a 64 px di altezza un'immagine 1,6:1 è larga ~102 px (154 da 520 px): a 360 px con DPR 2 il browser sceglie mini (200w),
+// object-fit: cover, quindi la larghezza deve coprire l'altezza: a 64 px di altezza un'immagine 1,6:1 è larga ~100 px (150 da 520 px): a 360 px con DPR 2 il browser sceglie mini (200w),
 // a DPR 1 thumb (128w), da 520 px con DPR 2 preview (400w).
-const THUMB_SIZES = '(min-width: 520px) 154px, 102px';
+const THUMB_SIZES = '(min-width: 520px) 150px, 100px';
 // Hero: colonna di 760 px al massimo, padding laterale di 16 px.
 const HERO_SIZES = '(min-width: 800px) 760px, calc(100vw - 32px)';
 
