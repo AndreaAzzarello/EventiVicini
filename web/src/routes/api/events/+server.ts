@@ -5,7 +5,12 @@ import type { RequestHandler } from './$types';
 
 // GET /api/events?lat=&lng=&r=  → eventi nel raggio dal punto della griglia di ~5 km più vicino
 //                                  (il browser rifiltra sulla distanza vera): poche chiavi di cache.
+//                                  `v` (versione dei dati, la stessa della pagina) è ignorato qui: serve solo a far cambiare
+//                                  l'URL, quindi la voce della cache del bordo e del browser, quando l'importer pubblica dati nuovi.
 // GET /api/events?ids=a,b,c     → eventi per id (preferiti di chi non ha l'account)
+/** Breve: la chiave porta già la versione dei dati, quindi il TTL protegge solo da modifiche fuori import. */
+const API_CACHE = 'public, max-age=60, s-maxage=300, stale-while-revalidate=600';
+
 export const GET: RequestHandler = async ({ url, setHeaders }) => {
 	const ids = url.searchParams.get('ids');
 	if (ids != null) {
@@ -21,7 +26,9 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 	if (!Number.isFinite(lat) || !Number.isFinite(lng) || !inItaly({ lat, lng }))
 		error(400, 'Coordinate non valide');
 	if (!(RADII_KM as readonly number[]).includes(r)) error(400, 'Raggio non valido');
-	const { events } = await eventsAround({ lat, lng }, r);
-	setHeaders({ 'cache-control': 'public, max-age=300, s-maxage=1800, stale-while-revalidate=86400' });
+	const { events, complete } = await eventsAround({ lat, lng }, r);
+	// Lista possibilmente parziale (import a metà, query fallita, vuoto sospetto): mai nella cache del bordo né del browser.
+	// Un errore di Firestore esce come 5xx e l'adapter non memorizza mai oltre il 399.
+	setHeaders({ 'cache-control': complete ? API_CACHE : 'no-store' });
 	return json(events);
 };
