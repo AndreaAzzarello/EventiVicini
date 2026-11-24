@@ -7,7 +7,7 @@ Una lettura per documento invece di una per evento. Collezione `bundles` (lettur
   coverage       copertura di tutte le regioni                           (ricerca luoghi, home senza luogo)
                la webapp usa le liste solo se esiste (finché manca, ripiega sulle query)
 Ogni bundle è {json, hash, parts, n}: `json` è una lista di righe con i campi di FIELDS, nell'ordine; sopra MAX_PART
-byte continua in `<nome>~1`, `<nome>~2`... Si riscrive solo se l'hash cambia. FIELDS deve coincidere con
+byte continua in `<nome>~1`, `<nome>~2`... Si riscrive solo se l'hash cambia; coverage porta anche `version`, aggiornata a ogni giro e scritta per ultima. FIELDS deve coincidere con
 web/src/lib/server/bundles.ts (lo controlla tests/test_bundles.py).
 
 Si parte dal bundle già scritto: un import parziale (--regione) non cancella gli eventi delle altre regioni nelle
@@ -113,29 +113,48 @@ def rows_of(bundle: dict | None) -> list[list]:
     return [r for p in (bundle["json"] if bundle else []) for r in json.loads(p)]
 
 
-def write_bucket(db, ops: list, name: str, parts: list[str], prev: dict | None, now_ms: int) -> int:
-    """Accoda le scritture di un bundle se è cambiato; restituisce quante operazioni."""
+def write_bucket(db, ops: list, name: str, parts: list[str], prev: dict | None, now_ms: int, extra: dict | None = None) -> int:
+    """Accoda il gruppo di scritture di un bundle se è cambiato; restituisce quante operazioni.
+
+    Ordine nel gruppo: prima le parti `~k`, poi la testa (parts=N), per ultime le cancellazioni delle parti in più: chi legge
+    la testa trova sempre le sue parti. `extra`: campi in più nella testa (es. version di coverage).
+    """
     h = digest(parts)
     if prev and prev["hash"] == h:
         return 0
     ref = lambda n: db.collection(COLL).document(n)  # noqa: E731
-    n = 0
-    for k, p in enumerate(parts):
-        doc = {"json": p} | ({"hash": h, "parts": len(parts), "n": len(json.loads(p)), "updatedAt": now_ms} if k == 0 else {})
-        ops.append(lambda b, r=ref(name if k == 0 else f"{name}~{k}"), d=doc: b.set(r, d))
-        n += 1
-    for k in range(len(parts), prev["parts"] if prev else 1):
-        ops.append(lambda b, r=ref(f"{name}~{k}"): b.delete(r))
-        n += 1
-    return n
+    head = {"json": parts[0], "hash": h, "parts": len(parts), "n": len(json.loads(parts[0])), "updatedAt": now_ms} | (extra or {})
+    group = [lambda b, r=ref(f"{name}~{k}"), d={"json": p}: b.set(r, d) for k, p in enumerate(parts) if k]
+    group.append(lambda b, r=ref(name), d=head: b.set(r, d))
+    group += [lambda b, r=ref(f"{name}~{k}"): b.delete(r) for k in range(len(parts), prev["parts"] if prev else 1)]
+    ops.append(group)
+    return len(group)
 
 
-def commit(db, ops: list) -> None:
-    for i in range(0, len(ops), BATCH):
-        b = db.batch()
-        for op in ops[i:i + BATCH]:
-            op(b)
-        b.commit()
+def commit(db, groups: list[list]) -> None:
+    """Un gruppo (un bundle) non si spezza tra due batch: se ci sta, entra intero in uno; se da solo supera BATCH, si scrive
+    a pezzi nell'ordine del gruppo (parti, poi testa), quindi la testa è sempre l'ultima a diventare visibile."""
+    pending: list = []
+
+    def flush():
+        if pending:
+            b = db.batch()
+            for op in pending:
+                op(b)
+            b.commit()
+            pending.clear()
+
+    for group in groups:
+        if len(group) > BATCH:
+            flush()
+            for i in range(0, len(group), BATCH):
+                pending.extend(group[i:i + BATCH])
+                flush()
+            continue
+        if len(pending) + len(group) > BATCH:
+            flush()
+        pending.extend(group)
+    flush()
 
 
 def write_events(db, upserts: list[dict], removed: list[dict], now_ms: int, budget: int) -> dict:
@@ -194,6 +213,11 @@ def write_coverage(db, docs: dict[str, dict], now_ms: int) -> dict:
         log.error("Bundle coverage troppo grande (%d byte): non scritto, la webapp usa i documenti per regione", len(s))
         return {"reads": reads, "writes": 0}
     ops: list = []
-    writes = write_bucket(db, ops, "coverage", [s], prev.get("coverage"), now_ms)
+    # `version` cambia a ogni giro (anche a copertura invariata) ed è l'ultima cosa che il job scrive: la webapp la mette
+    # nelle chiavi di cache, quindi una versione nuova è visibile solo a bundle completi.
+    writes = write_bucket(db, ops, "coverage", [s], prev.get("coverage"), now_ms, {"version": now_ms})
+    if not writes:
+        ops.append([lambda b, r=db.collection(COLL).document("coverage"): b.set(r, {"version": now_ms}, merge=True)])
+        writes = 1
     commit(db, ops)
     return {"reads": reads, "writes": writes}

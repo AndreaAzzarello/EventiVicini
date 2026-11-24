@@ -104,3 +104,62 @@ def test_import_scrive_i_bundle_con_manuali_e_nasconde_gli_spariti():
     for _ in range(2):
         write([mk(1)], now, {"www.comune.test.it"}, db=db, with_bundles=True)
     assert {r[0] for r in stored(db, "g_u0qa")} == {"e1", "m1"}
+
+
+class Tracer(FakeFirestore):
+    """Registra l'ordine dei documenti scritti e in quale commit."""
+
+    def __init__(self):
+        super().__init__()
+        self.log: list[tuple[int, str]] = []
+
+    def batch(self):
+        b = super().batch()
+        real, n = b.commit, self.commits
+        b.commit = lambda: ([self.log.append((n, o[1].split("/")[1])) for o in b.ops], real())[1]
+        return b
+
+
+def test_un_bundle_non_si_spezza_tra_due_batch(monkeypatch):
+    monkeypatch.setattr(bundles, "MAX_PART", 400)
+    monkeypatch.setattr(bundles, "BATCH", 6)
+    db = Tracer()
+    # un bundle di 3 parti riempie quasi il lotto: quello dopo non può cominciare nello stesso commit se non ci sta intero
+    bundles.write_events(db, [ev(i) for i in range(4)] + [ev(9, geohash="u0qb9abc", citySlug="altra")], [], NOW, 100)
+    by_bundle: dict[str, set[int]] = {}
+    for commit_no, doc in db.log:
+        by_bundle.setdefault(doc.split("~")[0], set()).add(commit_no)
+    multi = [n for n in by_bundle if f"{n}~1" in {d for _, d in db.log}]
+    assert multi and all(len(by_bundle[n]) == 1 for n in multi)
+
+
+def test_bundle_piu_grande_del_lotto_scrive_prima_le_parti_e_per_ultima_la_testa(monkeypatch):
+    monkeypatch.setattr(bundles, "MAX_PART", 120)
+    monkeypatch.setattr(bundles, "BATCH", 3)
+    db = Tracer()
+    bundles.write_events(db, [ev(i) for i in range(12)], [], NOW, 1000)
+    parts = db.data["bundles/g_u0qa"]["parts"]
+    assert parts > 3  # supera da solo il lotto
+    seq = [d for _, d in db.log if d.split("~")[0] == "g_u0qa"]
+    assert seq[-1] == "g_u0qa" and seq.count("g_u0qa") == 1  # la testa è l'ultima scritta
+    assert {f"g_u0qa~{k}" for k in range(1, parts)} <= set(seq[:-1])
+
+
+def test_riduzione_parti_cancella_le_in_piu_dopo_la_testa(monkeypatch):
+    monkeypatch.setattr(bundles, "MAX_PART", 400)
+    db = Tracer()
+    bundles.write_events(db, [ev(i) for i in range(10)], [], NOW, 100)
+    db.log.clear()
+    bundles.write_events(db, [], [{"id": f"e{i}", "geohash": "u0qa3xyz"} for i in range(1, 10)], NOW, 100)
+    seq = [d for _, d in db.log if d.startswith("g_u0qa")]
+    assert seq[0] == "g_u0qa" and all("~" in d for d in seq[1:])
+
+
+def test_coverage_scrive_sempre_la_version_anche_a_copertura_invariata():
+    db = FakeFirestore()
+    docs = {"lazio": {"name": "Lazio", "comuni": [{"slug": "roma"}]}}
+    bundles.write_coverage(db, docs, NOW)
+    assert db.data["bundles/coverage"]["version"] == NOW
+    out = bundles.write_coverage(db, docs, NOW + 5)  # stesso contenuto, hash uguale
+    assert db.data["bundles/coverage"]["version"] == NOW + 5 and out["writes"] == 1
+    assert [r["slug"] for r in stored(db, "coverage")] == ["lazio"]  # il contenuto non è stato toccato
