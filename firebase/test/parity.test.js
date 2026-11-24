@@ -57,6 +57,12 @@ describe('testo di firestore.rules contro parity.json', () => {
     expect(sorted([...PARITY.eventKeys, ...only])).toEqual(sorted([...PARITY.eventKeys, ...PARITY.eventOptionalKeys]));
   });
 
+  it('i campi ammessi in più dalle proposte (hasOnly di submissions) coincidono', () => {
+    const block = RULES.slice(RULES.indexOf('match /submissions/{sid}'), RULES.indexOf('// ---- Utenti'));
+    const only = listFrom(/hasOnly\(eventKeys\(\)\.concat\(\[([^\]]*)\]/, block).filter((k) => !['ownerId', 'status', 'createdAt'].includes(k));
+    expect(sorted(only)).toEqual(sorted(PARITY.submissionOptionalKeys));
+  });
+
   it('i campi solo-importer non compaiono nelle regole', () => {
     for (const k of PARITY.importerOnlyKeys) expect(RULES, k).not.toContain(`'${k}'`);
   });

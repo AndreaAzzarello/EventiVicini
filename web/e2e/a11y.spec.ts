@@ -61,6 +61,13 @@ test('a11y: account e proponi', async ({ page }) => {
 	await page.goto('/proponi');
 	await expect(page.getByRole('button', { name: 'Invia la proposta' })).toBeVisible();
 	expect(await violations(page)).toEqual([]);
+	await page.goto('/proponi?da=social');
+	await expect(page.getByRole('button', { name: 'Invia la segnalazione' })).toBeVisible();
+	expect(await violations(page)).toEqual([]);
+	// con gli errori in vista (link mancante e campi vuoti)
+	await page.getByRole('button', { name: 'Invia la segnalazione' }).click();
+	await expect(page.locator('#e-source')).toBeVisible();
+	expect(await violations(page)).toEqual([]);
 });
 
 test('a11y: area segnalazioni (admin)', async ({ page }) => {

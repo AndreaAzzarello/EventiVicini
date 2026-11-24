@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { romeTime } from './dates';
-import { PRICE_TYPES, compareEvents, eventSource, eventPath, fromData, runningLabel, idFromSlug, parseTags, safeUrl, slugify, ticketLabel, ticketVendor, ticketsOffSale, validateEvent, type EventInput } from './event';
+import { PRICE_TYPES, compareEvents, linkKey, normalizeLink, validateSourceLink, eventSource, eventPath, fromData, runningLabel, idFromSlug, parseTags, safeUrl, slugify, ticketLabel, ticketVendor, ticketsOffSale, validateEvent, type EventInput } from './event';
 
 const sample = (over: Partial<EventInput> = {}): EventInput => ({
 	title: 'Concerto in piazza',
@@ -168,7 +168,65 @@ describe('eventSource', () => {
 
 	it('i comuni restano Comune di …, le proposte e gli eventi senza fonte hanno la loro dicitura', () => {
 		expect(eventSource({ source: 'scraper', sourceUrl: 'https://www.comune.san-giorgio.mo.it/e/1' }).text).toMatch(/^Comune di San/);
-		expect(eventSource({ source: 'user', sourceUrl: '' }).text).toMatch(/utente/);
+		expect(eventSource({ source: 'user', sourceUrl: '' }).text).toBe('Segnalato da un utente e approvato dalla redazione');
 		expect(eventSource({ source: 'manual', sourceUrl: '' }).text).toBe('Redazione di Eventi Vicini');
+	});
+});
+
+describe('eventSource: proposte degli utenti con link', () => {
+	it('mostra l’host, il link e la nota «approvato», mai «verificato»', () => {
+		const s = eventSource({ source: 'user', sourceUrl: 'https://www.instagram.com/p/AbC123/' });
+		expect(s).toEqual({
+			text: 'instagram.com',
+			href: 'https://www.instagram.com/p/AbC123/',
+			ugc: true,
+			note: 'segnalato da un utente e approvato dalla redazione'
+		});
+		expect(JSON.stringify(s)).not.toMatch(/verificat/i);
+	});
+
+	it('un link non https o rovinato non diventa un href', () => {
+		for (const sourceUrl of ['http://example.org/e', 'javascript:alert(1)', 'https://u:p@example.org/e'])
+			expect(eventSource({ source: 'user', sourceUrl }).href).toBeUndefined();
+	});
+});
+
+describe('normalizeLink', () => {
+	it('accetta https, toglie gli spazi e porta l’host in minuscolo', () => {
+		expect(normalizeLink('  https://WWW.Instagram.com/p/AbC123/?igsh=x  ')).toBe('https://www.instagram.com/p/AbC123/?igsh=x');
+	});
+	it.each(['http://example.org/e', 'javascript:alert(1)', 'data:text/html,x', 'ftp://example.org', '//example.org', 'example.org/e', '', 'https://', 'https://u:p@example.org/e', 'https://user@example.org/'])(
+		'rifiuta %s',
+		(s) => expect(normalizeLink(s)).toBeNull()
+	);
+});
+
+describe('linkKey', () => {
+	it('riconosce lo stesso link scritto in modi diversi', () => {
+		const k = linkKey('https://www.instagram.com/p/AbC123/');
+		expect(k).toBe('instagram.com/p/AbC123');
+		expect(linkKey('https://instagram.com/p/AbC123?igsh=1#x')).toBe(k);
+		expect(linkKey('https://INSTAGRAM.com/p/AbC123/')).toBe(k);
+	});
+	it('link diversi hanno chiavi diverse; un link non valido non ha chiave', () => {
+		expect(linkKey('https://instagram.com/p/AAA')).not.toBe(linkKey('https://instagram.com/p/BBB'));
+		expect(linkKey('http://instagram.com/p/AAA')).toBe('');
+	});
+});
+
+describe('validateSourceLink', () => {
+	it('vuoto: ammesso se facoltativo, obbligatorio altrimenti', () => {
+		expect(validateSourceLink('  ', false)).toBeUndefined();
+		expect(validateSourceLink('', true)).toBe('Campo obbligatorio');
+	});
+	it('solo https', () => {
+		expect(validateSourceLink('https://example.org/post', true)).toBeUndefined();
+		expect(validateSourceLink('http://example.org/post', true)).toBe('Inserisci un link che inizi con https://');
+		expect(validateSourceLink('javascript:alert(1)', false)).toBe('Inserisci un link che inizi con https://');
+	});
+	it('massimo 500 caratteri, misurati sul link normalizzato', () => {
+		const at = (n: number) => `https://example.org/${'a'.repeat(n - 'https://example.org/'.length)}`;
+		expect(validateSourceLink(at(500), true)).toBeUndefined();
+		expect(validateSourceLink(at(501), true)).toBe('Massimo 500 caratteri');
 	});
 });

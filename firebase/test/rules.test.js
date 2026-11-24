@@ -396,6 +396,18 @@ describe('submissions', () => {
   it('rifiuta cityAlt (solo importer/admin)', () => assertFails(submit(db('alice'), 'alice', 's1', { cityAlt: 'Bozen' })));
   it('rifiuta longRunning (solo importer/admin)', () => assertFails(submit(db('alice'), 'alice', 's1', { longRunning: true })));
   it('rifiuta campi interni (submittedBy)', () => assertFails(submit(db('alice'), 'alice', 's1', { submittedBy: 'alice' })));
+  it('sourceUrl (link alla fonte): facoltativo, solo https, al massimo 500 caratteri, stringa', async () => {
+    await assertSucceeds(submit(db('alice'), 'alice', 's1', { sourceUrl: 'https://www.instagram.com/p/AbC123/' }));
+    await assertSucceeds(submit(db('alice'), 'alice', 's2', { sourceUrl: '' }));
+    await assertSucceeds(submit(db('alice'), 'alice', 's3', { sourceUrl: `https://example.org/${'a'.repeat(480)}` }));
+    await assertFails(submit(db('alice'), 'alice', 's4', { sourceUrl: 'http://example.org/e' }));
+    await assertFails(submit(db('alice'), 'alice', 's4', { sourceUrl: 'javascript:alert(1)' }));
+    await assertFails(submit(db('alice'), 'alice', 's4', { sourceUrl: 'data:text/html;base64,AAA' }));
+    await assertFails(submit(db('alice'), 'alice', 's4', { sourceUrl: 'https://example.org/a b' }));
+    await assertFails(submit(db('alice'), 'alice', 's4', { sourceUrl: `https://example.org/${'a'.repeat(481)}` }));
+    await assertFails(submit(db('alice'), 'alice', 's4', { sourceUrl: 42 }));
+    await assertFails(submit(db('alice'), 'alice', 's4', { sourceUrl: null }));
+  });
   it('tag: stringhe di 1-30 caratteri, al massimo 10', async () => {
     await assertFails(submit(db('alice'), 'alice', 's1', { tags: [1] }));
     await assertFails(submit(db('alice'), 'alice', 's1', { tags: [''] }));
@@ -432,6 +444,14 @@ describe('submissions', () => {
       const b = writeBatch(fs);
       b.set(doc(fs, 'events', 'new1'), { ...event(), source: 'user', sourceUrl: '', createdAt: 1, updatedAt: 1 });
       b.update(doc(fs, 'submissions', 's1'), { status: 'approved', eventId: 'new1', reviewedAt: serverTimestamp() });
+      b.update(doc(fs, 'users', 'alice'), { pendingCount: increment(-1) });
+      await assertSucceeds(b.commit());
+    });
+    it('admin approva una proposta con link: il link passa a events.sourceUrl', async () => {
+      const fs = db('adm', ADMIN);
+      const b = writeBatch(fs);
+      b.set(doc(fs, 'events', 'new2'), { ...event(), source: 'user', sourceUrl: 'https://www.instagram.com/p/AbC123/', createdAt: 1, updatedAt: 1 });
+      b.update(doc(fs, 'submissions', 's1'), { status: 'approved', eventId: 'new2', reviewedAt: serverTimestamp() });
       b.update(doc(fs, 'users', 'alice'), { pendingCount: increment(-1) });
       await assertSucceeds(b.commit());
     });

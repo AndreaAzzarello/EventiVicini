@@ -65,13 +65,13 @@ const offenders = (page: Page) =>
 
 test('accedi, proponi, account e tutte le viste admin senza scroll orizzontale a 360px', async ({ page }) => {
 	await page.setViewportSize({ width: 360, height: 740 });
-	for (const path of ['/accedi', '/proponi']) {
+	for (const path of ['/accedi', '/proponi', '/proponi?da=social']) {
 		await page.goto(path);
 		await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 		expect(await overflow(page), path).toBeLessThanOrEqual(0);
 	}
 	await signInByEmail(page, 'eventivicini.info@gmail.com', '/proponi');
-	for (const path of ['/proponi', '/account', '/admin', '/admin/proposte', '/admin/statistiche', '/admin/stile', '/admin/eventi/nuovo', '/admin/eventi/seedJazz']) {
+	for (const path of ['/proponi', '/proponi?da=social', '/account', '/admin', '/admin/proposte', '/admin/statistiche', '/admin/stile', '/admin/eventi/nuovo', '/admin/eventi/seedJazz']) {
 		await page.goto(path);
 		await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 		await page.waitForLoadState('networkidle');
@@ -87,4 +87,15 @@ test('/admin/stile senza scroll orizzontale a 360px anche con un font di sistema
 	await page.waitForLoadState('networkidle');
 	await page.addStyleTag({ content: ':root { --font-body: Verdana, sans-serif !important; } body { font-family: Verdana, sans-serif !important; }' });
 	expect(await overflow(page), (await offenders(page)).join(' | ')).toBeLessThanOrEqual(0);
+});
+
+// Riga «Segnala un evento» e modulo dai social: nessuno scroll orizzontale anche a 320 px.
+test('segnala dai social, riga in elenco e scheda evento senza scroll orizzontale a 320px', async ({ page }) => {
+	await page.setViewportSize({ width: 320, height: 640 });
+	for (const path of ['/citta/torino', '/?luogo=modena', '/eventi/jazz-in-piazza-grande-seedJazz', '/proponi?da=social']) {
+		await page.goto(path);
+		await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+		await page.waitForLoadState('networkidle');
+		expect(await overflow(page), `${path}: ${(await offenders(page)).join(' | ')}`).toBeLessThanOrEqual(0);
+	}
 });

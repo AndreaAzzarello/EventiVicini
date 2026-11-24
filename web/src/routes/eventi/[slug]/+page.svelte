@@ -14,6 +14,7 @@
 	import Link2 from '@lucide/svelte/icons/link-2';
 	import MapPin from '@lucide/svelte/icons/map-pin';
 	import Navigation from '@lucide/svelte/icons/navigation';
+	import Plus from '@lucide/svelte/icons/plus';
 	import Share2 from '@lucide/svelte/icons/share-2';
 	import Ticket from '@lucide/svelte/icons/ticket';
 	import { CATEGORIES, PRICE_TYPES, cityPath, eventPath, eventSource, isForKids, runningLabel, ticketLabel, ticketsOffSale, ticketVendor } from '$lib/event';
@@ -47,6 +48,8 @@
 
 	const Cat = $derived(CATEGORY_ICONS[e.category]);
 	const source = $derived(eventSource(e));
+	// Link scritto da un utente (proposta approvata): rel ugc + nofollow; gli altri restano come prima.
+	const sourceRel = $derived(source.ugc ? 'noopener noreferrer nofollow ugc' : 'noopener noreferrer');
 	// Open Data Hub non dà una pagina leggibile dell'evento (la fonte rimanda al portale): niente «sito ufficiale» che non c'è
 	const fromOpenData = $derived(source.href === 'https://opendatahub.com/');
 	const vendor = $derived(e.ticketUrl ? ticketVendor(e.ticketUrl) : null);
@@ -137,7 +140,7 @@
 					{#if e.venueName}<strong>{e.venueName}</strong><br />{/if}
 					{#if e.approxLocation}
 						<span class="approx">Luogo da confermare</span>
-						<span class="note">Il Comune non ha ancora indicato l’indirizzo preciso.{#if source.href} <a href={source.href} target="_blank" rel="noopener noreferrer">Controlla sulla fonte</a>.{/if}</span>
+						<span class="note">Il Comune non ha ancora indicato l’indirizzo preciso.{#if source.href} <a href={source.href} target="_blank" rel={sourceRel}>Controlla sulla fonte</a>.{/if}</span>
 					{:else}{e.address}{/if}
 					{#if e.locality && e.locality !== e.city}<br />{e.locality}, {e.city}{/if}
 					{#if away}<span class="away">{away}</span>{/if}
@@ -156,7 +159,7 @@
 			{/if}
 			<div>
 				<dt><Link2 size={20} aria-hidden="true" /> Fonte</dt>
-				<dd>{#if source.href}<a href={source.href} target="_blank" rel="noopener noreferrer">{source.text}</a>{:else}{source.text}{/if}{#if source.license}
+				<dd>{#if source.href}<a href={source.href} target="_blank" rel={sourceRel}>{source.text}</a>{:else}{source.text}{/if}{#if source.note}{` · ${source.note}`}{/if}{#if source.license}
 						· dati <a href={source.license.href} target="_blank" rel="license noopener noreferrer">{source.license.text}</a>{/if}</dd>
 			</div>
 		</dl>
@@ -197,7 +200,10 @@
 		{#if vendor && !offSale}I biglietti li vende {vendor}: il pulsante apre il suo sito, dove valgono le sue condizioni.{/if}
 	</p>
 
-	<div class="report-row"><ReportDialog eventId={e.id} title={e.title} contact={data.contact} /></div>
+	<div class="report-row">
+		<ReportDialog eventId={e.id} title={e.title} contact={data.contact} />
+		<a class="btn btn-sm" href="/proponi?da=social"><Plus size={16} aria-hidden="true" /> Segnala un evento trovato sui social</a>
+	</div>
 </article>
 
 <style>
@@ -320,6 +326,9 @@
 		margin: 0 0 var(--space-3);
 	}
 	.report-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
 		margin: 0 0 var(--space-3);
 	}
 	.source {

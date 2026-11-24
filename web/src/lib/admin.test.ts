@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // #46: l'admin non deve perdere cityAlt (nome nell'altra lingua) quando salva un evento importato.
 const saved: { data?: Record<string, unknown> } = {};
 let old: Record<string, unknown> | undefined;
+const batched: { set?: Record<string, unknown> } = {};
 
 vi.mock('./session.svelte', () => ({
 	session: {
@@ -12,6 +13,15 @@ vi.mock('./session.svelte', () => ({
 				doc: (_db: unknown, _c: string, id?: string) => ({ id: id ?? 'nuovo' }),
 				collection: () => ({}),
 				getDoc: async () => ({ data: () => old }),
+				serverTimestamp: () => 'ts',
+				increment: (n: number) => n,
+				writeBatch: () => ({
+					set: (_ref: unknown, data: Record<string, unknown>) => {
+						batched.set = data;
+					},
+					update: () => {},
+					commit: async () => {}
+				}),
 				setDoc: async (_ref: unknown, data: Record<string, unknown>) => {
 					saved.data = data;
 				}
@@ -20,7 +30,7 @@ vi.mock('./session.svelte', () => ({
 	}
 }));
 
-const { saveEvent } = await import('./admin');
+const { approve, saveEvent, sameLinkSubmissions } = await import('./admin');
 
 const input = (over = {}) =>
 	({
@@ -58,5 +68,33 @@ describe('saveEvent e cityAlt', () => {
 		old = { source: 'scraper', city: 'Bolzano', cityAlt: 5 };
 		await saveEvent('e1', input());
 		expect(saved.data).not.toHaveProperty('cityAlt');
+	});
+});
+
+describe('approve e link alla fonte', () => {
+	const sub = (over = {}) => ({ ...(input() as object), id: 's1', ownerId: 'u1', status: 'pending', createdAt: 1, ...over }) as never;
+
+	it('copia il link della proposta in sourceUrl, con source "user"', async () => {
+		await approve(sub({ sourceUrl: 'https://www.instagram.com/p/AbC123/' }));
+		expect(batched.set).toMatchObject({ source: 'user', sourceUrl: 'https://www.instagram.com/p/AbC123/' });
+	});
+
+	it('senza link resta vuoto e non copia ownerId', async () => {
+		await approve(sub());
+		expect(batched.set).toMatchObject({ source: 'user', sourceUrl: '' });
+		expect(batched.set).not.toHaveProperty('ownerId');
+	});
+});
+
+describe('sameLinkSubmissions', () => {
+	it('segnala solo le proposte con lo stesso link, scritto anche in modi diversi', () => {
+		const out = sameLinkSubmissions([
+			{ id: 'a', sourceUrl: 'https://www.instagram.com/p/X1/' },
+			{ id: 'b', sourceUrl: 'https://instagram.com/p/X1?igsh=1' },
+			{ id: 'c', sourceUrl: 'https://instagram.com/p/X2/' },
+			{ id: 'd', sourceUrl: '' },
+			{ id: 'e' }
+		]);
+		expect([...out].sort()).toEqual(['a', 'b']);
 	});
 });

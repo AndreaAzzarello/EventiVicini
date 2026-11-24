@@ -3,7 +3,10 @@ import { session } from './session.svelte';
 
 export const MAX_PENDING = 5;
 
-export interface Submission extends EventInput {
+/** Proposta: i campi dell'evento più, facoltativo, il link alla fonte (https, già normalizzato). */
+export type SubmissionInput = EventInput & { sourceUrl?: string };
+
+export interface Submission extends SubmissionInput {
 	id: string;
 	ownerId: string;
 	status: 'pending' | 'approved' | 'rejected';
@@ -25,7 +28,7 @@ export function fromSnap(id: string, d: Record<string, unknown>): Submission {
 }
 
 /** Proposta + contatore nella stessa transazione: le regole verificano entrambi (max 5 pending). */
-export async function submitEvent(input: EventInput): Promise<string> {
+export async function submitEvent(input: SubmissionInput): Promise<string> {
 	const fb = await session.start();
 	const uid = fb.auth.currentUser?.uid;
 	if (!uid) throw new Error('Accedi per proporre un evento.');
