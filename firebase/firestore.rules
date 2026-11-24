@@ -28,6 +28,11 @@ service cloud.firestore {
       return v is string && v.size() <= 500 && (v == '' || v.matches('https?://[^\\s]+'));
     }
 
+    // Come optUrl ma solo https: il link alla fonte di una proposta (post sui social o pagina web). Il sito non lo apre mai.
+    function httpsUrlOpt(v) {
+      return v is string && v.size() <= 500 && (v == '' || v.matches('https://[^\\s]+'));
+    }
+
     // Elemento i di una lista di tag (max 10): stringa di 1-30 caratteri; oltre la fine della lista vale sempre.
     // Le regole non hanno cicli: si controllano gli indici 0..9 uno per uno. Lunghezze come LIMITS in event.ts.
     function tagOk(t, i) {
@@ -131,8 +136,9 @@ service cloud.firestore {
 
       allow create: if signedIn()
         && request.resource.data.keys().hasAll(eventKeys().concat(['ownerId', 'status', 'createdAt']))
-        && request.resource.data.keys().hasOnly(eventKeys().concat(['ownerId', 'status', 'createdAt']))
+        && request.resource.data.keys().hasOnly(eventKeys().concat(['ownerId', 'status', 'createdAt', 'sourceUrl']))
         && validEventFields(request.resource.data)
+        && httpsUrlOpt(request.resource.data.get('sourceUrl', ''))
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.status == 'pending'
         && request.resource.data.createdAt == request.time
