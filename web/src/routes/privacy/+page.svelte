@@ -38,7 +38,7 @@
 				data di creazione, i tuoi preferiti (con un contatore e la data dell’ultima modifica, che servono a limitare gli abusi: al massimo 200 preferiti e 100 modifiche al giorno; sono salvati in un documento separato, con il solo identificativo dell’account e senza altri dati personali) e le proposte di evento che invii, con il loro stato.
 		</li>
 		<li>
-			<strong>Proposte di evento.</strong> I dati dell’evento (titolo, luogo, date, link) vengono pubblicati se approvati.
+			<strong>Proposte di evento.</strong> I dati dell’evento (titolo, luogo, date, link) vengono pubblicati se approvati, compreso il link al post o alla pagina dove hai visto l’evento, che pubblichiamo come fonte. Non apriamo quel link e non ne copiamo i contenuti.
 			Chi ha proposto l’evento non viene mai mostrato pubblicamente e il suo identificativo non è salvato
 				nell’evento pubblicato: resta solo nella proposta, leggibile da te e dall’amministratore. Se usi la mappa del
 				modulo “Proponi”, le coordinate del segnaposto (arrotondate a circa 11 metri) vengono inviate al nostro server
