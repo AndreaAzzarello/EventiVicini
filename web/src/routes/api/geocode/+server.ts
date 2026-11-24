@@ -25,6 +25,9 @@ function throttle<T>(fn: () => Promise<T>): Promise<T> {
 	return run;
 }
 
+// Il parametro `v` (versione del formato, GEOCODE_FORMAT nel client) non cambia la risposta: serve solo a cambiare l'URL,
+// quindi la chiave della cache che l'adapter Cloudflare consulta prima di questo handler e quella HTTP del browser.
+// Senza `v` (vecchio client) la risposta è comunque nel formato corrente.
 export const GET: RequestHandler = async ({ url, setHeaders }) => {
 	const q = (url.searchParams.get('q') ?? '').trim();
 	const kind = url.searchParams.get('kind') === 'address' ? 'address' : 'city';
