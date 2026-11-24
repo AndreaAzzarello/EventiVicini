@@ -109,3 +109,79 @@ def test_dimensioni_aggiornate_dalle_statistiche_e_cache_illeggibile(tmp_path):
     assert load_sizes(f) == {}
     f.write_text('{"veneto": 834}', encoding="utf-8")
     assert load_sizes(f) == {"veneto": 834}
+
+
+# #89: avviso di calo
+from ci_report import DROP_HISTORY_DAYS, check_drop  # noqa: E402
+
+
+def storico(per_giorno: dict[str, dict]) -> dict:
+    return {"days": {d: {"regions": v.get("regions", {}), "sources": v.get("sources", {})} for d, v in per_giorno.items()}}
+
+
+GIORNI_CALO = [f"2026-11-{d:02d}" for d in range(16, 23)]  # 7 giorni prima di oggi (23/11)
+DATA_OGGI = "2026-11-23"
+
+
+def regione(eventi, valore=200):
+    return storico({d: {"regions": {"toscana": valore}} for d in GIORNI_CALO}), [{"region": "toscana", "events": eventi}]
+
+
+def test_calo_del_25_per_cento_della_regione_avvisa_con_valori():
+    h, st = regione(150)
+    msgs, _ = check_drop(st, h, DATA_OGGI)
+    assert len(msgs) == 1
+    assert "toscana" in msgs[0] and "150" in msgs[0] and "200" in msgs[0] and "7 giorni" in msgs[0]
+
+
+def test_calo_del_9_per_cento_e_il_fine_settimana_passano():
+    h, st = regione(182)
+    assert check_drop(st, h, DATA_OGGI)[0] == []
+
+
+def test_la_media_di_sette_giorni_assorbe_il_fine_settimana():
+    h = storico({d: {"regions": {"toscana": v}} for d, v in zip(GIORNI_CALO, [220, 220, 220, 220, 220, 190, 180])})  # media ~210
+    assert check_drop([{"region": "toscana", "events": 175}], h, DATA_OGGI)[0] == []  # -17% sulla media: sotto soglia
+
+
+def test_senza_storico_sufficiente_non_avvisa():
+    h = storico({d: {"regions": {"toscana": 200}} for d in GIORNI_CALO[-2:]})
+    assert check_drop([{"region": "toscana", "events": 10}], h, DATA_OGGI)[0] == []
+    assert check_drop([{"region": "toscana", "events": 10}], storico({}), DATA_OGGI)[0] == []
+
+
+def test_regione_piccola_non_avvisa():
+    h, st = regione(0, valore=10)
+    assert check_drop(st, h, DATA_OGGI)[0] == []
+
+
+def sorgenti(oggi, **storia):
+    h = storico({d: {"sources": {"toscana/scandicci": storia.get("ieri", 40)}} for d in GIORNI_CALO})
+    return h, [{"region": "toscana", "events": 100, "source_events": {"scandicci": oggi}}]
+
+
+def test_fonte_grande_a_zero_senza_errore_avvisa():
+    h, st = sorgenti(0)
+    msgs, _ = check_drop(st, h, DATA_OGGI)
+    assert len(msgs) == 1 and "toscana/scandicci" in msgs[0] and "40" in msgs[0] and "0 eventi" in msgs[0]
+
+
+def test_fonte_a_zero_con_errore_dichiarato_passa():
+    h, _ = sorgenti(0)
+    assert check_drop([{"region": "toscana", "events": 100, "source_events": {}}], h, DATA_OGGI)[0] == []  # in errore: assente
+
+
+def test_fonte_piccola_o_non_a_zero_passa():
+    assert check_drop(*reversed(sorgenti(0, ieri=5)), DATA_OGGI)[0] == []
+    assert check_drop(*reversed(sorgenti(3)), DATA_OGGI)[0] == []
+
+
+def test_storico_aggiornato_potato_e_idempotente():
+    h, st = sorgenti(7)
+    for d in range(1, DROP_HISTORY_DAYS + 2):
+        h["days"][f"2026-10-{d:02d}"] = {"regions": {"toscana": 1}, "sources": {}}
+    _, new = check_drop(st, h, DATA_OGGI)
+    assert "2026-10-01" not in new["days"] and len(new["days"]) == DROP_HISTORY_DAYS
+    assert new["days"][DATA_OGGI]["sources"]["toscana/scandicci"] == 7 and new["days"][DATA_OGGI]["regions"]["toscana"] == 100
+    _, again = check_drop(st, new, DATA_OGGI)  # la stessa run due volte: stesso risultato, oggi non entra nella media
+    assert again["days"][DATA_OGGI] == new["days"][DATA_OGGI]

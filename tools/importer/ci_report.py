@@ -4,6 +4,7 @@
   python ci_report.py summary <cartella> [cleanup.json]   # riepilogo unico → stdout e GITHUB_STEP_SUMMARY
   python ci_report.py simulate [regioni.json]      # quote per giorno della settimana (scenario Italia)
   python ci_report.py sizes <cartella> <sizes.json>   # aggiorna gli eventi per regione (minimo di letture del job)
+  python ci_report.py check-drop <cartella> <calo.json>   # avviso di calo (#89): scrive drop=true e report in GITHUB_OUTPUT, esce sempre 0
   python ci_report.py guard                        # avvio automatico: go=false se l'import completo di oggi c'è già
   python ci_report.py mac-artifact <cartella>      # scarica i dati del Mac mini (ultimo scarica-fonti riuscito su main)
 
@@ -30,6 +31,16 @@ BUDGET = {"reads": 40_000, "writes": 15_000, "geocode": 3_000}  # con margine, v
 
 SKIPPED_SHARE = 0.05  # oltre questa quota di fonti saltate il job segnala un avviso
 BIG_COMUNE = 50  # un comune che ieri aveva più di tanti eventi e oggi non risponde segnala sempre un avviso
+
+
+# Avviso di calo (#89): soglie in un solo punto, descritte in docs/importer.md («Avviso di calo»).
+DROP_WINDOW = 7  # giorni precedenti confrontati con oggi (la media assorbe il calo del fine settimana)
+DROP_MIN_DAYS = 3  # storico minimo per giudicare: prima l'avviso tace
+DROP_REGION_PCT = 0.20  # una regione sotto la media di oltre il 20% avvisa
+DROP_REGION_MIN_AVG = 30  # sotto questa media (eventi per regione) il numero è rumore (Molise, Basilicata)
+DROP_SOURCE_MIN = 10  # una fonte con almeno tanti eventi in ognuno dei giorni della finestra che oggi è a zero, senza errore, avvisa
+DROP_HISTORY_DAYS = 14  # storico conservato nella cache
+DROP_KEEP_SOURCE_MAX = 5  # nello storico restano solo le fonti che hanno avuto almeno tanti eventi in un giorno
 
 
 RECONCILE_WEIGHT = 7  # una riconciliazione legge ~tutti gli eventi della regione: pesa come 7 giorni di import normale
@@ -100,6 +111,50 @@ def update_sizes(stats: list[dict], old: dict[str, int]) -> dict[str, int]:
         if s.get("region") and s.get("events"):
             new[s["region"]] = int(s["events"])
     return new
+
+
+def check_drop(stats: list[dict], history: dict, today: str) -> tuple[list[str], dict]:
+    """(messaggi, storico aggiornato). Confronta oggi con la media dei DROP_WINDOW giorni precedenti dello storico.
+
+    Regione: avvisa se ha DROP_REGION_PCT in meno della media (con almeno DROP_MIN_DAYS giorni di storico e media da
+    DROP_REGION_MIN_AVG). Fonte: avvisa se oggi ha risposto (nessun errore: le fonti in errore non sono in `source_events`)
+    con zero eventi, mentre in ognuno dei giorni della finestra ne aveva almeno DROP_SOURCE_MIN.
+    history: {"days": {AAAA-MM-GG: {"regions": {slug: n}, "sources": {"regione/fonte": n}}}}. Oggi non entra nel confronto,
+    quindi rilanciare lo stesso giorno dà lo stesso esito."""
+    days = history.get("days") if isinstance(history.get("days"), dict) else {}
+    past = sorted(d for d in days if d < today)[-DROP_WINDOW:]
+    msgs: list[str] = []
+    for s in sorted(stats, key=lambda s: s.get("region", "")):
+        region, events = s.get("region"), s.get("events")
+        if not region or events is None:
+            continue
+        vals = [days[d]["regions"][region] for d in past if region in days[d].get("regions", {})]
+        if len(vals) >= DROP_MIN_DAYS and (avg := sum(vals) / len(vals)) >= DROP_REGION_MIN_AVG and events < avg * (1 - DROP_REGION_PCT):
+            msgs.append(f"Regione {region}: oggi {events} eventi, media degli ultimi {len(vals)} giorni {avg:.1f} ({(events - avg) / avg:+.0%})")
+        for name, n in sorted((s.get("source_events") or {}).items()):
+            vals = [days[d]["sources"][f"{region}/{name}"] for d in past if f"{region}/{name}" in days[d].get("sources", {})]
+            if n == 0 and len(vals) >= DROP_MIN_DAYS and min(vals) >= DROP_SOURCE_MIN:
+                msgs.append(f"Fonte {region}/{name}: oggi 0 eventi senza errore, media degli ultimi {len(vals)} giorni {sum(vals) / len(vals):.1f}")
+    today_doc = days.get(today, {"regions": {}, "sources": {}})
+    new_days = {**days, today: {"regions": {**today_doc.get("regions", {}), **{s["region"]: s["events"] for s in stats if s.get("region") and s.get("events") is not None}},
+                                "sources": {**today_doc.get("sources", {}), **{f"{s['region']}/{n}": v for s in stats if s.get("region") for n, v in (s.get("source_events") or {}).items()}}}}
+    kept = sorted(new_days)[-DROP_HISTORY_DAYS:]
+    new_days = {d: new_days[d] for d in kept}
+    peak: dict[str, int] = {}
+    for d in kept:
+        for k, v in new_days[d]["sources"].items():
+            peak[k] = max(peak.get(k, 0), v)
+    for d in kept:
+        new_days[d]["sources"] = {k: v for k, v in new_days[d]["sources"].items() if peak[k] >= DROP_KEEP_SOURCE_MAX}
+    return msgs, {"days": new_days}
+
+
+def load_history(path: Path) -> dict:
+    try:
+        d = json.loads(path.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}  # cache assente o corrotta: nessun giudizio finché lo storico non si ricostruisce
 
 
 def simulate(regions: dict[str, dict]) -> dict:
@@ -361,6 +416,22 @@ def main(argv: list[str]) -> int:
         out = Path(argv[2])
         out.write_text(json.dumps(update_sizes(stats, load_sizes(out)), sort_keys=True), encoding="utf-8")
         return 0
+    if argv[:1] == ["check-drop"] and len(argv) == 3:
+        stats = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(Path(argv[1]).rglob("stats-*.json"))]
+        out = Path(argv[2])
+        today = datetime.now(ZoneInfo("Europe/Rome")).strftime("%Y-%m-%d")
+        msgs, new = check_drop(stats, load_history(out), today)
+        out.write_text(json.dumps(new, sort_keys=True), encoding="utf-8")
+        sys.stdout.reconfigure(encoding="utf-8")
+        report = chr(10).join(msgs)
+        print(report if msgs else "Nessun calo oltre soglia.")
+        if path := os.environ.get("GITHUB_OUTPUT"):
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(f"drop={str(bool(msgs)).lower()}" + chr(10) + "report<<DROP_EOF" + chr(10) + report + chr(10) + "DROP_EOF" + chr(10))
+        if msgs and (path := os.environ.get("GITHUB_STEP_SUMMARY")):
+            with open(path, "a", encoding="utf-8") as f:
+                f.write("### ⚠️ Calo di eventi" + chr(10) + chr(10) + chr(10).join(f"- {m}" for m in msgs) + chr(10))
+        return 0  # il fallimento lo decide il job avviso-calo: questo passo non blocca cache e sitemap
     if argv[:1] == ["simulate"]:
         if len(argv) > 1:
             data = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
