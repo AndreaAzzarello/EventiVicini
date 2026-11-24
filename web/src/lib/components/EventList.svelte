@@ -93,6 +93,11 @@
 		gap: var(--space-2);
 		margin: 0 0 var(--space-3);
 	}
+	@media (max-width: 399px) {
+		.sect h2 {
+			margin-bottom: var(--space-2);
+		}
+	}
 	.count {
 		font: var(--fw-regular) var(--text-sm) / 1 var(--font-body);
 		color: var(--muted);

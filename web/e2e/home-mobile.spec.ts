@@ -110,6 +110,32 @@ test('da tastiera: la freccia destra porta da Lista a Mappa e cambia vista', asy
 	await expect(tab(page, 'Mappa')).toBeFocused();
 });
 
+// Sopra la piega (#22): a 360×640 la prima card è intera, senza togliere il testo di «Usa la mia posizione».
+test('a 360×640 la prima card è intera sopra la piega', async ({ page }) => {
+	await page.setViewportSize({ width: 360, height: 640 });
+	await home(page);
+	const box = (await page.locator('[data-ev-id]').first().boundingBox())!;
+	expect(box.y).toBeGreaterThanOrEqual(0);
+	expect(box.y + box.height).toBeLessThanOrEqual(640);
+	await expect(page.getByRole('button', { name: 'Usa la mia posizione' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Usa la mia posizione' })).toContainText('Usa la mia posizione'); // testo visibile, non solo etichetta
+});
+
+for (const [width, height] of [[360, 640], [320, 640]]) {
+	test(`a ${width}px: nessun overflow orizzontale e bersagli di testata, filtri e selettore ≥ 24 px`, async ({ page }) => {
+		await page.setViewportSize({ width, height });
+		await home(page);
+		expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+		const small = await page.evaluate(() =>
+			[...document.querySelectorAll<HTMLElement>('.intro button, .tabs button, .filters .chip, .filters select, .filters input')]
+				.map((el) => ({ el, r: el.getBoundingClientRect() }))
+				.filter(({ r }) => r.width && (r.width < 24 || r.height < 24))
+				.map(({ el, r }) => `${el.tagName.toLowerCase()} «${(el.textContent ?? '').trim().slice(0, 20)}» ${Math.round(r.width)}×${Math.round(r.height)}`)
+		);
+		expect(small).toEqual([]);
+	});
+}
+
 test('filtri: il select della distanza è alto quanto i chip', async ({ page }) => {
 	await home(page);
 	const select = (await page.locator('.filters select').boundingBox())!;

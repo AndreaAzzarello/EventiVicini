@@ -498,6 +498,7 @@
 		}
 		.intro h1 {
 			margin-bottom: var(--space-1);
+			font-size: var(--text-2xl);
 		}
 	}
 	.popular {
@@ -655,6 +656,28 @@
 		flex-wrap: wrap;
 		justify-content: center;
 		gap: var(--space-2);
+	}
+	/* Più eventi sopra la piega (#22), schermi stretti: riepilogo in --text-sm (il pulsante «Usa la mia posizione» tiene il testo e va a capo
+	   sotto, alto --control-sm) e meno aria tra testata, filtri, selettore e prima sezione. Dopo le regole base: a parità di peso vince l'ordine. */
+	@media (max-width: 399px) {
+		.summary {
+			font-size: var(--text-sm);
+			line-height: var(--lh-tight);
+		}
+		.where {
+			gap: var(--space-1) var(--space-3);
+		}
+		/* Il link del luogo resta alto --control-sm (bersaglio), ma non allunga la riga: il margine negativo lo fa sporgere sopra e sotto */
+		.place-link {
+			margin-block: calc(var(--space-1) * -1);
+		}
+		.toolbar {
+			margin-top: 0;
+			padding-top: var(--space-1);
+		}
+		.split {
+			margin-top: 0;
+		}
 	}
 	@media (min-width: 960px) {
 		.toolbar {
