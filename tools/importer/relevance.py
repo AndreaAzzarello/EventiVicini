@@ -72,17 +72,36 @@ def is_season(title: str) -> bool:
 
 
 YEAR_RE = re.compile(r"\b(20\d\d)\b")
+#: «2026/27», «2026-27», «2026/2027»: una stagione, vale l'anno più alto
+SEASON_YEARS_RE = re.compile(r"\b(20\d\d)\s*[/\-–]\s*(\d{4}|\d{2})\b")
+#: «1936-2020»: anni di vita o di attività, non un'edizione
+LIFESPAN_RE = re.compile(r"\b1\d\d\d\s*[/\-–]\s*20\d\d\b")
+#: un anno più vecchio di tanti anni rispetto all'inizio non è un'edizione scaduta ma un nome («Merano 2000»); vedi docs/importer.md
+PAST_EDITION_YEARS = 10
+
+
+def title_years(title: str) -> list[int]:
+    """Anni del titolo che possono dichiarare un'edizione: stagioni «2026/27» valgono per l'anno più alto, gli intervalli
+    che partono dal Novecento («1936-2020») non contano."""
+    t = LIFESPAN_RE.sub(" ", title)
+    years = []
+    for m in SEASON_YEARS_RE.finditer(t):
+        first, second = int(m[1]), m[2]
+        years.append(int(second) if len(second) == 4 else first // 100 * 100 + int(second))
+    t = SEASON_YEARS_RE.sub(" ", t)
+    return years + [int(y) for y in YEAR_RE.findall(t)]
 
 
 def exclusion_reason(title: str, start_year: int | None = None) -> str | None:
     """Motivo per cui la pagina non è un evento pubblico, None se va importata.
 
     start_year: anno di inizio dell'evento; un titolo con un anno precedente ("Natale 2023") è un'edizione vecchia
-    la cui data, scritta senza anno, è stata portata al prossimo."""
+    la cui data, scritta senza anno, è stata portata al prossimo. Contano solo gli anni entro PAST_EDITION_YEARS
+    dall'inizio e, per le stagioni («2026/27»), l'anno più alto."""
     t = _norm(title)
     if not t:
         return None
-    if start_year and (years := [int(y) for y in YEAR_RE.findall(t)]) and max(years) < start_year:
+    if start_year and (years := [y for y in title_years(title) if y >= start_year - PAST_EDITION_YEARS]) and max(years) < start_year:
         return "edizione passata"
     if is_season(title):
         return None
