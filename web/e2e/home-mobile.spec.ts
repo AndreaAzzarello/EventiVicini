@@ -97,13 +97,13 @@ test('in mappa il selettore non copre i controlli di Leaflet né l’anteprima a
 	expect(s.y >= t.y + t.height || s.y + s.height <= t.y).toBe(true);
 });
 
-test('da tastiera: Tab porta da Lista a Mappa e Invio cambia vista', async ({ page }) => {
+// Pattern ARIA tabs (#84): Tab entra sul tab selezionato (roving tabindex), la freccia sposta il focus e attiva la vista.
+test('da tastiera: la freccia destra porta da Lista a Mappa e cambia vista', async ({ page }) => {
 	await home(page);
 	await tab(page, 'Lista').focus();
 	await expect(tab(page, 'Lista')).toBeFocused();
-	await page.keyboard.press('Tab');
+	await page.keyboard.press('ArrowRight');
 	await expect(tab(page, 'Mappa')).toBeFocused();
-	await page.keyboard.press('Enter');
 	await expect(tab(page, 'Mappa')).toHaveAttribute('aria-selected', 'true');
 	await expect(page).toHaveURL(/vista=mappa/);
 	await expect(page.getByRole('region', { name: 'Mappa degli eventi' })).toBeVisible();
