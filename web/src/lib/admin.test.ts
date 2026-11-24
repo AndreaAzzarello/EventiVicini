@@ -30,7 +30,7 @@ vi.mock('./session.svelte', () => ({
 	}
 }));
 
-const { approve, saveEvent } = await import('./admin');
+const { approve, saveEvent, sameLinkSubmissions } = await import('./admin');
 
 const input = (over = {}) =>
 	({
@@ -83,5 +83,18 @@ describe('approve e link alla fonte', () => {
 		await approve(sub());
 		expect(batched.set).toMatchObject({ source: 'user', sourceUrl: '' });
 		expect(batched.set).not.toHaveProperty('ownerId');
+	});
+});
+
+describe('sameLinkSubmissions', () => {
+	it('segnala solo le proposte con lo stesso link, scritto anche in modi diversi', () => {
+		const out = sameLinkSubmissions([
+			{ id: 'a', sourceUrl: 'https://www.instagram.com/p/X1/' },
+			{ id: 'b', sourceUrl: 'https://instagram.com/p/X1?igsh=1' },
+			{ id: 'c', sourceUrl: 'https://instagram.com/p/X2/' },
+			{ id: 'd', sourceUrl: '' },
+			{ id: 'e' }
+		]);
+		expect([...out].sort()).toEqual(['a', 'b']);
 	});
 });

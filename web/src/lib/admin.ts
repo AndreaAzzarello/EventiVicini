@@ -1,5 +1,5 @@
 // Operazioni dell'admin. Le regole Firestore le ricontrollano tutte (email admin verificata).
-import { EVENT_KEYS, LONG_RUNNING_DAYS, fromData, type Event, type EventInput } from './event';
+import { EVENT_KEYS, LONG_RUNNING_DAYS, fromData, linkKey, normalizeLink, type Event, type EventInput } from './event';
 import { session } from './session.svelte';
 import { reportFromSnap, type Report } from './reports';
 import { fromSnap, type Submission } from './submissions';
@@ -60,6 +60,26 @@ export async function pendingSubmissions(): Promise<Submission[]> {
 		fs.query(fs.collection(db, 'submissions'), fs.where('status', '==', 'pending'), fs.orderBy('createdAt'), fs.limit(100))
 	);
 	return snap.docs.map((d) => fromSnap(d.id, d.data()));
+}
+
+/** Id delle proposte il cui link alla fonte è lo stesso di un'altra proposta in attesa (confronto in memoria, nessuna lettura). */
+export function sameLinkSubmissions(subs: Pick<Submission, 'id' | 'sourceUrl'>[]): Set<string> {
+	const byKey = new Map<string, string[]>();
+	for (const s of subs) {
+		const k = s.sourceUrl ? linkKey(s.sourceUrl) : '';
+		if (k) byKey.set(k, [...(byKey.get(k) ?? []), s.id]);
+	}
+	return new Set([...byKey.values()].filter((ids) => ids.length > 1).flat());
+}
+
+/** Evento già pubblicato con lo stesso link alla fonte (confronto esatto sul link normalizzato; una lettura, solo all'apertura dell'anteprima). */
+export async function eventWithSource(link: string): Promise<{ id: string; title: string } | null> {
+	const url = normalizeLink(link);
+	if (!url) return null;
+	const { fs, db } = await session.start();
+	const snap = await fs.getDocs(fs.query(fs.collection(db, 'events'), fs.where('sourceUrl', '==', url), fs.limit(1)));
+	const d = snap.docs[0];
+	return d ? { id: d.id, title: String(d.data().title ?? '') } : null;
 }
 
 /** Approva: copia in events (source "user", senza l'autore: l'uid resta solo nella proposta), chiude la proposta, libera il posto dell'autore. */

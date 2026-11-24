@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { approve, pendingSubmissions, reject } from '$lib/admin';
+	import { approve, eventWithSource, pendingSubmissions, reject, sameLinkSubmissions } from '$lib/admin';
 	import ErrorMessage from '$lib/components/ErrorMessage.svelte';
 	import PinMap from '$lib/components/PinMap.svelte';
 	import { formatWhen } from '$lib/dates';
 	import { CATEGORY_ICONS } from '$lib/categoryIcons';
 	import Check from '@lucide/svelte/icons/check';
+	import Link2 from '@lucide/svelte/icons/link-2';
 	import X from '@lucide/svelte/icons/x';
 	import { CATEGORIES, LISTING_NOTE, PRICE_TYPES, eventPath } from '$lib/event';
 	import type { Submission } from '$lib/submissions';
@@ -18,6 +19,19 @@
 	let reason = $state('');
 	let busy = $state(false);
 	let dialog: HTMLDialogElement;
+	// Duplicati del link alla fonte: tra le proposte in attesa (in memoria) e con gli eventi già pubblicati (una lettura, solo all'apertura dell'anteprima).
+	const sameLink = $derived(sameLinkSubmissions(subs ?? []));
+	let published = $state<Record<string, { id: string; title: string } | null>>({});
+
+	async function toggle(s: Submission) {
+		open = open === s.id ? null : s.id;
+		if (open !== s.id || !s.sourceUrl || s.id in published) return;
+		try {
+			published[s.id] = await eventWithSource(s.sourceUrl);
+		} catch (e) {
+			console.error(e);
+		}
+	}
 
 	async function load() {
 		error = '';
@@ -90,8 +104,18 @@
 						</div>
 						<h2>{s.title}</h2>
 						<p class="muted">{formatWhen(s.startTime, s.endTime)} · {s.venueName ? `${s.venueName}, ` : ''}{s.address} ({s.city}{s.province ? `, ${s.province}` : ''})</p>
+							{#if s.sourceUrl}
+								<p class="source">
+									<Link2 size={16} aria-hidden="true" /> Fonte:
+									<a href={s.sourceUrl} target="_blank" rel="noopener noreferrer nofollow ugc">{s.sourceUrl}</a>
+								</p>
+								{#if sameLink.has(s.id)}<p class="dupe">Stesso link di un’altra proposta in attesa.</p>{/if}
+								{#if published[s.id]}
+									<p class="dupe">Già pubblicato con questo link: <a href={eventPath(published[s.id]!)}>{published[s.id]!.title}</a>.</p>
+								{/if}
+							{/if}
 					</div>
-					<button class="btn btn-sm" aria-expanded={open === s.id} onclick={() => (open = open === s.id ? null : s.id)}>
+					<button class="btn btn-sm" aria-expanded={open === s.id} onclick={() => toggle(s)}>
 						{open === s.id ? 'Chiudi anteprima' : 'Anteprima'}
 					</button>
 				</div>
@@ -100,7 +124,7 @@
 						{#if s.imageUrl}<img src={s.imageUrl} decoding="async" alt="Immagine proposta per {s.title}" loading="lazy" referrerpolicy="no-referrer" />{/if}
 						{#if s.shortDescription}<p class="desc">{s.shortDescription}</p>{/if}
 						<dl>
-							{#if s.ticketUrl}<dt>Link</dt><dd><a href={s.ticketUrl} target="_blank" rel="noopener noreferrer nofollow">{s.ticketUrl}</a></dd>{/if}
+							{#if s.ticketUrl}<dt>Link</dt><dd><a href={s.ticketUrl} target="_blank" rel="noopener noreferrer nofollow ugc">{s.ticketUrl}</a></dd>{/if}
 							{#if s.tags.length}<dt>Tag</dt><dd>{s.tags.join(', ')}</dd>{/if}
 							<dt>Regione</dt><dd>{s.region || '—'}</dd>
 						</dl>
@@ -156,6 +180,21 @@
 	}
 	.top p {
 		margin: 0;
+	}
+	.top .source {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-1);
+		margin-top: var(--space-1);
+		overflow-wrap: anywhere;
+	}
+	.top .source :global(svg) {
+		flex: none;
+		align-self: center;
+	}
+	.top .dupe {
+		margin-top: var(--space-1);
+		font-weight: var(--fw-strong);
 	}
 	.top h2 {
 		margin: var(--space-2) 0 var(--space-1);
