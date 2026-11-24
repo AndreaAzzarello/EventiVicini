@@ -12,6 +12,13 @@ export interface GeoResult {
 	place: Place | null;
 }
 
+/**
+ * Versione del formato della risposta di /api/geocode. Alzala quando il formato cambia: finisce nell'URL di ogni richiesta
+ * (cambia la chiave della cache del bordo Cloudflare e di quella HTTP del browser, che indicizzano per URL) e nella chiave locale.
+ * La 2 non basta più: il client precedente chiedeva l'URL senza versione, riceveva dal bordo il formato vecchio e lo salvava sotto `v2:`.
+ */
+export const GEOCODE_FORMAT = 3;
+
 const MAX_CACHE = 60;
 let cache: Record<string, GeoResult[]> | null = null;
 let last = 0;
@@ -36,7 +43,9 @@ function throttled<T>(fn: () => Promise<T>): Promise<T> {
 
 async function cachedCall(key: string, params: URLSearchParams): Promise<GeoResult[]> {
 	const c = store();
+	key = `v${GEOCODE_FORMAT}:${key}`;
 	if (c[key]) return c[key];
+	params.set('v', String(GEOCODE_FORMAT));
 	const results = await throttled(async () => {
 		const res = await fetch(`/api/geocode?${params}`);
 		if (!res.ok) throw new Error(res.status === 429 ? 'Troppe ricerche, riprova tra poco' : 'Ricerca non disponibile');
@@ -51,7 +60,7 @@ async function cachedCall(key: string, params: URLSearchParams): Promise<GeoResu
 
 export function searchPlaces(q: string, kind: 'city' | 'address' = 'city') {
 	const query = q.trim().replace(/\s+/g, ' ');
-	return cachedCall(`v2:${kind}:${query.toLowerCase()}`, new URLSearchParams({ q: query, kind }));
+	return cachedCall(`${kind}:${query.toLowerCase()}`, new URLSearchParams({ q: query, kind }));
 }
 
 export async function reversePlace(lat: number, lng: number): Promise<GeoResult | null> {

@@ -48,3 +48,36 @@ describe('/api/geocode: risultati distinguibili', () => {
 		expect(body[0]).toMatchObject({ label: 'Modena (MO)', detail: 'comune', lat: 44.6459 });
 	});
 });
+
+describe('/api/geocode: URL senza versione (vecchio client) e con versione', () => {
+	const ita = { 'ISO3166-2-lvl6': 'IT-MO', state: 'Emilia-Romagna', county: 'Modena', country_code: 'it' };
+	const hits = [
+		{ lat: '44.5385', lon: '10.9360', name: 'Modena', display_name: 'Modena, Emilia-Romagna, Italia', addresstype: 'county', place_rank: 12, address: ita },
+		{ lat: '44.6459', lon: '10.9256', name: 'Modena', display_name: 'Modena, Emilia-Romagna, Italia', addresstype: 'city', place_rank: 16, address: { city: 'Modena', ...ita } }
+	];
+	const get = (qs: string) => GET({ url: new URL(`https://example.test/api/geocode?${qs}`), setHeaders: () => {} } as unknown as Parameters<typeof GET>[0]);
+
+	it('senza `v` risponde comunque col formato nuovo e rilegge da Nominatim ogni volta (nessuna risposta salvata dall’handler)', async () => {
+		const fetchMock = vi.fn().mockImplementation(async () => Response.json(hits));
+		vi.stubGlobal('fetch', fetchMock);
+		for (let i = 0; i < 2; i++) {
+			const body = await (await get('q=modena&kind=address')).json();
+			expect(body).toHaveLength(1);
+			expect(body[0]).toMatchObject({ label: 'Modena (MO)', detail: 'comune' });
+		}
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+	it('`v` cambia solo la chiave della cache: stessa richiesta a Nominatim, stessa risposta, stessi TTL', async () => {
+		const fetchMock = vi.fn().mockImplementation(async () => Response.json(hits));
+		vi.stubGlobal('fetch', fetchMock);
+		const headers: Record<string, string>[] = [];
+		const setHeaders = (h: Record<string, string>) => void headers.push(h);
+		const call = async (qs: string) =>
+			(await GET({ url: new URL(`https://example.test/api/geocode?${qs}`), setHeaders } as unknown as Parameters<typeof GET>[0])).json();
+		const [senza, con] = [await call('q=modena&kind=address'), await call('q=modena&kind=address&v=3')];
+		expect(con).toEqual(senza);
+		expect(String(fetchMock.mock.calls[1][0])).toBe(String(fetchMock.mock.calls[0][0]));
+		expect(headers[1]).toEqual(headers[0]);
+		expect(headers[0]['cache-control']).toBe('public, max-age=86400, s-maxage=86400');
+	});
+});
