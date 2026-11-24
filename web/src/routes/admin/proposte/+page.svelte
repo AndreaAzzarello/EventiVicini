@@ -96,7 +96,7 @@
 				</div>
 				{#if open === s.id}
 					<div class="preview">
-						{#if s.imageUrl}<img src={s.imageUrl} alt="Immagine proposta per {s.title}" loading="lazy" referrerpolicy="no-referrer" />{/if}
+						{#if s.imageUrl}<img src={s.imageUrl} decoding="async" alt="Immagine proposta per {s.title}" loading="lazy" referrerpolicy="no-referrer" />{/if}
 						{#if s.shortDescription}<p class="desc">{s.shortDescription}</p>{/if}
 						<dl>
 							{#if s.ticketUrl}<dt>Link</dt><dd><a href={s.ticketUrl} target="_blank" rel="noopener noreferrer nofollow">{s.ticketUrl}</a></dd>{/if}
