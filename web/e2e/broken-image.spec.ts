@@ -5,10 +5,15 @@ test('immagine rotta: la card ripiega sul motivo di categoria, senza violazioni 
 	const problems: string[] = [];
 	page.on('console', (m) => /Content Security Policy|violates the following|hydration_mismatch/i.test(m.text()) && problems.push(m.text()));
 	await page.route('https://example.org/**', (r) => r.abort());
+	// Il dato nel seed è http://example.org/immagine-rotta.jpg: il sito deve chiedere l'https (mai l'http) e poi ripiegare.
+	const asked: string[] = [];
+	page.on('request', (r) => r.url().includes('immagine-rotta') && asked.push(r.url()));
 	await page.goto('/?luogo=modena');
 	const card = page.locator('article', { hasText: 'Mercato dell’antiquariato' });
 	await expect(card).toBeVisible();
 	await expect(card.locator('img')).toHaveCount(0);
+	expect(asked.length).toBeGreaterThan(0);
+	expect(asked.every((u) => u.startsWith('https://example.org/'))).toBe(true);
 	expect(problems).toEqual([]);
 });
 

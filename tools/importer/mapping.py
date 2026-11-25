@@ -116,6 +116,34 @@ def event_id(source_url: str) -> str:
 HASH_SKIP = {"id", "createdAt", "updatedAt", "contentHash", "missingRuns", "removedAt", "importRegion"}
 
 
+IMAGE_FIELDS = ("imageUrl", "imageMiniUrl", "imagePreviewUrl")
+
+
+def https_image(url: str | None) -> str:
+    """URL di un'immagine, solo https: http:// e //host diventano https (il sito web li blocca già con la CSP `img-src https:`,
+    quindi un host che serve anche https guadagna l'immagine; se non lo serve la card ripiega sul motivo di categoria).
+    Qualsiasi altro schema (javascript:, data:, ftp:) o un percorso relativo diventa vuoto. Nessuna richiesta di verifica."""
+    u = (url or "").strip()
+    if u.startswith("//"):
+        return "https:" + u
+    if u[:8].lower() == "https://":
+        return u
+    if u[:7].lower() == "http://":
+        return "https://" + u[7:]
+    return ""
+
+
+def clean_images(ev: dict) -> int:
+    """Porta a https i campi immagine dell'evento (tutti gli adapter, prima del contentHash). Restituisce quanti URL erano http."""
+    upgraded = 0
+    for k in IMAGE_FIELDS:
+        if k in ev and ev[k]:
+            if str(ev[k]).strip()[:7].lower() == "http://" or str(ev[k]).strip().startswith("//"):
+                upgraded += 1
+            ev[k] = https_image(ev[k])
+    return upgraded
+
+
 def content_hash(ev: dict) -> str:
     """sha256 dei campi normalizzati dell'evento: se non cambia, il documento non va riscritto."""
     body = {k: v for k, v in ev.items() if k not in HASH_SKIP}

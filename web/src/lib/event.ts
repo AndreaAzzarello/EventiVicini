@@ -106,7 +106,7 @@ export function fromData(id: string, m: Record<string, unknown>): Event {
 		address: str(m.address),
 		lat: num(m.lat),
 		lng: num(m.lng),
-		imageUrl: safeUrl(str(m.imageUrl)),
+		imageUrl: safeImageUrl(str(m.imageUrl)),
 		ticketUrl: safeUrl(str(m.ticketUrl)),
 		tags: Array.isArray(m.tags) ? m.tags.map((t) => String(t)) : [],
 		geohash: str(m.geohash),
@@ -119,15 +119,15 @@ export function fromData(id: string, m: Record<string, unknown>): Event {
 		approxLocation: m.approxLocation === true,
 		locality: str(m.locality),
 		cityAlt: str(m.cityAlt) || undefined,
-		imageMiniUrl: safeUrl(str(m.imageMiniUrl)) || undefined,
-		imagePreviewUrl: safeUrl(str(m.imagePreviewUrl)) || undefined,
+		imageMiniUrl: safeImageUrl(str(m.imageMiniUrl)) || undefined,
+		imagePreviewUrl: safeImageUrl(str(m.imagePreviewUrl)) || undefined,
 		longRunning: m.longRunning === true || endMs - start > LONG_RUNNING_DAYS * 86_400_000,
 		createdAt: m.createdAt == null ? undefined : num(m.createdAt),
 		updatedAt: m.updatedAt == null ? undefined : num(m.updatedAt)
 	};
 }
 
-/** Solo link http(s) assoluti; tutto il resto diventa stringa vuota. */
+/** Solo link http(s) assoluti; tutto il resto diventa stringa vuota. Per i link in uscita (biglietti, fonte): la CSP non li tocca. */
 export function safeUrl(s: string): string {
 	try {
 		const u = new URL(s.trim());
@@ -135,6 +135,17 @@ export function safeUrl(s: string): string {
 	} catch {
 		return '';
 	}
+}
+
+/**
+ * URL di un'immagine, solo https: un http:// diventa https:// (la CSP del sito ha `img-src https:`, quindi oggi l'http è già
+ * bloccato: se l'host serve anche https l'immagine compare, altrimenti la card ripiega sul motivo di categoria); ogni altro
+ * schema (javascript:, data:, ftp:) o un percorso relativo diventa stringa vuota. Vale anche per i dati scritti prima dell'importer
+ * con lo stesso controllo (`https_image` in tools/importer/mapping.py).
+ */
+export function safeImageUrl(s: string): string {
+	const u = safeUrl(s);
+	return u.startsWith('http://') ? `https://${u.slice('http://'.length)}` : u;
 }
 
 /**
@@ -268,10 +279,12 @@ export function validateEvent(e: EventInput): EventErrors {
 	if (!Number.isInteger(e.startTime) || e.startTime <= 0) err.startTime = 'Data di inizio non valida';
 	if (!Number.isInteger(e.endTime) || e.endTime <= 0) err.endTime = 'Data di fine non valida';
 	else if (e.endTime < e.startTime) err.endTime = "La fine deve essere dopo l'inizio";
-	for (const k of ['imageUrl', 'ticketUrl'] as const) {
-		const v = e[k].trim();
-		if (v && (!safeUrl(v) || v.length > LIMITS.url)) err[k] = 'Inserisci un link che inizi con https://';
-	}
+	// L'immagine solo https (la CSP blocca l'http): chi scrive http:// lo vede subito, invece di una foto che non compare.
+	const image = e.imageUrl.trim();
+	if (image && (!/^https:\/\//i.test(image) || !safeUrl(image) || image.length > LIMITS.url)) err.imageUrl = 'Inserisci un link che inizi con https://';
+	// Il link ai biglietti è un collegamento in uscita: http:// è ammesso (il messaggio lo dice).
+	const ticket = e.ticketUrl.trim();
+	if (ticket && (!safeUrl(ticket) || ticket.length > LIMITS.url)) err.ticketUrl = 'Inserisci un link che inizi con http:// o https://';
 	if (e.tags.length > LIMITS.tags) err.tags = `Massimo ${LIMITS.tags} tag`;
 	else if (e.tags.some((t) => t.length > LIMITS.tag)) err.tags = `Ogni tag al massimo ${LIMITS.tag} caratteri`;
 	const badCoords =
