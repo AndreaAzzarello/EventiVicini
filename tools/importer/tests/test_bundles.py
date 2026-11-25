@@ -176,3 +176,14 @@ def test_bump_version_aggiorna_solo_la_version_senza_toccare_la_copertura():
     assert after["version"] == NOW + 9
     assert {k: v for k, v in after.items() if k != "version"} == {k: v for k, v in before.items() if k != "version"}
     assert bundles.bump_version(FakeFirestore(), NOW) == 1  # anche senza bundle di copertura
+
+
+def test_le_scale_piccole_sono_in_coda_ai_campi_e_le_righe_vecchie_restano_valide():
+    # #95: FIELDS cresce in coda, quindi un bundle scritto prima (20 campi) si legge ancora e non sposta nessun indice
+    assert bundles.FIELDS[-2:] == ["imageMiniUrl", "imagePreviewUrl"]
+    assert bundles.FIELDS.index("approxLocation") == 19
+    row = bundles.compact({**ev(1), "imageMiniUrl": "https://x.it/image-200-aa.jpeg", "imagePreviewUrl": "https://x.it/image-400-bb.jpeg"})
+    assert row[-2:] == ["https://x.it/image-200-aa.jpeg", "https://x.it/image-400-bb.jpeg"]
+    assert bundles.compact(ev(1))[-2:] == ["", ""]  # fonti senza scale: stringhe vuote
+    old = bundles.compact(ev(2))[:20]  # riga di un bundle vecchio
+    assert bundles.pack([old]) and bundles.rows_of({"json": bundles.pack([old])})[0] == old

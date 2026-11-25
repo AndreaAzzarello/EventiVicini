@@ -6,7 +6,8 @@ import { geohashForLocation } from 'geofire-common';
 
 export const FIELDS = [
 	'id', 'title', 'startTime', 'endTime', 'category', 'priceType', 'venueName', 'address', 'locality', 'city',
-	'citySlug', 'cityAlt', 'province', 'region', 'lat', 'lng', 'imageUrl', 'tags', 'longRunning', 'approxLocation'
+	'citySlug', 'cityAlt', 'province', 'region', 'lat', 'lng', 'imageUrl', 'tags', 'longRunning', 'approxLocation',
+	'imageMiniUrl', 'imagePreviewUrl' // in coda: le righe dei bundle scritti prima sono più corte e danno campi vuoti
 ];
 
 /** Una riga del bundle → Event (i campi che non servono a liste e mappa restano ai default). */

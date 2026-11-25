@@ -181,3 +181,39 @@ def test_durata_massima_confine():
     assert not too_long(start, start + timedelta(days=MAX_EVENT_DAYS), "u")
     assert not too_long(start, start + timedelta(days=MAX_EVENT_DAYS, hours=5), "u")  # il caso di Francavilla Marittima
     assert too_long(start, start + timedelta(days=MAX_EVENT_DAYS + 1), "u")
+
+
+def _plone_item_with_scales(**scales):
+    items = json.loads(FIXTURE.read_text(encoding="utf-8"))["items"]
+    item = next(i for i in items if i["title"] == "Delfini Book Party")
+    item = json.loads(json.dumps(item))
+    item["image"]["scales"].update(scales)
+    return item
+
+
+def test_scale_mini_e_preview_con_hash_sono_salvate_accanto_a_imageurl():
+    # #95: le scale senza hash fanno una richiesta condizionale per miniatura a ogni visita, quelle con hash hanno cache di 1 anno
+    base = "https://www.comune.modena.it/vivere-modena/eventi/2026/x/@@images/"
+    item = _plone_item_with_scales(mini={"download": base + "image-200-aaaa.jpeg"}, preview={"download": base + "image-400-bbbb.jpeg"})
+    e = to_event(item, SOURCE, NOW)
+    assert e["imageMiniUrl"] == base + "image-200-aaaa.jpeg"
+    assert e["imagePreviewUrl"] == base + "image-400-bbbb.jpeg"
+    assert "image-800-" in e["imageUrl"]  # la scala grande resta quella di prima
+
+
+def test_senza_scale_piccole_i_campi_sono_vuoti_e_imageurl_non_cambia(events):
+    e = events["Delfini Book Party"]
+    assert e["imageMiniUrl"] == "" and e["imagePreviewUrl"] == ""
+    assert "image-800-" in e["imageUrl"]
+    senza = to_event({**_plone_item_with_scales(), "image": None}, SOURCE, NOW)
+    assert senza["imageUrl"] == "" and senza["imageMiniUrl"] == "" and senza["imagePreviewUrl"] == ""
+
+
+def test_le_scale_nuove_cambiano_il_contenthash_una_volta_poi_restano_stabili():
+    from mapping import content_hash
+
+    sample = {"download": "https://x.it/@@images/image-200-aaaa.jpeg"}
+    before = content_hash(to_event(_plone_item_with_scales(), SOURCE, NOW))
+    after = content_hash(to_event(_plone_item_with_scales(mini=sample), SOURCE, NOW))
+    again = content_hash(to_event(_plone_item_with_scales(mini=sample), SOURCE, NOW))
+    assert before != after and after == again

@@ -27,7 +27,8 @@ log = logging.getLogger("importer")
 
 COLL = "bundles"
 FIELDS = ["id", "title", "startTime", "endTime", "category", "priceType", "venueName", "address", "locality", "city",
-          "citySlug", "cityAlt", "province", "region", "lat", "lng", "imageUrl", "tags", "longRunning", "approxLocation"]
+          "citySlug", "cityAlt", "province", "region", "lat", "lng", "imageUrl", "tags", "longRunning", "approxLocation",
+          "imageMiniUrl", "imagePreviewUrl"]  # i campi nuovi vanno in coda: le righe dei bundle già scritti sono più corte e il web le legge lo stesso
 NUMBERS = {"startTime", "endTime", "lat", "lng"}
 FLAGS = {"longRunning", "approxLocation"}
 KIDS_TAGS = {"kids", "family"}  # gli unici tag che la webapp usa

@@ -57,7 +57,7 @@
 	);
 	// Senza nome del luogo l'indirizzo grezzo («Via …, CAP città») è lungo e poco utile in una card: meglio la località.
 	const place = $derived(event.venueName || event.locality || event.address);
-	const img = $derived(event.imageUrl ? imageSources(event.imageUrl, 'thumb') : null);
+	const img = $derived(event.imageUrl ? imageSources(event.imageUrl, 'thumb', { mini: event.imageMiniUrl, preview: event.imagePreviewUrl }) : null);
 	let broken = $state(false);
 </script>
 
