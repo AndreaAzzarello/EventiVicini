@@ -13,7 +13,8 @@ from registry import base_url, read_rows
 
 from .base import Adapter, fallback_place
 from .design_comuni_html import DesignComuniHtmlAdapter
-from .ert import BASE as ERT_BASE, REGION as ERT_REGION, ErtAdapter
+from .ert import (BASE as ERT_BASE, CALABRIA_API, CALABRIA_BASE, CALABRIA_REGION, CATEGORY_CALABRIA, PROVINCE_CODE_CALABRIA,
+                  REGION as ERT_REGION, ErtAdapter)
 from .filesource import FileSourceAdapter
 from .opendatahub import OpenDataHubAdapter
 from .plone import PloneAdapter
@@ -49,11 +50,17 @@ def load_sources(rows: list[dict] | None = None) -> dict[str, Adapter]:
 
 
 def with_code_sources(out: dict[str, Adapter]) -> dict[str, Adapter]:
-    """Fonti regionali definite nel codice, non nel registro: l'API di Emilia-Romagna Turismo, se la regione ha fonti attive.
+    """Fonti regionali definite nel codice, non nel registro: le API di Emilia-Romagna Turismo e di Calabria Straordinaria, se la
+    regione ha fonti attive.
     Fuori da load_sources() perché quella legge solo le righe che le si passano."""
     if any(slugify(a.region) == slugify(ERT_REGION) for a in out.values()):
         # provincia del capoluogo regionale: serve solo come ripiego, ogni evento porta il suo comune e la sua provincia
         out["ert-emilia-romagna"] = ErtAdapter("ert-emilia-romagna", ERT_BASE, "Emilia Romagna Turismo", "BO", ERT_REGION)
+    if any(slugify(a.region) == slugify(CALABRIA_REGION) for a in out.values()):
+        # stesso schema dell'API ERT: solo una richiesta (limit 1000), niente status, province e categorie del portale
+        out["calabria-straordinaria"] = ErtAdapter(
+            "calabria-straordinaria", CALABRIA_BASE, "Calabria Straordinaria", "CZ", CALABRIA_REGION, api=CALABRIA_API,
+            page_size=1000, max_pages=2, status_required=False, provinces=PROVINCE_CODE_CALABRIA, categories=CATEGORY_CALABRIA)
     return out
 
 
