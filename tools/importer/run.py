@@ -1012,8 +1012,11 @@ def _main(argv: list[str] | None = None) -> int:
     if args.sitemap_out and not args.source:  # con --source l'elenco sarebbe parziale
         import sitemap
 
-        sitemap.write_part(args.sitemap_out, "+".join(sorted({slugify(SOURCES[n].region) for n in names})), sitemap.part_rows(events, int(now.timestamp() * 1000)),
-                           int(now.timestamp() * 1000))
+        import weekend
+
+        now_ms = int(now.timestamp() * 1000)
+        sitemap.write_part(args.sitemap_out, "+".join(sorted({slugify(SOURCES[n].region) for n in names})), sitemap.part_rows(events, now_ms),
+                           now_ms, weekend=weekend.part_rows(events, now_ms))
     if args.stats_out:
         args.stats_out.write_text(json.dumps(stats | {
             "region": "+".join(sorted({slugify(SOURCES[n].region) for n in names})), "events": len(events), "excluded": len(excluded),
