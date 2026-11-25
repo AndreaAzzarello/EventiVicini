@@ -2,6 +2,7 @@
 # le scarica il Mac mini (scarica-fonti.yml), l'importer le rilegge dall'artifact (#54). Un nome per riga, come in SOURCES
 # (nome del comune senza accenti, con trattini). Dati misurati il 12/11/2026 (run 43181740395 e prova dal runner);
 # arquata-scrivia aggiunta il 13/11/2026 (HTTP 403 dal runner GitHub nell'import del 13/11).
+# fidenza e pavullo-nel-frignano aggiunte il 25/11/2026: robots.txt in ConnectTimeout (15 s) dal runner anche il 25/11, da casa 200 in 0,09 s (#17).
 # Non metterci fonti raggiungibili dal runner: sul Mac passerebbero per un percorso in più senza motivo.
 arquata-scrivia
 bagno-di-romagna
@@ -13,6 +14,7 @@ collesalvetti
 courmayeur
 donnas
 ficulle
+fidenza
 fondi
 godrano
 grosseto
@@ -23,6 +25,7 @@ modena
 montiano
 napoli
 orbetello
+pavullo-nel-frignano
 pescia
 pont-saint-martin
 rieti
