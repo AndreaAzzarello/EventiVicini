@@ -1,0 +1,637 @@
+{
+ "data": [
+  {
+   "id": 16587,
+   "lang": "it",
+   "permalink": "https://calabriastraordinaria.it/eventi/festa-del-cioccolato-palmi",
+   "title": "Festa del Cioccolato a Palmi",
+   "subtitle": "Quattro giorni tra cioccolato, laboratori, spettacoli e attività",
+   "excerpt": "Dal 6 all’8 dicembre 2024, Palmi ospita la quarta edizione della Festa del Cioccolato, un evento imperdibile per tutti gli amanti del cioccolato e delle atmosfere natalizie.Sul suggestivo Corso Gariba",
+   "description": "<p><strong>Dal 5 all’8 dicembre 2026</strong>, <i>Corso Garibaldi</i> a <strong>Palmi</strong> ospita la 6ª edizione della <strong>Festa del Cioccolato</strong>, appuntamento dedicato al gusto, alla creatività e all’atmosfera delle festività natalizie.</p><p>Per quattro giornate, il centro cittadino",
+   "locations": [
+    {
+     "title": "",
+     "locality": null,
+     "city_id": 287,
+     "city": "Palmi",
+     "province": "Reggio di Calabria",
+     "address": "Corso Garibaldi",
+     "number": "",
+     "lat": 38.3565713,
+     "lng": 15.8474216
+    }
+   ],
+   "dates": {
+    "from": "2026-12-05",
+    "to": "2026-12-08"
+   },
+   "contacts": [],
+   "category": [
+    {
+     "id": 1013,
+     "parent": 1,
+     "name": "Sagre e Feste"
+    }
+   ],
+   "attachments": [
+    {
+     "id": 19983,
+     "url": "http://calabriastraordinaria.it/storage/images/19935/Festa-del-Cioccolato-a-Palmi.jpeg",
+     "title": "Festa del Cioccolato a Palmi",
+     "name": "Festa del Cioccolato a Palmi",
+     "copyright": null,
+     "width": 1131,
+     "height": 1600,
+     "is_primary": 1,
+     "created_at": "2026-11-17 13:40:54",
+     "license": "",
+     "license_url": ""
+    }
+   ],
+   "target": [],
+   "theme": [],
+   "created_at": "2024-11-29 13:56:26",
+   "updated_at": "2024-11-29 13:56:26"
+  },
+  {
+   "id": 29919,
+   "lang": "it",
+   "permalink": "https://calabriastraordinaria.it/eventi/edoardo-leo-ti-racconto-una-storia",
+   "title": "Edoardo Leo | Ti racconto una storia",
+   "subtitle": "Letture, monologhi e improvvisazioni musicali per uno spettacolo unico",
+   "excerpt": "Sabato 8 novembre 2025, alle ore 21:00, il Teatro Politeama di Catanzaro ospita Edoardo Leo con “Ti racconto una storia”, uno spettacolo che segna il debutto teatrale dell’amato attore e regista del c",
+   "description": "<p>Sabato <strong>28 novembre 2026</strong>, alle ore 21:00, il <i><strong>Teatro Comunale</strong></i> di <strong>Vibo Valentia</strong> ospita <i><strong>Ti racconto una storia</strong></i>, lo spettacolo di e con <strong>Edoardo Leo</strong>, nell’ambito del <i><strong>Festival Calabria Teatri in",
+   "locations": [
+    {
+     "title": "Teatro Comunale",
+     "locality": null,
+     "city_id": 401,
+     "city": "Vibo Valentia",
+     "province": "Vibo Valentia",
+     "address": "Viale Sandro Pertini",
+     "number": "",
+     "lat": 38.6670625,
+     "lng": 16.0835625
+    }
+   ],
+   "dates": {
+    "from": "2026-11-28",
+    "to": "2026-11-28"
+   },
+   "contacts": [],
+   "category": [
+    {
+     "id": 1016,
+     "parent": 1,
+     "name": "Teatro"
+    }
+   ],
+   "attachments": [
+    {
+     "id": 20096,
+     "url": "http://calabriastraordinaria.it/storage/images/20048/Edoardo-Leo.jpeg",
+     "title": "Edoardo Leo",
+     "name": "Edoardo Leo",
+     "copyright": "https://www.facebook.com/ilsindacoinforma2020",
+     "width": 1080,
+     "height": 1350,
+     "is_primary": 1,
+     "created_at": "2026-11-25 08:23:29",
+     "license": "",
+     "license_url": ""
+    }
+   ],
+   "target": [],
+   "theme": [],
+   "created_at": "2025-11-03 13:38:39",
+   "updated_at": "2026-11-25 08:23:55"
+  },
+  {
+   "id": 44591,
+   "lang": "it",
+   "permalink": "https://calabriastraordinaria.it/eventi/vibocomics",
+   "title": "ViboComics",
+   "subtitle": "Fumetti, cosplay, giochi e creatività tornano protagonisti a Vibo Valentia",
+   "excerpt": "Dopo una lunga pausa, ViboComics torna a Vibo Valentia con una nuova edizione in programma sabato 28 e domenica 29 novembre 2026 negli spazi di Palazzo Gagliardi.L’evento riporta in città il mondo dei",
+   "description": "<p>Dopo una lunga pausa, <strong>ViboComics</strong> torna a <strong>Vibo Valentia</strong> con una nuova edizione in programma <strong>sabato 28 e domenica 29 novembre 2026</strong> negli spazi di <i><strong>Palazzo Gagliardi</strong></i>.</p><p>L’evento riporta in città il mondo dei fumetti, del c",
+   "locations": [
+    {
+     "title": "Palazzo Gagliardi",
+     "locality": null,
+     "city_id": 401,
+     "city": "Vibo Valentia",
+     "province": "Vibo Valentia",
+     "address": "co",
+     "number": "121",
+     "lat": 38.67431250000001,
+     "lng": 16.1056875
+    }
+   ],
+   "dates": {
+    "from": "2026-11-28",
+    "to": "2026-11-29"
+   },
+   "contacts": [],
+   "category": [
+    {
+     "id": 1008,
+     "parent": 1,
+     "name": "Fiere ed Esposizioni"
+    }
+   ],
+   "attachments": [
+    {
+     "id": 19410,
+     "url": "http://calabriastraordinaria.it/storage/images/19362/ViboComics.jpg",
+     "title": "ViboComics",
+     "name": "ViboComics",
+     "copyright": "https://www.facebook.com/fumettoecosplay",
+     "width": 1080,
+     "height": 1350,
+     "is_primary": 1,
+     "created_at": "2026-10-02 13:32:12",
+     "license": "",
+     "license_url": ""
+    }
+   ],
+   "target": [],
+   "theme": [],
+   "created_at": "2026-10-02 13:32:42",
+   "updated_at": "2026-10-02 13:32:42"
+  },
+  {
+   "id": 6770,
+   "lang": "it",
+   "permalink": "https://calabriastraordinaria.it/eventi/compagnia-almatanz-lo-schiaccianoci",
+   "title": "Compagnia Almatanz - Lo Schiaccianoci",
+   "subtitle": "Il grande classico del balletto torna in scena",
+   "excerpt": "Evento coreutico per la regione presentato da AMA Calabria: corpo di ballo e solisti, provenienti dalle principali compagnie russe, danno corpo al Russian Classical Ballet che interpreta uno dei capol",
+   "description": "<p>A dicembre arriva in <strong>Calabria</strong> <strong>\"Lo Schiaccianoci\"</strong>, nuova produzione firmata dalla <i>Compagnia Almatanz</i> con la coreografia di Luigi Martelletta, ispirata a uno dei titoli più celebri del repertorio ballettistico.</p><p>Tra musica, danza e atmosfere natalizie, ",
+   "locations": [
+    {
+     "title": "Teatro Comunale",
+     "locality": null,
+     "city_id": 163,
+     "city": "Catanzaro",
+     "province": "Catanzaro",
+     "address": "Corso Giuseppe Mazzini",
+     "number": "84",
+     "lat": 38.9085625,
+     "lng": 16.5903125
+    },
+    {
+     "title": "Teatro Grandinetti",
+     "locality": null,
+     "city_id": 230,
+     "city": "Lamezia Terme",
+     "province": "Catanzaro",
+     "address": "Via Colonnello Cassoli",
+     "number": "",
+     "lat": 38.9730625,
+     "lng": 16.3181875
+    }
+   ],
+   "dates": {
+    "from": "2026-12-05",
+    "to": "2026-12-05"
+   },
+   "contacts": [],
+   "category": [
+    {
+     "id": 1004,
+     "parent": 1,
+     "name": "Danza"
+    }
+   ],
+   "attachments": [
+    {
+     "id": 19789,
+     "url": "http://calabriastraordinaria.it/storage/images/19741/schiaccianoci-almatanz-biglietti-2.jpg",
+     "title": "Lo schiaccianoci",
+     "name": "schiaccianoci-almatanz-biglietti-2",
+     "copyright": "https://www.ticketone.it/",
+     "width": 1240,
+     "height": 480,
+     "is_primary": 1,
+     "created_at": "2026-10-29 14:27:42",
+     "license": "",
+     "license_url": ""
+    }
+   ],
+   "target": [],
+   "theme": [],
+   "created_at": "2023-12-12 09:05:17",
+   "updated_at": "2025-01-08 08:46:00"
+  },
+  {
+   "id": 15889,
+   "lang": "it",
+   "permalink": "https://calabriastraordinaria.it/eventi/la-biennale-dello-stretto",
+   "title": "La Biennale dello Stretto",
+   "subtitle": "Un percorso su città, architetture, paesaggi e mutazioni del Mediterraneo",
+   "excerpt": "La Biennale dello Stretto torna nel 2024 con un ricco programma che si estenderà dal 18 settembre al 14 dicembre, con una serie di eventi in diverse location, tra Campo Calabro, Reggio Calabria e Mess",
+   "description": "<p><strong>Dal 18 settembre al 13 dicembre 2026</strong>, la <strong>Biennale dello Stretto</strong> torna con una nuova edizione dedicata al tema <i>“Mutazioni”</i>, sviluppata attraverso un calendario di incontri, mostre, sessioni culturali e momenti di confronto tra <strong>Calabria</strong>, Sic",
+   "locations": [
+    {
+     "title": "Forte Batteria Siacci",
+     "locality": null,
+     "city_id": 248,
+     "city": "Campo Calabro",
+     "province": "Reggio di Calabria",
+     "address": "Via Matiniti Superiore",
+     "number": "3",
+     "lat": 38.2240625,
+     "lng": 15.6794375
+    },
+    {
+     "title": "",
+     "locality": null,
+     "city_id": 156,
+     "city": "Badolato",
+     "province": "Catanzaro",
+     "address": "",
+     "number": "",
+     "lat": 38.5687085,
+     "lng": 16.5233988
+    },
+    {
+     "title": "",
+     "locality": null,
+     "city_id": 293,
+     "city": "Reggio di Calabria",
+     "province": "Reggio di Calabria",
+     "address": "",
+     "number": "",
+     "lat": 0,
+     "lng": 0
+    }
+   ],
+   "dates": {
+    "from": "2026-09-18",
+    "to": "2026-12-13"
+   },
+   "contacts": [],
+   "category": [
+    {
+     "id": 1003,
+     "parent": 1,
+     "name": "Congressi, Convegni, Conferenze e Seminari"
+    }
+   ],
+   "attachments": [
+    {
+     "id": 19358,
+     "url": "http://calabriastraordinaria.it/storage/images/19310/260910-BST26-locandina_ALTA.jpg",
+     "title": "Biennale dello Stretto",
+     "name": "260910 BST26 locandina_ALTA",
+     "copyright": null,
+     "width": 3508,
+     "height": 4961,
+     "is_primary": 1,
+     "created_at": "2026-09-30 14:30:07",
+     "license": "",
+     "license_url": ""
+    }
+   ],
+   "target": [],
+   "theme": [],
+   "created_at": "2024-09-30 15:18:37",
+   "updated_at": "2024-09-30 15:18:37"
+  },
+  {
+   "id": 6647,
+   "lang": "it",
+   "permalink": "https://calabriastraordinaria.it/eventi/assaporagionando",
+   "title": "Assaporagionando - Il Salone Mediterraneo dei Prodotti Tipici",
+   "subtitle": "Al via la XXV edizione tra gusto, tradizione e spettacolo",
+   "excerpt": "Nella suggestiva cornice di Palazzo Sanseverino Falcone ad Acri per degustare e ragionare. Un evento unico che mette la Calabria al centro della scena nazionale.Un viaggio ricco di spettacoli, degusta",
+   "description": "<p>Dal <strong>18 al 20 dicembre 2026</strong>, <strong>Palazzo Sanseverino Falcone</strong> di <strong>Acri</strong>, in provincia di Cosenza, ospita la <strong>XXV edizione di Assaporagionando</strong> <strong>- Il Salone Mediterraneo dei Prodotti Tipici</strong>, uno degli appuntamenti storici de",
+   "locations": [
+    {
+     "title": "",
+     "locality": null,
+     "city_id": 3,
+     "city": "Acri",
+     "province": "Cosenza",
+     "address": "",
+     "number": "",
+     "lat": 39.4891857,
+     "lng": 16.3826297
+    }
+   ],
+   "dates": {
+    "from": "2026-12-18",
+    "to": "2026-12-20"
+   },
+   "contacts": [],
+   "category": [
+    {
+     "id": 1006,
+     "parent": 1,
+     "name": "Eventi multipli"
+    }
+   ],
+   "attachments": [
+    {
+     "id": 19964,
+     "url": "http://calabriastraordinaria.it/storage/images/19916/Image_343A43E4-4731-4457-A127-CFD8AF940953.jpeg",
+     "title": "Assaporagionando",
+     "name": "Image_343A43E4-4731-4457-A127-CFD8AF940953",
+     "copyright": null,
+     "width": 1184,
+     "height": 1600,
+     "is_primary": 1,
+     "created_at": "2026-11-13 14:42:31",
+     "license": "",
+     "license_url": ""
+    }
+   ],
+   "target": [],
+   "theme": [],
+   "created_at": "2023-10-19 13:05:17",
+   "updated_at": "2026-11-13 14:37:23"
+  },
+  {
+   "id": 8201,
+   "lang": "it",
+   "permalink": "https://calabriastraordinaria.it/eventi/rassegna-laltro-teatro-teatro-rendano",
+   "title": "Rassegna L'Altro Teatro - Teatro Rendano",
+   "subtitle": "Due città, due teatri, un’unica visione",
+   "excerpt": "La stagione teatrale del rinomato Teatro Alfonso Rendano di Cosenza si distingue come parte integrante della prestigiosa rassegna \"L'Altro Teatro\". Il palcoscenico del teatro si anima con una serie di",
+   "description": "<p><strong>Dal 19 novembre 2026 al 18 maggio 2027</strong> torna la <i><strong>Rassegna L’Altro Teatro</strong></i>, curata da Gianluigi Fabiano, con una nuova stagione che mette in rete <strong>Cosenza</strong> e <strong>Rende</strong> attraverso due importanti luoghi della cultura: il <i><strong>T",
+   "locations": [
+    {
+     "title": "Teatro Rendano",
+     "locality": null,
+     "city_id": 43,
+     "city": "Cosenza",
+     "province": "Cosenza",
+     "address": "Piazza XV Marzo",
+     "number": "",
+     "lat": 39.2863125,
+     "lng": 16.2615625
+    },
+    {
+     "title": "TAU - Teatro Auditorium Università della Calabria",
+     "locality": null,
+     "city_id": 99,
+     "city": "Rende",
+     "province": "Cosenza",
+     "address": "Via Settimio Severo",
+     "number": "73",
+     "lat": 39.3676875,
+     "lng": 16.2254375
+    }
+   ],
+   "dates": {
+    "from": "2026-11-19",
+    "to": "2026-11-19"
+   },
+   "contacts": [],
+   "category": [
+    {
+     "id": 1016,
+     "parent": 1,
+     "name": "Teatro"
+    }
+   ],
+   "attachments": [
+    {
+     "id": 19668,
+     "url": "http://calabriastraordinaria.it/storage/images/19620/Rassegna-L%27Altro-Teatro---Teatro-Rendano-programma.jpeg",
+     "title": "Rassegna L'Altro Teatro - Teatro Rendano programma",
+     "name": "Rassegna L'Altro Teatro - Teatro Rendano programma",
+     "copyright": "https://www.facebook.com/laltroteatroofficial",
+     "width": 1119,
+     "height": 1600,
+     "is_primary": 0,
+     "created_at": "2026-10-21 15:01:14",
+     "license": "",
+     "license_url": ""
+    }
+   ],
+   "target": [],
+   "theme": [],
+   "created_at": "2024-01-30 13:40:31",
+   "updated_at": "2024-10-29 13:48:26"
+  },
+  {
+   "id": 5788,
+   "lang": "it",
+   "permalink": "https://calabriastraordinaria.it/eventi/color-fest",
+   "title": "Color Fest",
+   "subtitle": "L'edizione 2027 del Color Fest si svolgerà sul Lungomare di Lamezia Terme dall'11 al 13 agosto",
+   "excerpt": "Tre giorni di live, sedici nomi in line-up, band e artisti di respiro internazionale in esclusiva per il Sud Italia, due palchi, dj set ed eventi collaterali per l’edizione 2023 di un Festival che in(",
+   "description": "<p>Tre giorni di live, band e artisti di respiro internazionale in esclusiva per il sud Italia, diversi palchi, dj set ed eventi collaterali: questo è il <strong>Color Fest</strong>, un festival che in dieci anni ha registrato oltre 60mila presenze, confermandosi come uno degli appuntamenti musicali",
+   "locations": [
+    {
+     "title": "",
+     "locality": null,
+     "city_id": 230,
+     "city": "Lamezia Terme",
+     "province": "Catanzaro",
+     "address": "Lungomare Falcone-Borsellino",
+     "number": "",
+     "lat": 38.9230977,
+     "lng": 16.2186071
+    }
+   ],
+   "dates": {
+    "from": "2027-08-11",
+    "to": "2027-08-13"
+   },
+   "contacts": [],
+   "category": [
+    {
+     "id": 1011,
+     "parent": 1,
+     "name": "Musica"
+    }
+   ],
+   "attachments": [
+    {
+     "id": 18769,
+     "url": "http://calabriastraordinaria.it/storage/images/18721/Color-Fest.jpeg",
+     "title": "Color Fest",
+     "name": "Color Fest",
+     "copyright": "https://www.facebook.com/colorfestlamezia",
+     "width": 1080,
+     "height": 1350,
+     "is_primary": 1,
+     "created_at": "2026-09-03 14:30:43",
+     "license": "",
+     "license_url": ""
+    }
+   ],
+   "target": [],
+   "theme": [],
+   "created_at": "2023-07-17 10:52:57",
+   "updated_at": "2026-09-03 14:31:07"
+  },
+  {
+   "id": 36877,
+   "lang": "it",
+   "permalink": "https://calabriastraordinaria.it/eventi/la-memoria-di-tanino-de-santis-a-francavilla-marittima-il-ritorno-dei-reperti",
+   "title": "La memoria di Tanino De Santis a Francavilla Marittima: il ritorno dei reperti",
+   "subtitle": "Un viaggio nella memoria archeologica del territorio",
+   "excerpt": "Venerdì 13 febbraio 2026, alle ore 17:00, il Museo Civico Archeologico “Palazzo De Santis” di Francavilla Marittima ospita l’inaugurazione della mostra \"La memoria di Tanino De Santis a Francavilla Ma",
+   "description": "<p>Il <strong>Museo Civico Archeologico “Palazzo De Santis”</strong> di <strong>Francavilla Marittima</strong> ospita la mostra <i>\"<strong>La memoria di Tanino De Santis a Francavilla Marittima: il ritorno dei reperti\"</strong></i>, inaugurata il<strong> 13 febbraio 2026</strong> e visitabile fino ",
+   "locations": [
+    {
+     "title": "Museo Civico Archeologico “Palazzo De Santis”",
+     "locality": null,
+     "city_id": 54,
+     "city": "Francavilla Marittima",
+     "province": "Cosenza",
+     "address": "",
+     "number": "",
+     "lat": 39.8201017,
+     "lng": 16.3881096
+    }
+   ],
+   "dates": {
+    "from": "2026-02-13",
+    "to": "2027-02-13"
+   },
+   "contacts": [],
+   "category": [
+    {
+     "id": 1010,
+     "parent": 1,
+     "name": "Mostre"
+    }
+   ],
+   "attachments": [
+    {
+     "id": 15508,
+     "url": "http://calabriastraordinaria.it/storage/images/15460/Museo-archeologico-Francavilla-Marittima.jpg",
+     "title": "Museo archeologico Francavilla Marittima",
+     "name": "Museo archeologico Francavilla Marittima",
+     "copyright": "https://www.facebook.com/museoarcheologicofrancavillamarittima?locale=it_IT",
+     "width": 2048,
+     "height": 1536,
+     "is_primary": 1,
+     "created_at": "2026-02-26 11:58:24",
+     "license": "",
+     "license_url": ""
+    }
+   ],
+   "target": [],
+   "theme": [],
+   "created_at": "2026-02-10 16:46:23",
+   "updated_at": "2026-02-10 16:49:09"
+  },
+  {
+   "id": 20329,
+   "lang": "it",
+   "permalink": "https://calabriastraordinaria.it/eventi/de-andre-canta-de-andre",
+   "title": "De André canta De André",
+   "subtitle": "A Crotone una serata dedicata alla poesia musicale di Fabrizio De André",
+   "excerpt": "Giovedì 24 luglio 2025, la magica cornice di Rendano Arena a Cosenza ospiterà Cristiano De André con il suo tour De André canta De André - Best of Estate 2025. Un viaggio emozionante tra le canzoni se",
+   "description": "<p>Sabato <strong>12 dicembre 2026</strong>, il <i><strong>Teatro Comunale Vincenzo Scaramuzza</strong></i> di <strong>Crotone</strong> ospita <strong>Cristiano De André</strong> con <i><strong>De André canta De André – Best Of Tour 2026</strong></i>.</p><p>Lo spettacolo nasce come un omaggio al rep",
+   "locations": [
+    {
+     "title": "Teatro Comunale Vincenzo Scaramuzza",
+     "locality": null,
+     "city_id": 337,
+     "city": "Crotone",
+     "province": "Crotone",
+     "address": "Via Ercole Scalfaro",
+     "number": "",
+     "lat": 39.0791875,
+     "lng": 17.1280625
+    }
+   ],
+   "dates": {
+    "from": "2026-12-12",
+    "to": "2026-12-12"
+   },
+   "contacts": [],
+   "category": [
+    {
+     "id": 1011,
+     "parent": 1,
+     "name": "Musica"
+    }
+   ],
+   "attachments": [
+    {
+     "id": 19908,
+     "url": "http://calabriastraordinaria.it/storage/images/19860/Cristiano-de-Andre.jpg",
+     "title": "Cristiano de Andre",
+     "name": "Cristiano de Andre",
+     "copyright": "https://www.facebook.com/jblasacom",
+     "width": 1024,
+     "height": 512,
+     "is_primary": 1,
+     "created_at": "2026-11-06 11:44:40",
+     "license": "",
+     "license_url": ""
+    }
+   ],
+   "target": [],
+   "theme": [],
+   "created_at": "2025-03-06 15:47:23",
+   "updated_at": "2026-07-28 10:13:56"
+  },
+  {
+   "id": 42325,
+   "lang": "it",
+   "permalink": "https://calabriastraordinaria.it/eventi/medusa-la-donna-dietro-il-mito",
+   "title": "Medusa – La donna dietro il mito",
+   "subtitle": "Uno spettacolo che rilegge il mito in chiave contemporanea",
+   "excerpt": "Il 31 luglio 2026, alle ore 21:30, l’Arena del Teatro Vincenzo Scaramuzza ospita “Medusa – La donna dietro il mito”, spettacolo inserito nel programma di Crotone Summer 2026.L’opera propone una rilett",
+   "description": "<p>Il <strong>25 novembre 2026</strong>, alle ore 21:30, il <i><strong>Teatro Apollo </strong></i>di<strong> Crotone</strong> ospita <strong>“Medusa – La donna dietro il mito”</strong>.</p><p>L’opera propone una rilettura contemporanea del mito di Medusa, restituendo voce alla donna prima della crea",
+   "locations": [
+    {
+     "title": "Teatro Apollo",
+     "locality": null,
+     "city_id": 337,
+     "city": "Crotone",
+     "province": "Crotone",
+     "address": "Viale Regina Margherita",
+     "number": "6",
+     "lat": 39.0814375,
+     "lng": 17.1260625
+    }
+   ],
+   "dates": {
+    "from": "2026-11-25",
+    "to": "2026-11-25"
+   },
+   "contacts": [],
+   "category": [
+    {
+     "id": 1016,
+     "parent": 1,
+     "name": "Teatro"
+    }
+   ],
+   "attachments": [
+    {
+     "id": 19944,
+     "url": "http://calabriastraordinaria.it/storage/images/19896/Medusa.jpg",
+     "title": "Medusa",
+     "name": "Medusa",
+     "copyright": "https://www.facebook.com/EventiSpettacoliCrotone",
+     "width": 1080,
+     "height": 1350,
+     "is_primary": 1,
+     "created_at": "2026-11-10 09:55:53",
+     "license": "",
+     "license_url": ""
+    }
+   ],
+   "target": [],
+   "theme": [],
+   "created_at": "2026-07-24 12:53:29",
+   "updated_at": "2026-07-24 12:53:29"
+  }
+ ],
+ "meta": {
+  "current_page": 1,
+  "last_page": 1,
+  "per_page": 1000,
+  "total": 11
+ }
+}

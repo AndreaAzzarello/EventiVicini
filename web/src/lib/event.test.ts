@@ -213,6 +213,17 @@ describe('eventSource', () => {
 		});
 	});
 
+	it('cita Calabria Straordinaria col nome, il link all’evento e la licenza CC BY 4.0', () => {
+		const url = 'https://calabriastraordinaria.it/eventi/presepe-vivente-di-panettieri';
+		expect(eventSource({ source: 'scraper', sourceUrl: url })).toEqual({
+			text: 'Calabria Straordinaria',
+			href: url,
+			license: { text: 'CC BY 4.0', href: 'https://creativecommons.org/licenses/by/4.0/deed.it' }
+		});
+		// un host che solo somiglia a quello del portale non eredita nome e licenza
+		expect(eventSource({ source: 'scraper', sourceUrl: 'https://calabriastraordinaria.it.evil.example/e/1' }).license).toBeUndefined();
+	});
+
 	it('cita Ticketmaster per i concerti importati dalla sua API', () => {
 		expect(eventSource({ source: 'scraper', sourceUrl: 'https://app.ticketmaster.com/discovery/v2/events/G5v0Z' })).toEqual({
 			text: 'Ticketmaster',
