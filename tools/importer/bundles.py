@@ -219,7 +219,14 @@ def write_coverage(db, docs: dict[str, dict], now_ms: int) -> dict:
     # nelle chiavi di cache, quindi una versione nuova è visibile solo a bundle completi.
     writes = write_bucket(db, ops, "coverage", [s], prev.get("coverage"), now_ms, {"version": now_ms})
     if not writes:
-        ops.append([lambda b, r=db.collection(COLL).document("coverage"): b.set(r, {"version": now_ms}, merge=True)])
-        writes = 1
+        writes = bump_version(db, now_ms)
     commit(db, ops)
     return {"reads": reads, "writes": writes}
+
+
+def bump_version(db, now_ms: int) -> int:
+    """Scrive solo `version` in bundles/coverage (merge, 1 scrittura). Serve agli import parziali (--source): riscrivono i
+    bundle delle liste ma non la copertura, e senza una `version` nuova la webapp servirebbe la lista vecchia (chiavi di cache
+    `near:`/`city:`) fino a 3 ore. Da chiamare dopo la scrittura dei bundle."""
+    commit(db, [[lambda b, r=db.collection(COLL).document("coverage"): b.set(r, {"version": now_ms}, merge=True)]])
+    return 1

@@ -62,6 +62,7 @@ Dove `Q` è il numero di intervalli dopo deduplica (da 1 a 9). Il `max(1, …)` 
 - **Memoria del Worker**: TTL di 5 minuti. Chiavi: `near:lat,lng,km` (home e `/api/events`), `city:slug`, `upcoming:n`, `event:id`. Il limite di 300 voci è gestito per eliminazione della più vecchia.
 - **Cache HTTP delle pagine**: `public, max-age=60, s-maxage=300, stale-while-revalidate=60` (`HTML_CACHE`) su home, città ed evento.
 - **Cache HTTP di `/api/events`**: `max-age=60, s-maxage=300, stale-while-revalidate=600` (`no-store` se la lista è incompleta; gli errori sono 5xx e non si memorizzano). Il browser aggiunge `v=<version dei dati>` all'URL, così bordo e browser cambiano voce a ogni import e il conteggio dell'HTML coincide con la lista. Le coordinate sono arrotondate a 0,05° (circa 5 km), quindi molti utenti condividono la stessa chiave.
+- **Cache HTTP di `/api/citta/<slug>` e di `/citta/<slug>`**: come `/api/events` (`API_CACHE` e `HTML_CACHE`, `no-store` se la lista è incompleta). La pagina porta la `version` dei dati e «Mostra altri» chiede `/api/citta/<slug>?v=<version>`. Un import con `--source` riscrive i bundle delle liste e aggiorna solo `version` su `bundles/coverage` (1 scrittura), così la webapp non serve la lista vecchia fino a 3 ore.
 
 **Visita con cache hit: 0 letture.** Una visita alla home nella stessa finestra di 5 minuti di un isolate già caldo non legge Firestore. Lo stesso vale per la cache HTTP dell'edge, se Cloudflare la applica alle risposte SSR (da verificare in produzione).
 

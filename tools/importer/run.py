@@ -1007,6 +1007,8 @@ def _main(argv: list[str] | None = None) -> int:
                                                        if not getattr(SOURCES[n], "regional", False)}, now)
         stats["reads"] += reads
         stats["writes"] += writes
+    else:  # i bundle delle liste sono cambiati: una version nuova, scritta per ultima, li rende visibili alla webapp
+        stats["writes"] += bundles.bump_version(db, int(now.timestamp() * 1000))
     if args.sitemap_out and not args.source:  # con --source l'elenco sarebbe parziale
         import sitemap
 
