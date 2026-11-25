@@ -87,7 +87,8 @@
 			remote = found.slice(0, 4).map((r) => ({
 				kind: 'comune' as const,
 				place: { lat: r.lat, lng: r.lng, label: r.place?.city ?? r.label.split(',')[0] },
-				detail: r.label,
+				detail: r.place?.province ? `(${r.place.province})` : '',
+				line2: r.detail,
 				events: nearCovered(r, coverageStore.regions) ? 1 : 0,
 				score: 0
 			}));
@@ -244,7 +245,7 @@
 								onclick={() => pick(i)}
 							>
 								<MapPin size={16} aria-hidden="true" />
-								<span class="grow"><span class="name">{hit.place.label}</span> <span class="muted">{hit.detail}</span></span>
+								<span class="grow"><span class="name">{hit.place.label}</span> <span class="muted">{hit.detail}</span>{#if hit.line2}<span class="sub">{hit.line2}</span>{/if}</span>
 								<span class="n">
 									{#if hit.events > 0 && hit.place.slug !== undefined}{hit.events === 1 ? '1 evento' : `${fmtNum(hit.events)} eventi`}{:else if hit.place.slug === undefined && hit.events === 0}Pochi eventi in questa zona{/if}
 								</span>
@@ -370,6 +371,11 @@
 	.n {
 		color: var(--muted);
 		font-size: var(--text-sm);
+	}
+	.sub {
+		display: block;
+		color: var(--muted);
+		font-size: var(--text-xs);
 	}
 	.n {
 		text-align: right;

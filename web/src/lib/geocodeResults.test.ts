@@ -61,10 +61,28 @@ describe('shapeResults: indirizzo', () => {
 	});
 });
 
-describe('shapeResults: città (home)', () => {
-	it('etichetta «Comune (PR)» come prima, senza scartare nulla; il comune per primo', () => {
+describe('shapeResults: città (home, #101)', () => {
+	it('«modena»: la provincia (rank 12, place null) non è un risultato; resta il comune con la seconda riga', () => {
 		const r = shapeResults(MODENA, 'city', 'modena');
-		// come prima non si scarta nulla (la provincia, senza comune nell'indirizzo, ha l'etichetta di display_name); il comune viene per primo
+		expect(r).toHaveLength(1);
+		expect(r[0]).toMatchObject({ label: 'Modena (MO)', detail: 'Prov. MO · Emilia-Romagna', lat: 44.6458885 });
+		expect(r[0].place).not.toBeNull();
+	});
+	it('nessun risultato di tipo provincia o regione: place sempre valorizzato', () => {
+		const r = shapeResults([...MODENA, ...CITTANOVA], 'city', 'modena');
+		expect(r.every((x) => x.place !== null)).toBe(true);
+	});
+	it('senza sigla di provincia la seconda riga è solo la regione; senza regione è vuota', () => {
+		const h = (address: Record<string, string>): Hit => ({ lat: '45', lon: '9', name: 'Xville', display_name: 'Xville, Italia', addresstype: 'town', place_rank: 16, address });
+		expect(shapeResults([h({ town: 'Xville', state: 'Lombardia' })], 'city', 'x')[0].detail).toBe('Lombardia');
+		expect(shapeResults([h({ town: 'Xville' })], 'city', 'x')[0].detail).toBe('');
+	});
+});
+
+describe('shapeResults: reverse (da coordinate)', () => {
+	it('come prima: etichetta «Comune (PR)», nessun filtro e nessun dettaglio', () => {
+		const r = shapeResults(MODENA, 'reverse', '');
 		expect(r.map((x) => x.label)).toEqual(['Modena (MO)', 'Modena, Emilia-Romagna, Italia']);
+		expect(r.every((x) => x.detail === '')).toBe(true);
 	});
 });

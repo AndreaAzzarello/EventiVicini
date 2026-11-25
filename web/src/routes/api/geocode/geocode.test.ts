@@ -49,6 +49,29 @@ describe('/api/geocode: risultati distinguibili', () => {
 	});
 });
 
+describe('/api/geocode: città della home (#101)', () => {
+	const ita = { 'ISO3166-2-lvl6': 'IT-MO', state: 'Emilia-Romagna', county: 'Modena', country_code: 'it' };
+	const hits = [
+		{ lat: '44.5385', lon: '10.9360', name: 'Modena', display_name: 'Modena, Emilia-Romagna, Italia', addresstype: 'county', place_rank: 12, address: ita },
+		{ lat: '44.6459', lon: '10.9256', name: 'Modena', display_name: 'Modena, Emilia-Romagna, Italia', addresstype: 'city', place_rank: 16, address: { city: 'Modena', ...ita } }
+	];
+	const ask = async (qs: string) =>
+		(await GET({ url: new URL(`https://example.test/api/geocode?${qs}`), setHeaders: () => {} } as unknown as Parameters<typeof GET>[0])).json();
+	it('kind=city: niente riga provincia, il comune ha la seconda riga', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(hits)));
+		const body = await ask('q=modena&kind=city');
+		expect(body).toHaveLength(1);
+		expect(body[0]).toMatchObject({ label: 'Modena (MO)', detail: 'Prov. MO · Emilia-Romagna', lat: 44.6459 });
+		expect(body[0].place).not.toBeNull();
+	});
+	it('reverse: invariato, anche se il punto cade in un\'area ampia', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(hits[0])));
+		const body = await ask('lat=44.5&lng=10.9');
+		expect(body).toHaveLength(1);
+		expect(body[0].detail).toBe('');
+	});
+});
+
 describe('/api/geocode: URL senza versione (vecchio client) e con versione', () => {
 	const ita = { 'ISO3166-2-lvl6': 'IT-MO', state: 'Emilia-Romagna', county: 'Modena', country_code: 'it' };
 	const hits = [

@@ -69,22 +69,27 @@ function describe(h: Hit, place: Place | null): { label: string; detail: string 
 
 const rankOf = (h: Hit) => h.place_rank ?? 0;
 
+/** Seconda riga dei risultati della home: provincia (sigla) e regione, per distinguere i comuni omonimi. */
+const provinceLine = (place: Place) => [place.province && `Prov. ${place.province}`, place.region].filter(Boolean).join(' · ');
+
 /**
  * - `address`: scarta le aree più ampie di un comune (non possono collocare l'evento) e dà a ogni risultato etichetta + dettaglio.
- * - `city` (home): l'etichetta resta «Comune (PR)», cambia solo l'eliminazione dei duplicati.
+ * - `city` (home): scarta le aree più ampie di un comune (la provincia «Modena, Emilia-Romagna, Italia» spostava la mappa sul suo
+ *   centroide); l'etichetta è «Comune (PR)» e il dettaglio «Prov. PR · Regione».
+ * - `reverse` (da coordinate): un solo risultato, etichetta «Comune (PR)», senza filtri né dettaglio.
  * Poi toglie i duplicati (stessa etichetta e dettaglio entro 1 km: resta il più specifico) e mette per primo il comune
  * che si chiama come il testo cercato, poi gli altri centri abitati, poi vie e luoghi (a parità, l'ordine di Nominatim).
  */
-export function shapeResults(hits: Hit[], kind: 'city' | 'address', query: string): Shaped[] {
+export function shapeResults(hits: Hit[], kind: 'city' | 'address' | 'reverse', query: string): Shaped[] {
 	const q = fold(query.trim());
 	const shaped = hits
-		.filter((h) => kind === 'city' || h.place_rank === undefined || h.place_rank >= MIN_RANK)
+		.filter((h) => kind === 'reverse' || h.place_rank === undefined || h.place_rank >= MIN_RANK)
 		.map((h, order) => {
 			const place = placeFromNominatim(h.address);
 			const text =
-				kind === 'city' && place
-					? { label: place.province ? `${place.city} (${place.province})` : place.city, detail: '' }
-					: kind === 'city'
+				kind !== 'address' && place
+					? { label: place.province ? `${place.city} (${place.province})` : place.city, detail: kind === 'city' ? provinceLine(place) : '' }
+					: kind !== 'address'
 						? { label: h.display_name.split(', ').slice(0, 4).join(', '), detail: '' }
 						: describe(h, place);
 			const k = effectiveKind(h, place);

@@ -15,9 +15,10 @@ export interface GeoResult {
 /**
  * Versione del formato della risposta di /api/geocode. Alzala quando il formato cambia: finisce nell'URL di ogni richiesta
  * (cambia la chiave della cache del bordo Cloudflare e di quella HTTP del browser, che indicizzano per URL) e nella chiave locale.
+ * La 4: i risultati `city` non hanno più la provincia e portano la seconda riga («Prov. MO · Emilia-Romagna»).
  * La 2 non basta più: il client precedente chiedeva l'URL senza versione, riceveva dal bordo il formato vecchio e lo salvava sotto `v2:`.
  */
-export const GEOCODE_FORMAT = 3;
+export const GEOCODE_FORMAT = 4;
 
 const MAX_CACHE = 60;
 let cache: Record<string, GeoResult[]> | null = null;

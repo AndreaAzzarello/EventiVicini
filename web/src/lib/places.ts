@@ -31,6 +31,8 @@ export interface PlaceHit {
 	place: ChosenPlace;
 	/** Riga di dettaglio: provincia o regione. */
 	detail: string;
+	/** Seconda riga sotto il nome (solo risultati di ricerca fuori copertura): provincia e regione. */
+	line2?: string;
 	events: number;
 	/** 0 esatto, 1 prefisso, 2 inizio di parola, 3 contenuto. */
 	score: number;
