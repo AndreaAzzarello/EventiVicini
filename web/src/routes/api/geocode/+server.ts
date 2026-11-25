@@ -63,8 +63,8 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 		error(502, 'Geocoding non disponibile'); // rete assente, timeout o risposta non JSON: Nominatim non è raggiungibile
 	}
 	const hits = Array.isArray(body) ? body : 'lat' in body ? [body] : [];
-	// reverse: un solo risultato, etichetta «Comune (PR)»; ricerca: scarto delle aree ampie, etichette distinguibili, duplicati fuori
-	const results: GeoResult[] = shapeResults(hits, endpoint === 'reverse' ? 'city' : kind, q);
+	// reverse: un solo risultato, etichetta «Comune (PR)»; ricerca: scarto delle aree ampie (anche per la home), etichette distinguibili, duplicati fuori
+	const results: GeoResult[] = shapeResults(hits, endpoint === 'reverse' ? 'reverse' : kind, q);
 	setHeaders({ 'cache-control': 'public, max-age=86400, s-maxage=86400' });
 	return json(results);
 };
