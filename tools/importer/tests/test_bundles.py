@@ -187,3 +187,13 @@ def test_le_scale_piccole_sono_in_coda_ai_campi_e_le_righe_vecchie_restano_valid
     assert bundles.compact(ev(1))[-2:] == ["", ""]  # fonti senza scale: stringhe vuote
     old = bundles.compact(ev(2))[:20]  # riga di un bundle vecchio
     assert bundles.pack([old]) and bundles.rows_of({"json": bundles.pack([old])})[0] == old
+
+
+PRIVATI = {"ownerId", "submittedBy", "email", "uid", "userId", "authorEmail", "ip", "token", "reporter", "reportedBy",
+           "shortDescription", "ticketUrl", "sourceUrl", "contentHash"}
+
+
+def test_i_bundle_non_portano_campi_privati_ne_testi_lunghi():
+    """I bundle sono letti da chiunque dal sito: solo i campi della card e della mappa (niente autori, link, descrizioni)."""
+    assert PRIVATI.isdisjoint(bundles.FIELDS)
+    assert len(bundles.FIELDS) == len(set(bundles.FIELDS))

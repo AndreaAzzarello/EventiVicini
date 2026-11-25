@@ -26,12 +26,17 @@ export function authMessage(e: unknown): string {
 	return MESSAGES[code] ?? 'Qualcosa è andato storto. Riprova tra poco.';
 }
 
-/** Solo percorsi interni: evita redirect verso altri siti tramite ?next=. Si risolve come farebbe il browser e si confronta l'origine. */
+/**
+ * Solo percorsi interni: evita redirect verso altri siti tramite ?next=. Si risolve come farebbe il browser e si confronta l'origine.
+ * Il percorso risolto non può iniziare con `//`: `/.//evil.com` o `/..//evil.com` hanno l'origine del sito ma, riusati come
+ * indirizzo, il browser li legge come `//evil.com` (stesso schema, altro host). Così `goto()` non riceve mai un URL di altra origine.
+ */
 export function safeNext(next: string | null, origin = location.origin): string {
 	if (!next) return '/';
 	try {
 		const u = new URL(next, origin);
-		return u.origin === origin ? u.pathname + u.search + u.hash : '/';
+		if (u.origin !== origin || u.pathname.startsWith('//')) return '/';
+		return u.pathname + u.search + u.hash;
 	} catch {
 		return '/';
 	}
