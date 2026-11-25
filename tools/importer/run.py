@@ -38,7 +38,7 @@ from geocode import Geocoder
 from liveness import LiveChecker, read_mac_results
 from netcluster import NetGate, interleave
 from meter import BudgetExceeded, SourceMeter
-from mapping import ROME, content_hash, dedupe_key, html_to_text, is_long_running, one_line
+from mapping import ROME, clean_images, content_hash, dedupe_key, html_to_text, is_long_running, one_line
 from registry import USER_AGENT, host_key, read_rows
 from relevance import exclusion_reason
 
@@ -167,6 +167,7 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
         # Geocoding (Nominatim, 1 richiesta/s in tutto) in sequenza, dagli eventi più vicini nel tempo: se il budget
         # di richieste del giro finisce, i più lontani restano senza geocoding e lo prendono nei giorni dopo.
         pending = []
+        https_images: Counter[str] = Counter()  # immagini http portate a https, per fonte (solo log)
         for name, got in zip(batch, fetched):
             found, error = got.found, got.error
             stats[name] = {"events": 0, "skipped": 0, "excluded": 0, "duplicates": 0, "error": error,
@@ -199,6 +200,7 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
             enrich(ev, ev.pop("_place", None) or place_of(geocoder, ev, source), fallback_place(source))
             use_italian_name(ev)
             clean_texts(ev)
+            https_images[name] += clean_images(ev)
             if is_long_running(ev):
                 ev["longRunning"] = True
             ev["importRegion"] = slugify(source.region)  # regione del registro, non quella di Nominatim
@@ -222,6 +224,10 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
         for name in batch:
             log.info("%s: %d eventi, %d senza coordinate, %d esclusi, %d doppioni", name, stats[name]["events"],
                      stats[name]["skipped"], stats[name]["excluded"], stats[name]["duplicates"])
+            if https_images[name]:
+                log.info("%s: %d immagini http portate a https", name, https_images[name])
+        if https_images:
+            log.info("Immagini http portate a https: %d in %d fonti", sum(https_images.values()), sum(1 for v in https_images.values() if v))
 
     process(names)
     failed = [n for n in names if stats[n]["error"] and not any(stats[n].get(k) for k in ("parked", "cluster", "connect", "budget"))]
