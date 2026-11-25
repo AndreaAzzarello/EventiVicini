@@ -402,3 +402,11 @@ def test_sitemap_relativa_nel_robots_si_risolve_sull_host():
 
     f = Fetcher(httpx.Client(transport=httpx.MockTransport(handler)), min_interval=0)
     assert f.sitemaps("https://x.it") == ["https://x.it/SiteMap.aspx", "https://x.it/a.xml"]
+
+
+def test_nessuna_fonte_api_attiva_ha_il_sito_in_http():
+    # Trecenta e Borgo a Mozzano (25/11/2026): con http:// il WAF risponde 400 «request method denied» all'endpoint REST, con https:// 200.
+    # Vale per gli adapter che interrogano un'API sul sito (wordpress-dci, plone); le pagine HTML hanno url_eventi proprio.
+    http = [f"{r['regione']}/{r['comune']}" for r in read_rows() if r["stato"] == "attivo" and r["cms"] in ("wordpress-dci", "plone")
+            and r["sito"].startswith("http://")]
+    assert http == []
