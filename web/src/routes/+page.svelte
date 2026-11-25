@@ -15,6 +15,7 @@
 	import FilterBar from '$lib/components/FilterBar.svelte';
 	import SearchBox from '$lib/components/SearchBox.svelte';
 	import Seo from '$lib/components/Seo.svelte';
+	import WeekendStrip from '$lib/components/WeekendStrip.svelte';
 	import { comuniStore } from '$lib/comuni.svelte';
 	import { coverageStore } from '$lib/coverage.svelte';
 	import type { Event } from '$lib/event';
@@ -252,6 +253,14 @@
 <!-- Il canonical resta "/" (Seo con path="/"); il titolo segue il luogo dell'URL, deciso dal server. -->
 <Seo title={data.fromUrl ? `Eventi a ${data.place.label} e dintorni` : 'Cosa fare oggi e nel weekend vicino a te'} path="/" />
 
+{#snippet welcome(where: 'in-card' | 'after')}
+	<ul class="welcome {where}">
+		<li><Landmark size={20} aria-hidden="true" /> Eventi pubblici vicino a te, dai Comuni e da fonti aperte</li>
+		<li><ShieldCheck size={20} aria-hidden="true" /> Gratis, senza pubblicità né tracciamento</li>
+		<li><CalendarPlus size={20} aria-hidden="true" /> Salva i preferiti e aggiungi gli eventi al calendario</li>
+	</ul>
+{/snippet}
+
 <div class="container home">
 	<section class="intro" aria-labelledby="h1">
 		<h1 id="h1" class="display">Cosa succede <span class="display-em">vicino a te</span></h1>
@@ -282,12 +291,9 @@
 				<LocateFixed size={20} aria-hidden="true" /> Usa la mia posizione
 			</button>
 			<p class="hint" role="status">{locateMsg}</p>
-			<ul class="welcome">
-				<li><Landmark size={20} aria-hidden="true" /> Eventi pubblici vicino a te, dai Comuni e da fonti aperte</li>
-				<li><ShieldCheck size={20} aria-hidden="true" /> Gratis, senza pubblicità né tracciamento</li>
-				<li><CalendarPlus size={20} aria-hidden="true" /> Salva i preferiti e aggiungi gli eventi al calendario</li>
-			</ul>
+			{@render welcome('in-card')}
 		</section>
+		<WeekendStrip events={data.weekend} {now} />
 		{#if data.popular && (data.popular.regions.length || data.popular.cities.length)}
 			<nav class="popular" aria-labelledby="pop-title">
 				<h2 id="pop-title">Oppure sfoglia per luogo</h2>
@@ -307,6 +313,8 @@
 				{/if}
 			</nav>
 		{/if}
+		<!-- Sotto i 400 px le tre righe stanno dopo fascia e città: sopra la piega restano scelta del luogo ed eventi (#22) -->
+		{@render welcome('after')}
 		<!-- Chi ha già un luogo salvato (lo segnala app.html) vede lo scheletro delle card, non la scelta, mentre arriva il suo luogo -->
 		<div class="pending-list" aria-hidden="true"><EventList events={[]} {now} loading /></div>
 	{:else}
@@ -457,6 +465,9 @@
 		display: grid;
 		gap: var(--space-2);
 	}
+	.welcome.after {
+		display: none;
+	}
 	.welcome li {
 		display: flex;
 		align-items: flex-start;
@@ -508,6 +519,21 @@
 			margin-bottom: var(--space-1);
 			font-size: var(--text-2xl);
 		}
+		/* Senza luogo (#22): scheda più stretta e le tre righe dopo fascia e città, così un evento compare sopra la piega */
+		.first-visit {
+			padding: var(--space-3);
+		}
+		.welcome.in-card {
+			display: none;
+		}
+		.welcome.after {
+			display: grid;
+			margin: var(--space-4) 0;
+			padding: var(--space-3) 0 0;
+		}
+		.welcome.after li {
+			font-size: var(--text-sm);
+		}
 	}
 	.popular {
 		margin: var(--space-4) 0;
@@ -533,6 +559,7 @@
 		display: none;
 	}
 	:global(html[data-saved-place]) .first-visit,
+	:global(html[data-saved-place]) .welcome.after,
 	:global(html[data-saved-place]) .popular {
 		display: none;
 	}

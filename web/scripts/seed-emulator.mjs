@@ -147,6 +147,21 @@ if (!process.env.SEED_NO_BUNDLES) {
 	for (const e of live) {
 		for (const name of [`g_${e.data.geohash.slice(0, 4)}`, `c_${e.data.citySlug}`]) (buckets[name] ??= []).push(rowOf(e));
 	}
+	// «Questo weekend» (#22), come bundles/weekend dell'importer: righe sintetiche, senza documenti in events (nessun altro test
+	// le vede), sempre dentro la finestra ven 18:00 – dom 23:59 e ancora in corso fino a domenica sera.
+	const wd = new Date(at(0, 0)).getDay();
+	const friday = wd === 0 ? -2 : wd === 6 ? -1 : 5 - wd;
+	const weekendEvent = (id, title, place, day, hour, category) => {
+		const p = places[place];
+		return rowOf({ id, data: { ...p, title, category, priceType: 'free', venueName: 'Piazza del mercato', address: `Centro, ${p.city}`, startTime: at(friday + day, hour), endTime: at(friday + 2, 23) } });
+	};
+	buckets.weekend = [
+		weekendEvent('we-1', 'Festa dei sapori d’autunno', 'modena', 1, 10, 'food'),
+		weekendEvent('we-2', 'Concerto al tramonto', 'roma', 1, 16, 'music'),
+		weekendEvent('we-3', 'Passeggiata nel borgo', 'lecce', 2, 11, 'culture'),
+		weekendEvent('we-4', 'Mercatino del riuso', 'bolzano', 2, 15, 'market'),
+		weekendEvent('we-5', 'Laboratorio di ceramica', 'bologna', 1, 20, 'kids')
+	];
 	buckets.coverage = Object.entries(coverage).map(([slug, c]) => ({ slug, name: c.name, comuni: c.comuni }));
 	for (const [name, rows] of Object.entries(buckets)) {
 		const doc = { json: JSON.stringify(rows), parts: 1, hash: name, updatedAt: now };

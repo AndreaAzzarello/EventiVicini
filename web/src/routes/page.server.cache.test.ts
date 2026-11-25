@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HTML_CACHE } from '$lib/server/cache';
 
-vi.mock('$lib/server/firestore', () => ({ coverage: vi.fn(), eventsAround: vi.fn(), eventsInCityList: vi.fn() }));
+vi.mock('$lib/server/firestore', () => ({ coverage: vi.fn(), eventsAround: vi.fn(), eventsInCityList: vi.fn(), weekendEventsList: vi.fn() }));
 vi.mock('$lib/server/comuneSlug', () => ({ comuneBySlug: vi.fn(async () => null) }));
 import * as store from '$lib/server/firestore';
 import { load } from './+page.server';
@@ -30,6 +30,7 @@ beforeEach(() => {
 	vi.mocked(store.coverage).mockResolvedValue(regions as never);
 	vi.mocked(store.eventsAround).mockResolvedValue(around(3) as never);
 	vi.mocked(store.eventsInCityList).mockResolvedValue({ events: [], complete: true, version: '7' } as never);
+	vi.mocked(store.weekendEventsList).mockResolvedValue({ events: [], complete: true, version: '7' } as never);
 });
 
 describe('home: intestazioni di cache', () => {
@@ -81,6 +82,36 @@ describe('home: intestazioni di cache', () => {
 		vi.mocked(store.eventsInCityList).mockResolvedValue({ events: [], complete: true, version: '7' } as never);
 		await run(sconosciuta);
 		expect(headers['cache-control']).toBe(HTML_CACHE);
+	});
+
+	it('senza luogo: «Questo weekend» dal bundle, 5 eventi di città diverse, HTML_CACHE', async () => {
+		const lo = Date.parse('2026-11-27T18:00:00+01:00');
+		vi.useFakeTimers({ toFake: ['Date'], now: Date.parse('2026-11-25T10:00:00+01:00') });
+		try {
+			const we = ['Modena', 'Roma', 'Lecce', 'Bolzano', 'Aosta', 'Torino'].map((c, i) => ({ ...ev(i), id: `w${i}`, city: c, citySlug: c.toLowerCase(), region: `R${i}`, startTime: lo + H, endTime: lo + 3 * H }));
+			vi.mocked(store.weekendEventsList).mockResolvedValue({ events: we, complete: true, version: '7' } as never);
+			const d = await run('');
+			expect(headers['cache-control']).toBe(HTML_CACHE);
+			expect((d.weekend as { citySlug: string }[]).length).toBe(5);
+			expect(new Set((d.weekend as { citySlug: string }[]).map((e) => e.citySlug)).size).toBe(5);
+			expect(store.eventsAround).not.toHaveBeenCalled();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('senza luogo: bundle weekend a metà o non leggibile → niente fascia e no-store', async () => {
+		vi.mocked(store.weekendEventsList).mockResolvedValue({ events: [], complete: false, version: '7' } as never);
+		expect((await run('')).weekend).toEqual([]);
+		expect(headers['cache-control']).toBe('no-store');
+		vi.mocked(store.weekendEventsList).mockRejectedValue(new Error('Firestore 500'));
+		expect((await run('')).weekend).toEqual([]);
+		expect(headers['cache-control']).toBe('no-store');
+	});
+
+	it('con un luogo la fascia non c’è e il bundle weekend non si legge', async () => {
+		expect((await run()).weekend).toEqual([]);
+		expect(store.weekendEventsList).not.toHaveBeenCalled();
 	});
 
 	it('senza luogo: nessun evento caricato, HTML_CACHE', async () => {

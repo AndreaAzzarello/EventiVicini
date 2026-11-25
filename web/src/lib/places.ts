@@ -128,6 +128,40 @@ export const strongPlace = (text: string, regions: CoverageRegion[], comuni: Com
 
 // Risultati memoizzati per identità dell'array di copertura: il Worker tiene lo stesso oggetto in memoria finché la cache non scade,
 // quindi ordinare ~1.100 comuni (con localeCompare) si paga una volta per isolate invece che a ogni richiesta (#51).
+const balancedCache = new WeakMap<CoverageRegion[], Map<string, PlaceHit[]>>();
+
+/**
+ * Città proposte dalla home senza luogo (#22): non le più grandi in assoluto (erano quasi tutte altoatesine) ma una per
+ * regione, dalle regioni con più eventi; se restano posti, la seconda di ogni regione, e così via. `first` (di norma Modena,
+ * la zona da curare) apre l'elenco se ha eventi. Solo comuni con almeno un evento.
+ */
+export function balancedPlaces(regions: CoverageRegion[], limit = 12, first = 'modena'): PlaceHit[] {
+	const key = `${limit}|${first}`;
+	let byKey = balancedCache.get(regions);
+	if (!byKey) balancedCache.set(regions, (byKey = new Map()));
+	const hit = byKey.get(key);
+	if (hit) return hit;
+	const byEvents = (a: CoverageComune, b: CoverageComune) => b.events - a.events || a.name.localeCompare(b.name, 'it');
+	const toHit = (c: CoverageComune, r: CoverageRegion): PlaceHit => ({
+		kind: 'comune',
+		place: comunePlace(c, r),
+		detail: c.province ? `(${c.province})` : '',
+		events: c.events,
+		score: 0
+	});
+	const lead = regions.flatMap((r) => r.comuni.filter((c) => c.slug === first && c.events > 0).map((c) => toHit(c, r)));
+	const queues = regionsWithEvents(regions).map(({ slug }) => {
+		const r = regions.find((x) => x.slug === slug)!;
+		return r.comuni.filter((c) => c.events > 0 && c.slug !== first).sort(byEvents).map((c) => toHit(c, r));
+	});
+	const out = [...lead];
+	for (let i = 0; out.length < limit && queues.some((q) => i < q.length); i++) {
+		for (const q of queues) if (i < q.length && out.length < limit) out.push(q[i]);
+	}
+	byKey.set(key, out);
+	return out;
+}
+
 const popularCache = new WeakMap<CoverageRegion[], Map<number, PlaceHit[]>>();
 
 /** Comuni con più eventi: i suggerimenti quando si apre la ricerca dei luoghi senza scrivere. */

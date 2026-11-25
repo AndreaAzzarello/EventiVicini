@@ -12,7 +12,7 @@ test('senza posizione si sceglie il luogo dalla ricerca, non si parte da Modena'
 	const first = page.getByRole('region', { name: 'Dove cerchi eventi?' });
 	await expect(first).toBeVisible();
 	for (const t of ['Eventi pubblici vicino a te', 'senza pubblicità né tracciamento', 'preferiti e aggiungi gli eventi al calendario'])
-		await expect(first.getByText(t)).toBeVisible();
+		await expect(page.locator('li:visible', { hasText: t })).toHaveCount(1); // sotto i 400 px le righe stanno dopo fascia e città (#22), non nella scheda
 	await expect(page.getByRole('dialog')).toHaveCount(0); // niente popup
 	expect(await noOverflow(page)).toBe(true);
 	const box = await first.boundingBox();

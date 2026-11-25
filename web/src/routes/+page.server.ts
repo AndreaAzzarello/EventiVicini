@@ -3,9 +3,11 @@ import { HTML_CACHE } from '$lib/server/cache';
 import { comuneBySlug } from '$lib/server/comuneSlug';
 import { applyFilter, filterFromParams, groupingFor } from '$lib/filters';
 import { DEFAULT_PLACE, type ChosenPlace } from '$lib/geo';
-import { autoRadius, nearestWithEvents, placeFromEvents, placeFromParams, popularPlaces, regionsWithEvents } from '$lib/places';
+import type { Event } from '$lib/event';
+import { autoRadius, balancedPlaces, nearestWithEvents, placeFromEvents, placeFromParams, regionsWithEvents } from '$lib/places';
 import { sections } from '$lib/sections';
-import { coverage, eventsAround, eventsInCityList } from '$lib/server/firestore';
+import { pickWeekend } from '$lib/weekend';
+import { coverage, eventsAround, eventsInCityList, weekendEventsList } from '$lib/server/firestore';
 import type { PageServerLoad } from './$types';
 
 /** Card nell'HTML del server: oltre, il resto arriva da /api/events dopo l'idratazione (render di centinaia di card = CPU del Worker, #51). */
@@ -51,19 +53,24 @@ export const load: PageServerLoad = async ({ url, setHeaders }) => {
 	}
 	const nearest = fromUrl && quiet ? nearestWithEvents(place, regions) : [];
 	const view = url.searchParams.get('vista') === 'mappa' ? ('map' as const) : ('list' as const);
-	const base = { place, fromUrl: !!fromUrl, unknownPlace: wanted && !fromUrl ? slug : null, noPlace: !wanted, view, quiet, nearest };
+	const base = { place, fromUrl: !!fromUrl, unknownPlace: wanted && !fromUrl ? slug : null, noPlace: !wanted, view, quiet, nearest, weekend: [] as Event[] };
 
 	if (!wanted || !fromUrl) {
 		// Senza luogo (o con un luogo che non conosciamo) niente eventi: si sceglie il luogo, non si ripiega su Modena.
 		const popular = {
 			regions: regionsWithEvents(regions),
-			cities: popularPlaces(regions, 12)
+			cities: balancedPlaces(regions, 12)
 				.filter((h) => h.events > 0)
 				.map((h) => ({ slug: h.place.slug!, name: h.place.label, events: h.events }))
 		};
 		// popular c'è anche con un luogo sconosciuto: niente vicolo cieco, si scelgono le città con più eventi
+		// «Questo weekend» (#22): 5 eventi dal bundle weekend, senza letture in più oltre a quella (in cache) del bundle.
+		// Se non si legge o è a metà la fascia non c'è e la pagina non va in cache.
+		const wk = await weekendEventsList().catch(() => null);
+		if (!wk?.complete) cacheable = false;
+		const weekend = wk ? pickWeekend(wk.events, Date.now()) : [];
 		// km: 0 → mai "coperto": il browser scarica gli eventi solo dopo aver saputo il luogo
-		return done({ ...base, events: [], fetched: { lat: place.lat, lng: place.lng, km: 0 }, error: '', popular, partial: false, total: 0, sectionCounts: null, version: '' });
+		return done({ ...base, weekend, events: [], fetched: { lat: place.lat, lng: place.lng, km: 0 }, error: '', popular, partial: false, total: 0, sectionCounts: null, version: '' });
 	}
 
 	try {
