@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { romeTime } from './dates';
-import { PRICE_TYPES, compareEvents, linkKey, normalizeLink, validateSourceLink, eventSource, eventPath, fromData, runningLabel, idFromSlug, parseTags, safeUrl, slugify, ticketLabel, ticketVendor, ticketsOffSale, validateEvent, type EventInput } from './event';
+import { PRICE_TYPES, compareEvents, linkKey, normalizeLink, validateSourceLink, eventSource, eventPath, fromData, runningLabel, idFromSlug, parseTags, safeImageUrl, safeUrl, slugify, ticketLabel, ticketVendor, ticketsOffSale, validateEvent, type EventInput } from './event';
 
 const sample = (over: Partial<EventInput> = {}): EventInput => ({
 	title: 'Concerto in piazza',
@@ -30,11 +30,18 @@ describe('validateEvent', () => {
 		['title', { title: '  ' }, 'Campo obbligatorio'],
 		['title', { title: 'x'.repeat(201) }, 'Massimo 200 caratteri'],
 		['endTime', { endTime: 1_700_000_000_000 }, "La fine deve essere dopo l'inizio"],
-		['ticketUrl', { ticketUrl: 'javascript:alert(1)' }, 'Inserisci un link che inizi con https://'],
+		['ticketUrl', { ticketUrl: 'javascript:alert(1)' }, 'Inserisci un link che inizi con http:// o https://'],
 		['imageUrl', { imageUrl: 'ftp://x.it/a.png' }, 'Inserisci un link che inizi con https://'],
+		['imageUrl', { imageUrl: 'http://x.it/a.png' }, 'Inserisci un link che inizi con https://'],
+		['imageUrl', { imageUrl: 'data:image/png;base64,AAA' }, 'Inserisci un link che inizi con https://'],
 		['tags', { tags: Array.from({ length: 11 }, (_, i) => `t${i}`) }, 'Massimo 10 tag']
 	])('%s non valido', (field, over, msg) => {
 		expect(validateEvent(sample(over as Partial<EventInput>))[field as keyof EventInput]).toBe(msg);
+	});
+	it('immagine https valida; il link ai biglietti ammette anche http (collegamento in uscita)', () => {
+		expect(validateEvent(sample({ imageUrl: 'https://x.it/a.png' }))).toEqual({});
+		expect(validateEvent(sample({ ticketUrl: 'http://biglietti.it/x' }))).toEqual({});
+		expect(validateEvent(sample({ ticketUrl: 'https://biglietti.it/x' }))).toEqual({});
 	});
 	it('approxLocation: default false, true solo se booleano true', () => {
 		expect(fromData('x', {}).approxLocation).toBe(false);
@@ -56,6 +63,25 @@ describe('url e slug', () => {
 		expect(safeUrl('data:text/html,x')).toBe('');
 		expect(safeUrl('/relativo')).toBe('');
 	});
+	it('safeUrl resta http(s) anche per i link in uscita: la CSP non li tocca e togliere «Fonte» perderebbe l’attribuzione', () => {
+		expect(safeUrl('http://www.comune.x.it/eventi/1')).toBe('http://www.comune.x.it/eventi/1');
+	});
+	it('safeImageUrl: solo https, l’http viene portato a https, il resto sparisce', () => {
+		expect(safeImageUrl('https://a.it/x.jpg')).toBe('https://a.it/x.jpg');
+		expect(safeImageUrl(' http://a.it/x.jpg?w=1 ')).toBe('https://a.it/x.jpg?w=1');
+		expect(safeImageUrl('HTTP://A.it/x.jpg')).toBe('https://a.it/x.jpg');
+		expect(safeImageUrl('javascript:alert(1)')).toBe('');
+		expect(safeImageUrl('data:image/png;base64,AAA')).toBe('');
+		expect(safeImageUrl('ftp://a.it/x.jpg')).toBe('');
+		expect(safeImageUrl('//cdn.a.it/x.jpg')).toBe('');
+		expect(safeImageUrl('/relativo/x.jpg')).toBe('');
+		expect(safeImageUrl('')).toBe('');
+	});
+	it('safeImageUrl: le virgolette nell’URL non escono dall’attributo (il parser le codifica)', () => {
+		const u = safeImageUrl('http://example.org/x.jpg" onerror="alert(10)');
+		expect(u.startsWith('https://example.org/x.jpg')).toBe(true);
+		expect(u).not.toContain('"');
+	});
 	it('slugify toglie accenti e simboli', () => {
 		expect(slugify("Sagra dell'Uva & Città Più Bella!")).toBe('sagra-dell-uva-citta-piu-bella');
 		expect(slugify('Reggio nell’Emilia')).toBe('reggio-nell-emilia');
@@ -73,6 +99,34 @@ describe('fromData', () => {
 		const e = fromData('x', { title: 'T', startTime: 10, submittedBy: 'uid-segreto', ticketUrl: 'javascript:x' });
 		expect(e).toMatchObject({ id: 'x', category: 'other', priceType: 'unknown', endTime: 10, source: 'manual', ticketUrl: '' });
 		expect('submittedBy' in e).toBe(false);
+	});
+});
+
+describe('fromData: immagini solo https, link invariati', () => {
+	const raw = {
+		title: 'T', startTime: 10,
+		imageUrl: 'http://www.comune.x.it/.imaging/a.jpg',
+		imageMiniUrl: 'http://www.comune.x.it/@@images/image-200-aaaa.jpeg',
+		imagePreviewUrl: 'https://www.comune.x.it/@@images/image-400-bbbb.jpeg',
+		ticketUrl: 'http://biglietti.it/x',
+		sourceUrl: 'http://www.comune.x.it/eventi/1'
+	};
+	it('i tre campi immagine passano da http a https (anche per i dati già scritti)', () => {
+		const e = fromData('x', raw);
+		expect(e.imageUrl).toBe('https://www.comune.x.it/.imaging/a.jpg');
+		expect(e.imageMiniUrl).toBe('https://www.comune.x.it/@@images/image-200-aaaa.jpeg');
+		expect(e.imagePreviewUrl).toBe('https://www.comune.x.it/@@images/image-400-bbbb.jpeg');
+	});
+	it('ticketUrl e sourceUrl in http restano com’erano (sono link, non sottorisorse)', () => {
+		const e = fromData('x', raw);
+		expect(e.ticketUrl).toBe('http://biglietti.it/x');
+		expect(e.sourceUrl).toBe('http://www.comune.x.it/eventi/1');
+	});
+	it('schemi ostili nelle immagini: vuoti (le scale restano undefined)', () => {
+		const e = fromData('x', { ...raw, imageUrl: 'javascript:alert(6)', imageMiniUrl: 'data:text/html,x', imagePreviewUrl: 'ftp://x.it/p.jpg' });
+		expect(e.imageUrl).toBe('');
+		expect(e.imageMiniUrl).toBeUndefined();
+		expect(e.imagePreviewUrl).toBeUndefined();
 	});
 });
 

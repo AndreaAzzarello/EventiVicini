@@ -97,7 +97,7 @@ export function seedEvents(now, { xss = false, big = false, bench = false } = {}
 			venueName: 'Parco Novi Sad',
 			priceType: 'free',
 			// immagine volutamente irraggiungibile: e2e/broken-image.spec.ts verifica il ripiego sul motivo di categoria
-			imageUrl: 'https://example.org/immagine-rotta.jpg'
+			imageUrl: 'http://example.org/immagine-rotta.jpg' // http di proposito: dato scritto prima del controllo https, il sito lo porta a https e, se non carica, ripiega
 		}),
 		ev('seedBimbi', 'formigine', {
 			title: 'Letture animate per bambini al castello',
