@@ -299,6 +299,22 @@ export function eventsAround(place: LatLng, radiusKm: number) {
 	return eventsNearList(center, km).then((l) => ({ ...l, fetched: { ...center, km } }));
 }
 
+/**
+ * Candidati di «Questo weekend» (bundles/weekend, scritto dal job cleanup dell'importer; vedi weekend.ts per la scelta).
+ * La chiave porta la version dei dati come le altre liste. Un bundle assente (prima del primo import che lo scrive) è
+ * una lista vuota: la fascia non compare. Una lettura per versione, data center e finestra di 3 ore.
+ */
+export async function weekendEventsList(): Promise<NearList> {
+	const cov = await coverageBundle();
+	const version = cov?.version ?? 'q';
+	if (!cov) return { events: [], complete: true, version };
+	const list = await cached<Listing>(`weekend:${version}`, async () => {
+		const { rows, complete } = await readBundles(['weekend']);
+		return { events: liveEvents(rows, nowMinute()), complete };
+	}, FRESH.list, isComplete);
+	return { ...list, version };
+}
+
 export async function eventsInCityList(citySlug: string, limit = 100): Promise<NearList> {
 	const cov = await coverageBundle();
 	const version = cov?.version ?? 'q';

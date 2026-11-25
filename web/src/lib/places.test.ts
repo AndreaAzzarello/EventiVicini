@@ -11,6 +11,7 @@ import {
 	placeFromEvents,
 	placeFromParams,
 	placeToParams,
+	balancedPlaces,
 	popularPlaces,
 	rankPlaces,
 	regionCenter,
@@ -242,5 +243,49 @@ describe('memoizzazione per identità della copertura', () => {
 			{ slug: 'trentino-alto-adige', name: 'Trentino-Alto Adige', events: 4 }
 		]);
 		expect(regionsWithEvents(REGIONS)).toBe(r);
+	});
+});
+
+describe('balancedPlaces (#22)', () => {
+	const c = (name: string, events: number, slug = name.toLowerCase()) => ({ name, slug, province: 'XX', lat: 44, lng: 10, events });
+	const MANY: CoverageRegion[] = [
+		{ slug: 'trentino-alto-adige', name: 'Trentino-Alto Adige', comuni: [c('Bolzano', 90), c('Merano', 80), c('Bressanone', 70), c('Brunico', 60)] },
+		{ slug: 'emilia-romagna', name: 'Emilia-Romagna', comuni: [c('Bologna', 50), c('Modena', 30), c('Parma', 20), c('Forlì', 0)] },
+		{ slug: 'lazio', name: 'Lazio', comuni: [c('Roma', 40), c('Rieti', 5)] },
+		{ slug: 'puglia', name: 'Puglia', comuni: [c('Lecce', 10)] },
+		{ slug: 'vuota', name: 'Vuota', comuni: [c('Niente', 0)] }
+	];
+	const names = (r: CoverageRegion[], limit?: number) => balancedPlaces(r, limit).map((h) => h.place.label);
+
+	it('Modena in testa se ha eventi, poi una città per regione dalle regioni con più eventi', () => {
+		expect(names(MANY, 4)).toEqual(['Modena', 'Bolzano', 'Bologna', 'Roma']);
+	});
+	it('le seconde città solo dopo una per regione; mai due volte la stessa e mai una senza eventi', () => {
+		const all = names(MANY, 20);
+		expect(all).toEqual(['Modena', 'Bolzano', 'Bologna', 'Roma', 'Lecce', 'Merano', 'Parma', 'Rieti', 'Bressanone', 'Brunico']);
+		expect(new Set(all).size).toBe(all.length);
+		expect(all).not.toContain('Forlì');
+		expect(all).not.toContain('Niente');
+	});
+	it('il limite di 12 con tante regioni: non sono tutte della stessa', () => {
+		const regions = Array.from({ length: 15 }, (_, i) => ({ slug: `r${i}`, name: `R${i}`, comuni: [c(`Citta${i}A`, 100 - i), c(`Citta${i}B`, 50)] }));
+		const out = balancedPlaces(regions, 12);
+		expect(out).toHaveLength(12);
+		expect(new Set(out.map((h) => h.place.region)).size).toBe(12);
+	});
+	it('senza Modena (nessun evento o assente) parte dalla regione con più eventi', () => {
+		const noModena = MANY.map((r) => ({ ...r, comuni: r.comuni.filter((x) => x.slug !== 'modena') }));
+		expect(names(noModena, 3)).toEqual(['Bolzano', 'Bologna', 'Roma']);
+		const zero = MANY.map((r) => ({ ...r, comuni: r.comuni.map((x) => (x.slug === 'modena' ? { ...x, events: 0 } : x)) }));
+		expect(names(zero, 2)).toEqual(['Bolzano', 'Bologna']);
+	});
+	it('ogni voce è un comune con slug, regione e provincia tra parentesi; il risultato è in cache per identità', () => {
+		const [first] = balancedPlaces(MANY, 3);
+		expect(first).toMatchObject({ kind: 'comune', detail: '(XX)', events: 30, place: { slug: 'modena', region: 'Emilia-Romagna' } });
+		expect(balancedPlaces(MANY, 3)).toBe(balancedPlaces(MANY, 3));
+		expect(balancedPlaces(MANY, 4)).not.toBe(balancedPlaces(MANY, 3));
+	});
+	it('copertura vuota: nessuna città', () => {
+		expect(balancedPlaces([], 12)).toEqual([]);
 	});
 });

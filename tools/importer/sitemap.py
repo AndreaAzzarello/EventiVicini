@@ -47,8 +47,12 @@ def part_rows(events: list[dict], now_ms: int) -> list[list]:
     return [rows[i] for i in sorted(rows)]
 
 
-def write_part(path: Path, region: str, rows: list[list], now_ms: int) -> None:
-    path.write_text(json.dumps({"region": region, "at": now_ms, "rows": rows}, separators=(",", ":")), encoding="utf-8")
+def write_part(path: Path, region: str, rows: list[list], now_ms: int, weekend: list[list] | None = None) -> None:
+    """`weekend`: righe candidate di «Questo weekend» (weekend.part_rows), nello stesso file perché seguono la stessa strada."""
+    data: dict = {"region": region, "at": now_ms, "rows": rows}
+    if weekend is not None:
+        data["weekend"] = weekend
+    path.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
 
 
 def load_parts(directory: Path) -> dict[str, list[list]]:
@@ -60,6 +64,18 @@ def load_parts(directory: Path) -> dict[str, list[list]]:
             out[str(d["region"])] = [list(r) for r in d["rows"]]
         except (OSError, ValueError, KeyError, TypeError):
             log.warning("parte di sitemap illeggibile, ignorata: %s", p.name)
+    return out
+
+
+def load_weekend(directory: Path) -> dict[str, list[list]]:
+    """regione → righe candidate del weekend, dagli stessi file (le parti senza il campo, scritte prima, danno zero righe)."""
+    out: dict[str, list[list]] = {}
+    for p in sorted(directory.glob("sitemap-*.json")):
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+            out[str(d["region"])] = [list(r) for r in d.get("weekend") or []]
+        except (OSError, ValueError, KeyError, TypeError):
+            pass  # già segnalata da load_parts
     return out
 
 
@@ -144,12 +160,18 @@ def main(argv: list[str] | None = None) -> int:
     cov, reads = read(db, ["coverage"])
     coverage = rows_of(cov.get("coverage")) if "coverage" in cov else []
     docs = build(parts, coverage, now_ms)
+    import weekend
+
+    weekend_rows = weekend.merge(load_weekend(args.parts), now_ms)
+    log.info("Weekend: %s", weekend.summary(weekend_rows))
     n_events = sum(d.count("/eventi/") for d in docs.values())
     log.info("Sitemap: %d regioni nelle parti, %d URL evento in %d pagine", len(parts), n_events, len(docs) - 2)
     if args.dry_run:
         return 0
     out = write(db, docs, now_ms)
     log.info("Sitemap scritta: %d letture, %d scritture", reads + out["reads"], out["writes"])
+    wk = weekend.write(db, weekend_rows, now_ms)
+    log.info("Weekend scritto: %d letture, %d scritture", wk["reads"], wk["writes"])
     return 0
 
 
