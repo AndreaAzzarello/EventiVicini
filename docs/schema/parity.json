@@ -58,8 +58,11 @@
     "sourceUrl"
   ],
   "_submissionNota": "Campi che una proposta degli utenti può avere in più dei comuni (hasOnly di submissions): il link alla fonte, solo https; approve() lo copia in events.sourceUrl.",
-  "importerOnlyKeys": [],
-  "_importerOnlyNota": "Scritte dall'importer (Admin SDK) ma non ammesse da hasOnly delle regole. Oggi nessuna: cityAlt è passato tra gli opzionali con #46.",
+  "importerOnlyKeys": [
+    "imageMiniUrl",
+    "imagePreviewUrl"
+  ],
+  "_importerOnlyNota": "Scritte dall'importer (Admin SDK) ma non ammesse da hasOnly delle regole: imageMiniUrl e imagePreviewUrl (scale Plone con hash, #95). saveEvent riscrive il documento con setDoc senza questi campi, quindi un evento modificato a mano torna alla derivazione dall'imageUrl. cityAlt è passato tra gli opzionali con #46.",
   "hashSkip": [
     "id",
     "createdAt",

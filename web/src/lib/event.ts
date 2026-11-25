@@ -72,6 +72,9 @@ export interface Event extends EventInput {
 	cityAlt?: string;
 	/** true = dura più di LONG_RUNNING_DAYS giorni (mostre, rassegne). Non è nel form: si ricava dalle date. */
 	longRunning: boolean;
+	/** Plone: scale mini (200 px) e preview (400 px) con l'hash nell'URL (cache di 1 anno), scritte dall'importer (#95). Solo per le miniature. */
+	imageMiniUrl?: string;
+	imagePreviewUrl?: string;
 	createdAt?: number;
 	updatedAt?: number;
 }
@@ -116,6 +119,8 @@ export function fromData(id: string, m: Record<string, unknown>): Event {
 		approxLocation: m.approxLocation === true,
 		locality: str(m.locality),
 		cityAlt: str(m.cityAlt) || undefined,
+		imageMiniUrl: safeUrl(str(m.imageMiniUrl)) || undefined,
+		imagePreviewUrl: safeUrl(str(m.imagePreviewUrl)) || undefined,
 		longRunning: m.longRunning === true || endMs - start > LONG_RUNNING_DAYS * 86_400_000,
 		createdAt: m.createdAt == null ? undefined : num(m.createdAt),
 		updatedAt: m.updatedAt == null ? undefined : num(m.updatedAt)

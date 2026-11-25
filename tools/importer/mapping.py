@@ -274,7 +274,12 @@ def to_event(item: dict, source: dict, now: datetime, horizon_days: int = 60) ->
 
     audience = " ".join([title, plaintext(item.get("descrizione_destinatari"))])
     image = item.get("image") or {}
-    image_url = ((image.get("scales") or {}).get("large") or {}).get("download") or image.get("download") or ""
+    scales = image.get("scales") or {}
+    image_url = (scales.get("large") or {}).get("download") or image.get("download") or ""
+    # Scale piccole CON hash nell'URL (image-200-<hash>.jpeg): il server le serve con cache di 1 anno, mentre quelle senza hash
+    # (image/mini) fanno una richiesta condizionale per ogni miniatura a ogni visita (#95). Il web le usa solo per le card.
+    image_mini = (scales.get("mini") or {}).get("download") or ""
+    image_preview = (scales.get("preview") or {}).get("download") or ""
 
     geo = item.get("geolocation") or venue.get("geolocation") or {}
     lat, lng = geo.get("latitude"), geo.get("longitude")
@@ -293,6 +298,8 @@ def to_event(item: dict, source: dict, now: datetime, horizon_days: int = 60) ->
         "lat": float(lat) if has_geo else None,
         "lng": float(lng) if has_geo else None,
         "imageUrl": image_url,
+        "imageMiniUrl": image_mini,
+        "imagePreviewUrl": image_preview,
         "ticketUrl": "",
         "tags": ["kids"] if KIDS_RE.search(audience) else [],
         "source": "scraper",

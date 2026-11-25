@@ -37,6 +37,29 @@ describe('imageSources: Plone', () => {
 	});
 });
 
+describe('imageSources: Plone con le scale salvate dall’importer (#95)', () => {
+	const MINI = `${B}-200-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpeg`;
+	const PREVIEW = `${B}-400-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpeg`;
+	it('miniatura: mini e preview con hash (cache di 1 anno), originale conservato per il ripiego', () => {
+		const r = imageSources(PLONE_800, 'thumb', { mini: MINI, preview: PREVIEW });
+		expect(r.src).toBe(MINI);
+		expect(r.srcset).toBe(`${MINI} 200w, ${PREVIEW} 400w`);
+		expect(r.original).toBe(PLONE_800);
+		expect(r.sizes).toContain('100px');
+	});
+	it('solo mini: srcset con una scala', () => {
+		expect(imageSources(PLONE_800, 'thumb', { mini: MINI }).srcset).toBe(`${MINI} 200w`);
+	});
+	it('senza mini (dati scritti prima, altre fonti): la derivazione di sempre', () => {
+		expect(imageSources(PLONE_800, 'thumb', {})).toEqual(imageSources(PLONE_800, 'thumb'));
+		expect(imageSources(PLONE_800, 'thumb', { preview: PREVIEW }).src).toBe(`${B}/mini`);
+		expect(imageSources(PLONE_800, 'thumb', { mini: undefined, preview: undefined }).srcset).toContain('/thumb 128w');
+	});
+	it('hero: le scale salvate non c’entrano', () => {
+		expect(imageSources(PLONE_800, 'hero', { mini: MINI, preview: PREVIEW })).toEqual(imageSources(PLONE_800, 'hero'));
+	});
+});
+
 describe('imageSources: WordPress', () => {
 	it.each([
 		['https://c.it/wp-content/uploads/2026/03/foto.jpg', 'https://c.it/wp-content/uploads/2026/03/foto-150x150.jpg'],

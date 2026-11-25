@@ -40,7 +40,7 @@
 	let root = $state<HTMLElement>();
 	let heading = $state<HTMLElement>();
 	let broken = $state(false);
-	const img = $derived(active?.imageUrl ? imageSources(active.imageUrl, 'thumb') : null);
+	const img = $derived(active?.imageUrl ? imageSources(active.imageUrl, 'thumb', { mini: active.imageMiniUrl, preview: active.imagePreviewUrl }) : null);
 	const Icon = $derived(active ? CATEGORY_ICONS[active.category] : null);
 
 	// Il focus passa al titolo a ogni cambio di contenuto: chi usa la tastiera o lo screen reader sente cosa si è aperto.

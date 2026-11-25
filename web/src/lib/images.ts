@@ -21,9 +21,18 @@ const PLONE = /^(.*\/@@images\/image)(?:-(\d+)-[0-9a-f]{32}\.\w+|\/(thumb|mini|p
 const WORDPRESS = /^(.*\/wp-content\/uploads\/.+?)(?:-scaled)?(?:-\d+x\d+)?(\.(?:jpe?g|png|webp))(\?.*)?$/i;
 const TICKETMASTER = /^(https:\/\/s1\.ticketm\.net\/dam\/.+?)_([A-Z_]+)_16_9\.jpg$/;
 
-export function imageSources(url: string, use: ImageUse = 'thumb'): ImageSources {
+/** Scale Plone con hash salvate dall'importer (#95): cache di 1 anno, nessuna richiesta condizionale alle visite ripetute. */
+export type HashedScales = { mini?: string; preview?: string };
+
+export function imageSources(url: string, use: ImageUse = 'thumb', hashed?: HashedScales): ImageSources {
 	const sizes = use === 'hero' ? HERO_SIZES : THUMB_SIZES;
 	const plain: ImageSources = { src: url, sizes, original: url };
+
+	// Miniature: se l'importer ha salvato le scale con hash si usano quelle (mini 200w, preview 400w) al posto di quelle senza hash.
+	if (use === 'thumb' && hashed?.mini) {
+		const srcset = [`${hashed.mini} ${PLONE_SCALES.mini}w`, hashed.preview && `${hashed.preview} ${PLONE_SCALES.preview}w`].filter(Boolean).join(', ');
+		return { src: hashed.mini, srcset, sizes, original: url };
+	}
 
 	const p = PLONE.exec(url);
 	if (p) {

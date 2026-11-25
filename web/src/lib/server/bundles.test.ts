@@ -26,6 +26,28 @@ describe('rowToEvent', () => {
 	});
 });
 
+describe('rowToEvent: scale piccole (#95)', () => {
+	const cols = (n: number) => FIELDS.slice(0, n).map((f) => ({ id: 'a1', title: 'Jazz', startTime: 1, endTime: 2, category: 'music', imageUrl: 'https://c.it/image-800-aa.jpeg' })[f] ?? '');
+	it('riga nuova: mini e preview', () => {
+		const row = FIELDS.map((f) => ({ id: 'a1', title: 'Jazz', imageMiniUrl: 'https://c.it/image-200-aa.jpeg', imagePreviewUrl: 'https://c.it/image-400-bb.jpeg' })[f] ?? '');
+		expect(rowToEvent(row)).toMatchObject({ imageMiniUrl: 'https://c.it/image-200-aa.jpeg', imagePreviewUrl: 'https://c.it/image-400-bb.jpeg' });
+	});
+	it('riga di un bundle scritto prima (20 campi): nessuna scala, imageUrl intatto', () => {
+		const e = rowToEvent(cols(20));
+		expect(e.imageMiniUrl).toBeUndefined();
+		expect(e.imagePreviewUrl).toBeUndefined();
+		expect(e.imageUrl).toBe('https://c.it/image-800-aa.jpeg');
+	});
+	it('riga con stringhe vuote (fonti senza scale): campi non valorizzati', () => {
+		const e = rowToEvent(cols(FIELDS.length));
+		expect(e.imageMiniUrl).toBeUndefined();
+	});
+	it('URL non http(s) scartati', () => {
+		const row = FIELDS.map((f) => ({ id: 'a1', imageMiniUrl: 'javascript:alert(1)' })[f] ?? '');
+		expect(rowToEvent(row).imageMiniUrl).toBeUndefined();
+	});
+});
+
 describe('letture dai bundle', () => {
 	const H = 3_600_000;
 	const rowOf = (id: string, over: Record<string, unknown> = {}) =>
