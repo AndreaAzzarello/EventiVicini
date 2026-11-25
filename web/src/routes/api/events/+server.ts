@@ -1,5 +1,6 @@
 import { error, json } from '@sveltejs/kit';
 import { RADII_KM, inItaly } from '$lib/geo';
+import { API_CACHE } from '$lib/server/cache';
 import { MAX_IDS, eventsAround, getEvents } from '$lib/server/firestore';
 import type { RequestHandler } from './$types';
 
@@ -8,8 +9,6 @@ import type { RequestHandler } from './$types';
 //                                  `v` (versione dei dati, la stessa della pagina) è ignorato qui: serve solo a far cambiare
 //                                  l'URL, quindi la voce della cache del bordo e del browser, quando l'importer pubblica dati nuovi.
 // GET /api/events?ids=a,b,c     → eventi per id (preferiti di chi non ha l'account)
-/** Breve: la chiave porta già la versione dei dati, quindi il TTL protegge solo da modifiche fuori import. */
-const API_CACHE = 'public, max-age=60, s-maxage=300, stale-while-revalidate=600';
 
 export const GET: RequestHandler = async ({ url, setHeaders }) => {
 	const ids = url.searchParams.get('ids');

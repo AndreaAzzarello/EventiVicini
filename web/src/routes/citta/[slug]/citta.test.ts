@@ -3,13 +3,17 @@ import { fromData } from '$lib/event';
 
 const calls: string[] = [];
 let override: ReturnType<typeof fromData>[] | null = null;
+let complete = true;
 const ev = (id: string, locality: string) =>
 	fromData(id, { city: 'Terre del Reno', citySlug: 'terre-del-reno', province: 'FE', locality, startTime: 1 });
 vi.mock('$lib/server/comuneSlug', () => ({
 	comuneBySlug: async (slug: string) => (slug === 'modena' ? { label: 'Modena', lat: 44.65, lng: 10.93, slug } : null)
 }));
 vi.mock('$lib/server/firestore', () => ({
-	eventsInCity: async (slug: string) => (calls.push(slug), override ?? [ev('a', "Sant'Agostino"), ev('b', 'Mirabello')]),
+	eventsInCityList: async (slug: string) => (
+		calls.push(slug),
+		{ events: override ?? [ev('a', "Sant'Agostino"), ev('b', 'Mirabello')], complete, version: '1700000000000' }
+	),
 	regionCoverage: async (slug: string) => (slug === 'emilia-romagna' ? { slug, name: 'Emilia-Romagna', comuni: [] } : null),
 	coverage: async () => [
 		{ slug: 'trentino-alto-adige', name: 'Trentino-Alto Adige', comuni: [{ name: 'Bolzano', slug: 'bolzano', alt: 'Bozen' }] }
@@ -22,6 +26,21 @@ describe('/citta/[slug]', () => {
 		const r = (await load({ params: { slug: 'terre-del-reno' }, setHeaders() {} } as never)) as { city: string };
 		expect(calls).toEqual(['terre-del-reno']);
 		expect(r.city).toBe('Terre del Reno');
+	});
+
+	it('cache HTML solo per liste complete; la version dei dati va nella pagina', async () => {
+		const { load } = await import('./+page.server');
+		const run = async (ok: boolean) => {
+			complete = ok;
+			const headers: Record<string, string> = {};
+			const r = (await load({ params: { slug: 'terre-del-reno' }, setHeaders: (h: Record<string, string>) => Object.assign(headers, h) } as never)) as { version: string };
+			return { headers, version: r.version };
+		};
+		const ok = await run(true);
+		expect(ok.headers['cache-control']).toMatch(/s-maxage=300/);
+		expect(ok.version).toBe('1700000000000');
+		expect((await run(false)).headers['cache-control']).toBe('no-store');
+		complete = true;
 	});
 
 	it('il breadcrumb porta alla pagina regione solo se la regione è coperta', async () => {

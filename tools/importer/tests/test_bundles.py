@@ -163,3 +163,16 @@ def test_coverage_scrive_sempre_la_version_anche_a_copertura_invariata():
     out = bundles.write_coverage(db, docs, NOW + 5)  # stesso contenuto, hash uguale
     assert db.data["bundles/coverage"]["version"] == NOW + 5 and out["writes"] == 1
     assert [r["slug"] for r in stored(db, "coverage")] == ["lazio"]  # il contenuto non è stato toccato
+
+
+def test_bump_version_aggiorna_solo_la_version_senza_toccare_la_copertura():
+    # import parziale (--source): i bundle delle liste cambiano, la copertura no, ma la webapp deve vedere una version nuova (#cache /citta)
+    db = FakeFirestore()
+    bundles.write_coverage(db, {"lazio": {"name": "Lazio", "comuni": [{"slug": "roma"}]}}, NOW)
+    before = dict(db.data["bundles/coverage"])
+    writes = db.writes
+    assert bundles.bump_version(db, NOW + 9) == 1 and db.writes == writes + 1
+    after = db.data["bundles/coverage"]
+    assert after["version"] == NOW + 9
+    assert {k: v for k, v in after.items() if k != "version"} == {k: v for k, v in before.items() if k != "version"}
+    assert bundles.bump_version(FakeFirestore(), NOW) == 1  # anche senza bundle di copertura

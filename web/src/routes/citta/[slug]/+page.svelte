@@ -71,7 +71,9 @@
 		loadingAll = true;
 		loadError = '';
 		try {
-			const res = await fetch(`/api/citta/${data.slug}`);
+			// `v`: la versione dei dati con cui il server ha disegnato la pagina. Stesso URL → stessa lista nella cache del bordo e del browser.
+			const v = data.version ? `?v=${encodeURIComponent(data.version)}` : '';
+			const res = await fetch(`/api/citta/${data.slug}${v}`);
 			if (!res.ok) throw new Error(String(res.status));
 			full = await res.json();
 		} catch {

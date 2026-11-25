@@ -4,7 +4,7 @@ import { cityPath, slugify } from '$lib/event';
 import { applyFilter, filterFromParams, groupingFor } from '$lib/filters';
 import { sections } from '$lib/sections';
 import { comuneBySlug } from '$lib/server/comuneSlug';
-import { coverage, eventsInCity, regionCoverage } from '$lib/server/firestore';
+import { coverage, eventsInCityList, regionCoverage } from '$lib/server/firestore';
 import type { PageServerLoad } from './$types';
 
 /** Card per pagina: tante nell'HTML (e poi «Mostra altri»), perché renderne centinaia costa CPU al Worker (#51). */
@@ -14,7 +14,7 @@ const CITY_LIMIT = 100;
 
 export const load: PageServerLoad = async ({ params, setHeaders, url }) => {
 	if (params.slug !== slugify(params.slug)) error(404, 'Città non trovata');
-	const events = await eventsInCity(params.slug);
+	const { events, complete, version } = await eventsInCityList(params.slug);
 	// Senza eventi non sappiamo nemmeno il nome della città: 404 vero, non una pagina vuota indicizzata.
 	if (!events.length) {
 		// /citta/bozen o /citta/bolzano-bozen: l'indirizzo canonico è quello col nome italiano
@@ -26,13 +26,15 @@ export const load: PageServerLoad = async ({ params, setHeaders, url }) => {
 		if (await comuneBySlug(params.slug)) redirect(302, `/?luogo=${params.slug}`);
 		error(404, 'Nessun evento in programma per questa città.');
 	}
-	setHeaders({ 'cache-control': HTML_CACHE });
+	// Lista possibilmente parziale (import a metà, query fallita, vuoto sospetto): niente cache del bordo né del browser, come la home.
+	setHeaders({ 'cache-control': complete ? HTML_CACHE : 'no-store' });
 	const { city, province, region } = events[0];
 	// Link alla pagina regione solo se esiste (regione coperta): niente breadcrumb che portano a un 404.
 	const regionSlug = region ? slugify(region) : '';
 	const regionPage = regionSlug ? await regionCoverage(regionSlug).catch(() => null) : null;
 	const cityAlt = events.find((e) => e.cityAlt)?.cityAlt ?? '';
-	const meta = { slug: params.slug, capped: events.length >= CITY_LIMIT, city, cityAlt, province, region, regionSlug: regionPage ? regionSlug : '' };
+	// `version`: il browser la rimanda a /api/citta (parametro v) per leggere la stessa lista dell'HTML.
+	const meta = { version, slug: params.slug, capped: events.length >= CITY_LIMIT, city, cityAlt, province, region, regionSlug: regionPage ? regionSlug : '' };
 	const now = Date.now();
 	const liveCount = events.filter((e) => e.endTime >= now).length;
 	// Città piccola: tutto nell'HTML, il browser filtra come sempre.
