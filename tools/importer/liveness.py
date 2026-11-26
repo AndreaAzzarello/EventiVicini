@@ -30,6 +30,7 @@ from registry import host_key
 log = logging.getLogger("importer")
 MAX_CHECKS = 300  # richieste di controllo per import: oltre, nel dubbio l'evento resta visibile
 GONE = {404, 410}
+SKIP_HOSTS = frozenset({"app.ticketmaster.com"})  # API con chiave nell'URL: nessuna richiesta (la chiave non finisce nei log); gli eventi scadono a endTime
 COPY_SUFFIX = re.compile(r"(?:-copy)+/?$")
 
 
@@ -59,13 +60,15 @@ class LiveChecker:
     """Callable url → True se l'evento va tenuto visibile. Un'istanza per import: ricorda gli esiti."""
 
     def __init__(self, client: httpx.Client, seen_urls: set[str], cache_dir: Path | None = None, max_checks: int = MAX_CHECKS,
-                 precomputed: dict[str, str] | None = None, mac_hosts: set[str] | frozenset[str] = frozenset()):
+                 precomputed: dict[str, str] | None = None, mac_hosts: set[str] | frozenset[str] = frozenset(),
+                 https_hosts: set[str] | frozenset[str] = frozenset()):
         self.fetcher = Fetcher(client, cache_dir=cache_dir, retries=1, backoff=3.0)
         self.seen = {_norm(u) for u in seen_urls}
         self.max_checks = max_checks
         self.done: dict[str, bool] = {}
         self.precomputed = {_norm(u): v for u, v in (precomputed or {}).items() if v in ("online", "gone")}  # esiti del Mac (#70)
         self.mac_hosts = {host_key(h) for h in mac_hosts}  # host serviti dal Mac: nessuna richiesta da GitHub (#70)
+        self.https_hosts = {host_key(h) for h in https_hosts}  # host il cui sito nel registro è https: gli URL http si richiedono in https
         self.stats = {"online": 0, "gone": 0, "unknown": 0, "duplicates": 0, "skipped": 0, "mac": 0, "mac_missing": 0}
         self.unknown_by_host: dict[str, dict[str, int]] = {}  # host → motivo → quante pagine (#70)
 
@@ -97,6 +100,9 @@ class LiveChecker:
         if COPY_SUFFIX.search(urlsplit(url).path) and _norm(COPY_SUFFIX.sub("", url)) in self.seen:
             self.stats["duplicates"] += 1
             return "duplicate"  # doppione di un evento che la lista mostra
+        if urlsplit(url).netloc.lower() in SKIP_HOSTS:
+            self.stats["skipped"] += 1
+            return "skipped"
         pre = self.precomputed.get(_norm(url))
         if pre:  # lo ha già controllato il Mac, da un IP che il sito non blocca
             self.stats["mac"] += 1
@@ -105,6 +111,8 @@ class LiveChecker:
             self.stats["mac_missing"] += 1
             log.info("controllo pagina %s: fonte del Mac senza esito, resta visibile (nessuna richiesta)", url)
             return "skipped"
+        if url.startswith("http://") and host_key(url) in self.https_hosts:
+            url = "https://" + url[len("http://"):]  # il sito risponde in https: in http dà 400 (Trecenta)
         if self.fetcher.requests >= self.max_checks:
             self.stats["skipped"] += 1
             return "skipped"

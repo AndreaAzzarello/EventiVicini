@@ -87,7 +87,8 @@ def clean_event(raw, hosts: set[str]) -> dict | None:
           "startTime": start, "endTime": end, "lat": lat, "lng": lng, "sourceUrl": url, "source": "scraper",
           "shortDescription": _str(raw.get("shortDescription"), LIMITS["shortDescription"]),
           "venueName": _str(raw.get("venueName"), LIMITS["venueName"]), "address": _str(raw.get("address"), LIMITS["address"]),
-          "imageUrl": _https(raw.get("imageUrl")), "ticketUrl": _https(raw.get("ticketUrl")),
+          "imageUrl": _https(raw.get("imageUrl")), "imageMiniUrl": _https(raw.get("imageMiniUrl")),
+          "imagePreviewUrl": _https(raw.get("imagePreviewUrl")), "ticketUrl": _https(raw.get("ticketUrl")),
           "tags": [t for t in tags if t in TAGS] if isinstance(tags, list) else [],
           "approxLocation": raw.get("approxLocation") is True, "_geocode": geocode}
     place = raw.get("_place")

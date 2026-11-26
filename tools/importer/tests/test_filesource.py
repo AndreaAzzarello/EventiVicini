@@ -169,3 +169,11 @@ def test_collect_non_fa_richieste_di_rete(tmp_path, monkeypatch):
     client = httpx.Client(transport=httpx.MockTransport(lambda r: calls.append(r) or httpx.Response(500)))
     out = run.collect(client, CollegnoGeocoder(), ["collegno"], NOW, 3650, {}, [], None, {})
     assert len(out) == 3 and calls == []
+
+
+def test_clean_event_tiene_imageMiniUrl_e_imagePreviewUrl_solo_se_https_e_non_troppo_lunghi():
+    ok = clean_event(ev(0) | {"imageMiniUrl": "https://x.example/m.jpg", "imagePreviewUrl": "https://x.example/p.jpg"}, HOSTS)
+    assert ok["imageMiniUrl"] == "https://x.example/m.jpg" and ok["imagePreviewUrl"] == "https://x.example/p.jpg"
+    for bad in ("http://x.example/m.jpg", "javascript:alert(1)", "https://x.example/" + "a" * 2000):
+        out = clean_event(ev(0) | {"imageMiniUrl": bad, "imagePreviewUrl": bad}, HOSTS)
+        assert out["imageMiniUrl"] == "" and out["imagePreviewUrl"] == ""
