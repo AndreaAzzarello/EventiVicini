@@ -366,6 +366,11 @@ def mac_host_info(sources: dict, mac_names: list[str]) -> tuple[set[str], dict[s
     return hosts, {h: sorted(v) for h, v in sorted(shared.items())}
 
 
+def https_host_set(sources: dict) -> set[str]:
+    """Host delle fonti il cui sito nel registro è https: il controllo pagina passa a https gli URL http che li riguardano."""
+    return {host_key(h) for a in sources.values() if str(a.base).startswith("https://") for h in source_hosts(a)}
+
+
 def log_mac_verdicts(checker, read: int, shared: dict[str, list[str]]) -> None:
     """Riga fissa dell'import: quanti verdetti del Mac letti, usati, mancanti (#70), e gli host condivisi con altre fonti."""
     log.info("Verdetti dal Mac: %d letti, %d usati, %d mancanti", read, checker.stats["mac"], checker.stats["mac_missing"])
@@ -987,7 +992,8 @@ def _main(argv: list[str] | None = None) -> int:
                 if not mac_results:
                     log.warning("Verdetti del Mac assenti, scaduti o vuoti: le pagine delle sue fonti restano visibili, senza richieste")
                 checker = LiveChecker(live_client, {ev["sourceUrl"] for ev in events if ev.get("sourceUrl")}, HERE / ".httpcache",
-                                      precomputed=mac_results, mac_hosts=mac_hosts)
+                                      precomputed=mac_results, mac_hosts=mac_hosts,
+                                      https_hosts=https_host_set(SOURCES))
             stats = write(events, now, ok_hosts, args.horizon_days, {slugify(SOURCES[n].region) for n in names},
                           max_writes=args.max_writes, max_reads=args.max_reads, excluded={x["id"] for x in excluded},
                           manifest_dir=HERE / "manifests", reconcile=args.reconcile, with_bundles=True, still_online=checker)

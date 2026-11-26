@@ -240,3 +240,33 @@ def test_log_verdetti_dal_mac_e_host_condiviso(caplog):
     assert "Verdetti dal Mac: 5 letti, 1 usati, 2 mancanti" in text
     assert "host del Mac condiviso con: gemella (comune.example.it)" in text
     assert c.fetcher.requests == 0  # host condiviso: nessuna richiesta da GitHub
+
+
+def test_ticketmaster_nessuna_richiesta_verdetto_skipped():
+    calls = []
+
+    def handler(req):
+        calls.append(req.url)
+        return httpx.Response(200)
+    c = checker(handler)
+    url = "https://app.ticketmaster.com/discovery/v2/events/abc?apikey=SEGRETA"
+    assert c.verdict(url) == "skipped" and c(url) is True
+    assert calls == []
+
+
+def test_url_http_di_host_https_si_richiede_in_https():
+    seen = []
+
+    def handler(req):
+        if req.url.path == "/robots.txt":
+            return httpx.Response(404)
+        seen.append(str(req.url))
+        return httpx.Response(200) if req.url.scheme == "https" else httpx.Response(400)  # Trecenta: http → 400
+    client = httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+    c = LiveChecker(client, set(), None, https_hosts={"comune.example.it"})
+    c.fetcher.min_interval = 0
+    assert c.verdict("http://comune.example.it/eventi/a") == "online"
+    assert seen == ["https://comune.example.it/eventi/a"]
+    c2 = LiveChecker(client, set(), None)  # senza l'host https: resta la richiesta http e lo status 400 è «unknown»
+    c2.fetcher.min_interval = 0
+    assert c2.verdict("http://comune.example.it/eventi/b") == "unknown"
