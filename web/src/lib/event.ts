@@ -215,7 +215,7 @@ const CC_BY_4 = { text: 'CC BY 4.0', href: 'https://creativecommons.org/licenses
 const CC0 = { text: 'CC0', href: 'https://creativecommons.org/publicdomain/zero/1.0/deed.it' };
 
 /** Fonte da mostrare nel dettaglio. Le fonti regionali sono citate col loro nome e la licenza dei dati: Open Data Hub (CC0) ed
- * Emilia Romagna Turismo e Calabria Straordinaria (CC BY 4.0, con nome della fonte e URL dell'evento). */
+ * Emilia Romagna Turismo, Calabria Straordinaria e Comune di Firenze (CC BY 4.0, con nome della fonte e URL dell'evento). */
 export function eventSource(e: Pick<Event, 'source' | 'sourceUrl'>): SourceInfo {
 	if (e.source === 'user') {
 		const link = e.sourceUrl ? normalizeLink(e.sourceUrl) : null;
@@ -228,6 +228,7 @@ export function eventSource(e: Pick<Event, 'source' | 'sourceUrl'>): SourceInfo 
 	if (host === 'tourism.opendatahub.com') return { text: 'Open Data Hub Alto Adige / Südtirol', href: 'https://opendatahub.com/', license: CC0 };
 	if (host === 'emiliaromagnaturismo.it') return { text: 'Emilia Romagna Turismo', href: e.sourceUrl, license: CC_BY_4 };
 	if (host === 'calabriastraordinaria.it') return { text: 'Calabria Straordinaria', href: e.sourceUrl, license: CC_BY_4 };
+	if (host === 'destinationflorence.com') return { text: 'Comune di Firenze', href: e.sourceUrl, license: CC_BY_4 };
 	const m = /^comune\.([a-z-]+)\./.exec(host);
 	const name = m ? `Comune di ${m[1].split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')}` : host;
 	return { text: name, href: e.sourceUrl };
