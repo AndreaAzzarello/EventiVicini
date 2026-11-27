@@ -224,6 +224,17 @@ describe('eventSource', () => {
 		expect(eventSource({ source: 'scraper', sourceUrl: 'https://calabriastraordinaria.it.evil.example/e/1' }).license).toBeUndefined();
 	});
 
+	it('cita il Comune di Firenze col nome, il link alla scheda e la licenza CC BY 4.0', () => {
+		const url = 'https://www.destinationflorence.com/it/eventi/italian-opera';
+		expect(eventSource({ source: 'scraper', sourceUrl: url })).toEqual({
+			text: 'Comune di Firenze',
+			href: url,
+			license: { text: 'CC BY 4.0', href: 'https://creativecommons.org/licenses/by/4.0/deed.it' }
+		});
+		// un host che solo somiglia a quello del portale non eredita nome e licenza
+		expect(eventSource({ source: 'scraper', sourceUrl: 'https://destinationflorence.com.evil.example/it/eventi/x' }).license).toBeUndefined();
+	});
+
 	it('cita Ticketmaster per i concerti importati dalla sua API', () => {
 		expect(eventSource({ source: 'scraper', sourceUrl: 'https://app.ticketmaster.com/discovery/v2/events/G5v0Z' })).toEqual({
 			text: 'Ticketmaster',
