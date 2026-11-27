@@ -16,6 +16,7 @@ from .design_comuni_html import DesignComuniHtmlAdapter
 from .ert import (BASE as ERT_BASE, CALABRIA_API, CALABRIA_BASE, CALABRIA_REGION, CATEGORY_CALABRIA, PROVINCE_CODE_CALABRIA,
                   REGION as ERT_REGION, ErtAdapter)
 from .filesource import FileSourceAdapter
+from .firenze import API as FIRENZE_API, BASE as FIRENZE_BASE, FIRENZE_VIEWBOX, REGION as FIRENZE_REGION, FirenzeAdapter
 from .opendatahub import OpenDataHubAdapter
 from .plone import PloneAdapter
 from .ticketmaster import BASE as TICKETMASTER_BASE, TicketmasterAdapter
@@ -50,8 +51,8 @@ def load_sources(rows: list[dict] | None = None) -> dict[str, Adapter]:
 
 
 def with_code_sources(out: dict[str, Adapter]) -> dict[str, Adapter]:
-    """Fonti regionali definite nel codice, non nel registro: le API di Emilia-Romagna Turismo e di Calabria Straordinaria, se la
-    regione ha fonti attive.
+    """Fonti regionali definite nel codice, non nel registro: le API di Emilia-Romagna Turismo e di Calabria Straordinaria e il dataset
+    aperto del Comune di Firenze, se la regione ha fonti attive.
     Fuori da load_sources() perché quella legge solo le righe che le si passano."""
     if any(slugify(a.region) == slugify(ERT_REGION) for a in out.values()):
         # provincia del capoluogo regionale: serve solo come ripiego, ogni evento porta il suo comune e la sua provincia
@@ -61,6 +62,10 @@ def with_code_sources(out: dict[str, Adapter]) -> dict[str, Adapter]:
         out["calabria-straordinaria"] = ErtAdapter(
             "calabria-straordinaria", CALABRIA_BASE, "Calabria Straordinaria", "CZ", CALABRIA_REGION, api=CALABRIA_API,
             page_size=1000, max_pages=2, status_required=False, provinces=PROVINCE_CODE_CALABRIA, categories=CATEGORY_CALABRIA)
+    if any(slugify(a.region) == slugify(FIRENZE_REGION) for a in out.values()):
+        # dataset aperto «Eventi a Firenze» (GeoJSON, CC BY 4.0): una richiesta; `base` è l'host dei link alle schede degli eventi
+        out["comune-firenze-opendata"] = FirenzeAdapter(
+            "comune-firenze-opendata", FIRENZE_BASE, "Firenze", "FI", FIRENZE_REGION, FIRENZE_VIEWBOX, api=FIRENZE_API)
     return out
 
 

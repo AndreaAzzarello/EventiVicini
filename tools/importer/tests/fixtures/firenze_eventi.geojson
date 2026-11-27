@@ -1,0 +1,297 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "id": "feelflo_eventi.1",
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      11.2450721,
+      43.76807402
+     ]
+    ]
+   },
+   "geometry_name": "geom",
+   "properties": {
+    "id": 1,
+    "titolo": "Italian Opera ",
+    "data_inizio": "2026-01-01",
+    "data_fine": "2026-12-30",
+    "descrizione": "Nella suggestiva cornice dell'ex convento di Santa Monaca, in Oltrarno, una serie di concerti tratti dalle arie d'opera più famose di Puccini, Rossini, Verdi, e Mozart ( Madame Butterfly, Tosca, La Bohème, Il barbiere di Siviglia, La Traviata, Le Nozze di Figaro) .  \nPer consultare il calendario e il programma completo clicca qui.\n \n",
+    "link": "https://www.italianoperaflorence.it/",
+    "feelflorence_link": "https://www.destinationflorence.com/it/eventi/italian-opera",
+    "comuni": "Firenze",
+    "appuntamenti": "Italian Opera\nQuando:\nDa 01/01/2026 a 30/12/2026:\n - Domenica dalle 21:15\n - Lunedì dalle 21:15\n - Martedì dalle 21:15\n - Mercoledì dalle 21:15\n - Giovedì dalle 21:15\n - Venerdì dalle 21:15\n - Sabato dalle 21:15\nDove:\nEx Chiesa di Santa Monaca "
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "feelflo_eventi.7",
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      11.2356069,
+      43.77835372
+     ],
+     [
+      11.2356069,
+      43.77835372
+     ],
+     [
+      11.2356069,
+      43.77835372
+     ],
+     [
+      11.2356069,
+      43.77835372
+     ],
+     [
+      11.2356069,
+      43.77835372
+     ],
+     [
+      11.2356069,
+      43.77835372
+     ],
+     [
+      11.2356069,
+      43.77835372
+     ],
+     [
+      11.2356069,
+      43.77835372
+     ]
+    ]
+   },
+   "geometry_name": "geom",
+   "properties": {
+    "id": 7,
+    "titolo": "C'è musica & musica 3.0 - Rassegna per famiglie",
+    "data_inizio": "2026-02-08",
+    "data_fine": "2026-12-06",
+    "descrizione": "Tornano, a partire dall'8 febbraio 2026 i concerti domenicali dell’Orchestra del Maggio per le famiglie in sala Mehta. La prima a salire sul podio è la direttrice Sara Matteucci, direttrice del Coro di voci bianche, che si esibisce sulle note del Carmina Burana di Carl Orff. \nIl ciclo prosegue con Ginevra Fenyes, voce recitante della Sinfonia degli Animali di Dan Brown, eseguita dall'Orchestra del Maggio Musicale Fiorentino, Gaia Nanni che dà voce a La meravigliosa storia di Pascarella al castello di Morritz, con musiche di J.F. Händel. La danza delle maschere, tratto dall'opera dall’opera Un ballo in maschera di Giuseppe Verdi a cura di Venti Lucenti, e ancora Lorenzo Baglioni che racconterà Beethoven e Verdi, per concludersi con I percussionisti del Maggio ne I Cinque Elementi e il Concerto di Natale.  \nQui di il programma dei vari spettacoli che procederanno fino a fine anno. Per maggiori informazioni e prenotazioni consultare il sito del Maggio Fiorentino!\n",
+    "link": "https://www.maggiofiorentino.com/event_season/spettacoli-per-le-famiglie-e-le-scuole-2026",
+    "feelflorence_link": "https://www.destinationflorence.com/it/eventi/ce-musica-musica-30-rassegna-famiglie",
+    "comuni": "Firenze",
+    "appuntamenti": "Carl Orff - Carmina Burana\nQuando:\n08/02/2026 dalle 11:00\nDove:\nTeatro del Maggio Musicale Fiorentino\n\nLa sinfonia degli animali\nQuando:\n01/03/2026 dalle 11:00\nDove:\nTeatro del Maggio Musicale Fiorentino\n\nLa meravigliosa storia di Pascarella al castello di Morritz\nQuando:\n15/03/2026 dalle 11:00\nDove:\nTeatro del Maggio Musicale Fiorentino\n\nLa danza delle maschere\nQuando:\n27/03/2026 dalle 20:00\n28/03/2026 dalle 17:00\n29/03/2026 dalle 15:30\nDove:\nTeatro del Maggio Musicale Fiorentino\n\nLorenzo Baglioni racconta Beethoven\nQuando:\n11/10/2026 dalle 11:00\nDove:\nTeatro del Maggio Musicale Fiorentino\n\nLorenzo Baglioni racconta Verdi\nQuando:\n24/10/2026 dalle 16:00\nDove:\nTeatro del Maggio Musicale Fiorentino\n\nI cinque elementi \nQuando:\n14/11/2026 dalle 16:00\nDove:\nTeatro del Maggio Musicale Fiorentino\n\nConcerto di Natale\nQuando:\n06/12/2026 dalle 18:00\nDove:\nTeatro del Maggio Musicale Fiorentino"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "feelflo_eventi.10",
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      11.2442763,
+      43.76887677
+     ],
+     [
+      11.2474067,
+      43.76664982
+     ]
+    ]
+   },
+   "geometry_name": "geom",
+   "properties": {
+    "id": 10,
+    "titolo": "La Fierucola ",
+    "data_inizio": "2026-04-12",
+    "data_fine": "2026-12-20",
+    "descrizione": "La fierucola promuove l’agricoltura biologica di piccole aziende familiari e l’artigianato tradizionale naturale. Durante le fiere, che spesso hanno specifiche tematiche, vengono allestite mostre fotografiche, si organizzano convegni sull’alimentazione, laboratori per ragazzi, corsi di artigianato, pubblicazioni sulla vita rurale.\nOltre a quelle tematiche, le Fierucoline si svolgono regolarmente in Piazza Santo Spirito la terza domenica del mese (eccetto agosto) e quelle in Piazza del Carmine la seconda domenica del mese (eccetto agosto).\n",
+    "link": "http://lafierucola.org",
+    "feelflorence_link": "https://www.destinationflorence.com/it/eventi/la-fierucola",
+    "comuni": "Firenze",
+    "appuntamenti": "Fierucola di Piazza del Carmine\nQuando:\n12/04/2026 dalle 9:00 alle 19:00\n10/05/2026 dalle 9:00 alle 19:00\n14/06/2026 dalle 9:00 alle 19:00\n12/07/2026 dalle 9:00 alle 19:00\n13/09/2026 dalle 9:00 alle 19:00\n11/10/2026 dalle 9:00 alle 19:00\n08/11/2026 dalle 9:00 alle 19:00\n13/12/2026 dalle 9:00 alle 19:00\nDove:\nPiazza del Carmine\n\nFierucola di Piazza Santo Spirito\nQuando:\n15/03/2026 dalle 9:00 alle 19:00\n19/04/2026 dalle 9:00 alle 19:00\n17/05/2026 dalle 9:00 alle 19:00\n21/06/2026 dalle 9:00 alle 19:00\n19/07/2026 dalle 9:00 alle 19:00\n20/09/2026 dalle 9:00 alle 19:00\n18/10/2026 dalle 9:00 alle 19:00\n15/11/2026 dalle 9:00 alle 19:00\n20/12/2026 dalle 9:00 alle 19:00\nDove:\nPiazza Santo Spirito"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "feelflo_eventi.13",
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      11.2581071,
+      43.77764092
+     ]
+    ]
+   },
+   "geometry_name": "geom",
+   "properties": {
+    "id": 13,
+    "titolo": "Cinema La Compagnia - programmazione ",
+    "data_inizio": "2026-06-11",
+    "data_fine": "2038-01-19",
+    "descrizione": "In sala storie di tutti i generi e per tutte le età, le novità e qualche eccellente recupero, i film contemporanei, anche in lingua originale e gli immancabili grandi classici.\nPer il programma completo consulta il sito web.\n",
+    "link": "https://www.cinemalacompagnia.it/",
+    "feelflorence_link": "https://www.destinationflorence.com/it/eventi/cinema-la-compagnia-programmazione",
+    "comuni": "Firenze",
+    "appuntamenti": "Cinema La Compagnia -  programmazione \nQuando:\nDa 11/06/2026 a 19/01/2038\nDove:\nTeatro La Compagnia"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "feelflo_eventi.45",
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      11.2622677,
+      43.76856832
+     ]
+    ]
+   },
+   "geometry_name": "geom",
+   "properties": {
+    "id": 45,
+    "titolo": "Canto Gregoriano nella Basilica di Santa Croce - Coro Viri Galilaei",
+    "data_inizio": "2026-12-16",
+    "data_fine": "2026-12-16",
+    "descrizione": "Il Coro Viri Galilaei, diretto da Enzo Ventroni, che studia ed esegue il canto Gregoriano da più di trenta anni, si esibirà all'interno della Basilica di Santa Croce per il Concerto di Natale \"Cristus natus est nobis\", il 16 dicembre 2026. \nNel programma, il coro prevede l’esecuzione di una serie di brani tra vespri e legati alla celebrazione natalizia.\nPer informazioni sul concerto si può inviare una email all’indirizzo info@gregorianofirenze-virigalilaei.it oppure su enzoventroni@gmail.com o, infine, telefonare al cell. +39 328 0427031\nL'ingresso è libero fino ad esaurimento dei posti. La durata del concerto è poco meno di un'ora.\n",
+    "link": "https://www.gregorianofirenze-virigalilaei.it/eventi/categoria/eventi/concerti/list/",
+    "feelflorence_link": "https://www.destinationflorence.com/it/eventi/canto-gregoriano-nella-basilica-di-santa-croce-coro-viri-galilaei",
+    "comuni": "Firenze",
+    "appuntamenti": "Concerto di canto gregoriano\nQuando:\n16/12/2026 dalle 20:30\nDove:\nBasilica di Santa Croce"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "feelflo_eventi.47",
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      11.2484731,
+      43.76598152
+     ]
+    ]
+   },
+   "geometry_name": "geom",
+   "properties": {
+    "id": 47,
+    "titolo": "C’era una volta… Un Re! Carlo Lorenzini detto “Collodi” tra satira, giornalismo e letteratura per l’infanzia",
+    "data_inizio": "2026-10-16",
+    "data_fine": "2027-06-15",
+    "descrizione": "Dal 16 ottobre 2026 al 15 giugno 2027 il Palazzo Corsini Suarez, sede del Gabinetto Vieusseux, ospita la mostra C’era una volta… Un Re! - Carlo Lorenzini detto “Collodi” tra satira, giornalismo e letteratura per l’infanzia.\nLa mostra, in occasione del bicentenario dalla nascita dell’autore, a cura di Elisa Martini e Benedetta Gallerin ripercorre la figura di Collodi non solo inventore di Pinocchio, ma anche come brillante giornalista satirico e acuto osservatore della società dell'Ottocento. \nTra i documenti esposti spicca la firma autografa di Carlo Lorenzini sul Libro dei Soci del Gabinetto Vieusseux, datata 30 giugno 1865 (quando Firenze era capitale d'Italia). \n",
+    "link": "https://www.vieusseux.it/news/cera-una-volta-un-re-carlo-lorenzini-detto-collodi-tra-satira-giornalismo-e-letteratura-per-linfanzia-mostra/",
+    "feelflorence_link": "https://www.destinationflorence.com/it/eventi/cera-una-volta-un-re-carlo-lorenzini-detto-collodi-tra-satira-giornalismo-e-letteratura-0",
+    "comuni": null,
+    "appuntamenti": "C’era una volta… Un Re! - Carlo Lorenzini detto “Collodi” tra satira, giornalismo e letteratura per l’infanzia\nQuando:\nDa 16/10/2026 a 15/06/2027\nDove:\nArchivio Contemporaneo \"A. Bonsanti\" del Gabinetto Vieusseux"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "feelflo_eventi.90",
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      11.296225,
+      43.76665612
+     ]
+    ]
+   },
+   "geometry_name": "geom",
+   "properties": {
+    "id": 90,
+    "titolo": "Madame",
+    "data_inizio": "2026-11-30",
+    "data_fine": "2026-11-30",
+    "descrizione": "Il 30 novembre 2026, Madame arriva al Teatro Cartiere Carrara di Firenze con il suo Disincanto Tour, portando sul palco uno spettacolo intenso e contemporaneo. La cantautrice, tra le più innovative del panorama italiano, continua il suo percorso artistico con un live che fonde energia e introspezione.\n",
+    "link": "https://www.teatrocartierecarrara.it/eventi/madame-3/",
+    "feelflorence_link": "https://www.destinationflorence.com/it/eventi/madame",
+    "comuni": "Firenze",
+    "appuntamenti": "Madame\nQuando:\n30/11/2026 dalle 20:45\nDove:\nTeatro Cartiere Carrara ex Tuscany Hall"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "feelflo_eventi.62",
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      11.2602742,
+      43.77252132
+     ]
+    ]
+   },
+   "geometry_name": "geom",
+   "properties": {
+    "id": 62,
+    "titolo": "Leggere per non dimenticare - Ciclo di incontri alla Biblioteca delle Oblate",
+    "data_inizio": "2026-10-07",
+    "data_fine": "2027-05-12",
+    "descrizione": "Torna alla Biblioteca delle Oblate, alla sua XXXII edizione, Leggere per non dimenticare ideata da Anna Benedetti e curata da Paola Pesci. \n",
+    "link": "http://www.leggerepernondimenticare.it/",
+    "feelflorence_link": "https://www.destinationflorence.com/it/eventi/leggere-non-dimenticare-ciclo-di-incontri-alla-biblioteca-delle-oblate",
+    "comuni": "Firenze",
+    "appuntamenti": "Programma completo del ciclo di incontri\nQuando:\nDa 07/10/2026 a 12/05/2027:\n - Mercoledì dalle 17:30\nDove:\nBiblioteca delle Oblate"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "feelflo_eventi.71",
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      11.250143,
+      43.777099
+     ]
+    ]
+   },
+   "geometry_name": "geom",
+   "properties": {
+    "id": 71,
+    "titolo": "Calici sotto l'albero",
+    "data_inizio": "2026-12-05",
+    "data_fine": "2026-12-05",
+    "descrizione": "A Firenze nei magnifici saloni dell'Hotel Albani torna la grande degustazione unica nel suo genere: 45 produttori presenti con oltre 200 vini selezionati per la qualità a prezzi accessibili. Un'occasione per appassionati ed operatori del settore per degustare e scambiare opinioni direttamente con i produttori. \nTutto pronto per la nuova edizione di Calici sotto l'Albero, sabato 5 dicembre 2026 - degustazione vini aperta al pubblico e per gli operatori del settore.\n",
+    "link": "http://www.sommeliersauroegianni.com",
+    "feelflorence_link": "https://www.destinationflorence.com/it/eventi/calici-sotto-lalbero",
+    "comuni": "Firenze",
+    "appuntamenti": "Calici sotto l'albero\nQuando:\n05/12/2026 dalle 10:30 alle 19:30\nDove:\nHotel Albani"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "feelflo_eventi.74",
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      11.296225,
+      43.76665612
+     ]
+    ]
+   },
+   "geometry_name": "geom",
+   "properties": {
+    "id": 74,
+    "titolo": "Éveil - Compagnia Les Farfadeis ",
+    "data_inizio": "2026-11-27",
+    "data_fine": "2026-11-27",
+    "descrizione": "Dopo aver incantato la Francia, registrando oltre cento sold out in un solo anno, torna nel nostro Paese lo spettacolo “Éveil” di Les Farfadais, tra le compagnie di spettacolo acrobatico più apprezzate al mondo.\n“Éveil” torna sui palchi italiani in forma arricchita e potenziata. Le performance sono legate da un fil rouge narrativo onirico, il racconto delicato di un incontro tra creature diverse provenienti da mondi lontani. Dapprima, come in ogni rapporto, prevalgono diffidenza e ostilità che si trasformano poi in un percorso di conoscenza che termina in un finale di unione e armonia. \n",
+    "link": "https://www.teatrocartierecarrara.it/eventi/eveil/",
+    "feelflorence_link": "https://www.destinationflorence.com/it/eventi/eveil-compagnia-les-farfadeis",
+    "comuni": null,
+    "appuntamenti": "Éveil - Compagnia Les Farfadeis \nQuando:\n27/11/2026 dalle 21:00\nDove:\nTeatro Cartiere Carrara ex Tuscany Hall"
+   }
+  }
+ ],
+ "totalFeatures": 124,
+ "numberMatched": 124,
+ "numberReturned": 124,
+ "timeStamp": "2026-11-27T04:05:41.605Z",
+ "crs": {
+  "type": "name",
+  "properties": {
+   "name": "urn:ogc:def:crs:EPSG::4326"
+  }
+ }
+}
