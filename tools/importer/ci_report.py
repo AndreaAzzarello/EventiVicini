@@ -7,6 +7,7 @@
   python ci_report.py check-drop <cartella> <calo.json>   # avviso di calo (#89): scrive drop=true e report in GITHUB_OUTPUT, esce sempre 0
   python ci_report.py guard                        # avvio automatico: go=false se l'import completo di oggi c'è già
   python ci_report.py mac-artifact <cartella>      # scarica i dati del Mac mini (ultimo scarica-fonti riuscito su main)
+  python ci_report.py retry <comando...>           # esegue il comando e, se esce con 1 (nessun evento raccolto), lo ripete una volta
 
 Quote Spark giornaliere (50.000 letture, 20.000 scritture, 20.000 cancellazioni) divise tra i job della matrice.
 """
@@ -18,6 +19,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -383,6 +385,44 @@ def mac_artifact(dest: Path) -> bool:
     return True
 
 
+RETRY_EXIT_CODES = {1}  # 1 = nessun evento raccolto o errore prima di scrivere; 2 (quota Firestore) non si ritenta mai
+RETRY_WAIT_S = 300  # attesa prima del secondo tentativo (RETRY_WAIT dall'ambiente): un guasto del sito comunale ha il tempo di rientrare
+
+
+def run_with_retry(cmd: list[str], env: dict[str, str], runner=subprocess.call, sleeper=time.sleep, out=print) -> int:
+    """Esegue `cmd` e, se esce con un codice ritentabile, lo ripete UNA volta dopo l'attesa. Codice finale = quello dell'ultimo tentativo.
+
+    Il codice 1 di run.py arriva sempre prima di ogni scrittura su Firestore (nessun evento raccolto, fonti non valide), quindi il
+    ritento non può raddoppiare le scritture. Solo con DRY_RUN=true, FORZA_ERRORE=<regione> fa fallire il primo tentativo di quella
+    regione (FORZA_SEMPRE=true anche il secondo): serve a provare il ritento senza import reale.
+    Annotazioni nel formato di avviso-calo: `::error title=...::` compare solo se anche il ritento fallisce."""
+    region = env.get("REGION", "?")
+    forced = env.get("DRY_RUN") == "true" and env.get("FORZA_ERRORE", "") == region
+    always = forced and env.get("FORZA_SEMPRE") == "true"
+    try:
+        wait = max(0, int(env.get("RETRY_WAIT", RETRY_WAIT_S)))
+    except ValueError:
+        wait = RETRY_WAIT_S
+    code = 0
+    for attempt in (1, 2):
+        if forced and (attempt == 1 or always):
+            out(f"::warning title=Errore forzato (prova)::{region}: tentativo {attempt} fatto fallire apposta")
+            code = 1
+        else:
+            code = runner(cmd)
+        if code == 0:
+            if attempt == 2:
+                out(f"::notice title=Import ritentato::{region}: riuscito al secondo tentativo")
+            return 0
+        if attempt == 2 or code not in RETRY_EXIT_CODES:
+            break
+        out(f"::warning title=Import ritentato::{region}: primo tentativo uscito con {code}, riprovo tra {wait} s")
+        sleeper(wait)
+    motivo = "fallito anche al ritento" if attempt == 2 else f"uscito con {code}, nessun ritento per questo codice"
+    out(f"::error title=Import non riuscito::{region}: {motivo} (codice {code})")
+    return code
+
+
 def main(argv: list[str]) -> int:
     if argv[:1] == ["mac-artifact"] and len(argv) == 2:
         mac_artifact(Path(argv[1]))
@@ -390,6 +430,9 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["guard"]:
         guard()
         return 0
+    if argv[:1] == ["retry"] and len(argv) > 1:
+        sys.stdout.reconfigure(line_buffering=True)
+        return run_with_retry(argv[1:], dict(os.environ))
     if argv[:1] == ["matrix"]:
         m = matrix(read_rows(), os.environ.get("ONLY", ""), datetime.now(ZoneInfo("Europe/Rome")).weekday(),
                    os.environ.get("RECONCILE") == "true", load_sizes(Path(os.environ.get("SIZES", "sizes.json"))))
