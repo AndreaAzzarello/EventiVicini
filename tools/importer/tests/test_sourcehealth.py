@@ -118,3 +118,32 @@ def test_persist_state_nell_import_vero_salva_stato_cluster_e_salute(tmp_path):
 def test_persist_state_senza_stato_ne_salute_non_scrive_file(tmp_path):  # --source a mano
     run.persist_state(tmp_path / "u.json", None, tmp_path / "h.json", None, dry_run=False)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_registro_per_regione_giorni_a_zero_contati_dalle_date_non_dalle_esecuzioni():
+    from datetime import date
+
+    from sourcehealth import load, region_last_events, region_zero_days, update_regions
+
+    h = load(Path("/nonexistent/health.json"))
+    assert "regions" not in h and region_last_events(h, "molise") is None and region_zero_days(h, "molise", date(2026, 11, 28)) == 1
+    update_regions(h, {"molise": 2, "lazio": 0}, date(2026, 11, 26))
+    assert region_last_events(h, "molise") == 2 and region_zero_days(h, "molise", date(2026, 11, 27)) == 1
+    update_regions(h, {"molise": 0}, date(2026, 11, 27))
+    update_regions(h, {"molise": 0}, date(2026, 11, 27))  # ritento nello stesso giorno: non conta due volte
+    assert region_zero_days(h, "molise", date(2026, 11, 27)) == 1
+    assert region_zero_days(h, "molise", date(2026, 11, 28)) == 2 and region_last_events(h, "molise") == 2  # l'ultimo valore resta
+    update_regions(h, {"molise": 0}, date(2026, 11, 28))
+    assert region_zero_days(h, "molise", date(2026, 11, 29)) == 3
+    update_regions(h, {"molise": 3}, date(2026, 11, 29))  # torna a vivere: la serie riparte
+    assert region_last_events(h, "molise") == 3 and region_zero_days(h, "molise", date(2026, 11, 30)) == 1
+
+
+def test_held_conta_come_giorno_senza_successo_ma_non_parcheggia():
+    from datetime import date
+
+    from sourcehealth import update
+
+    h = {"sources": {}, "outages": [], "regions": {}}
+    update(h, {"montelongo": {"error": "nessun evento", "held": True, "events": 0}}, date(2026, 11, 28))
+    assert h["sources"]["montelongo"]["failStreak"] == 1 and h["sources"]["montelongo"]["lastKind"] == "held"

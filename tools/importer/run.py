@@ -17,6 +17,7 @@ import uuid
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from collections.abc import Callable
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
@@ -62,10 +63,77 @@ class Got(NamedTuple):
     kind: str = ""
 
 
+def hold_zero_regions(names: list[str], events: dict, stats: dict[str, dict], process: Callable, today: date, health: dict,
+                      reread_wait: float | None, yesterday_of: Callable[[str], int | None] | None,
+                      held_out: dict[str, dict] | None) -> None:
+    """Regioni a zero eventi in totale: rilettura senza cache, poi «tenute» o no (vedi collect). Aggiorna anche il registro per regione."""
+    by_region: dict[str, list[str]] = {}
+    for n in names:
+        by_region.setdefault(slugify(SOURCES[n].region), []).append(n)
+    ieri: dict[str, int | None] = {}
+
+    def before(slug: str) -> int | None:
+        if slug not in ieri:
+            ieri[slug] = yesterday_of(slug) if yesterday_of else None
+        return ieri[slug]
+
+    def totals() -> Counter:
+        return Counter(e["importRegion"] for e in events.values())
+
+    # senza yesterday_of (chi chiama collect() a mano) non si sa se ieri c'erano eventi: nessuna rilettura e nessuna regione tenuta
+    zero = [r for r in by_region if yesterday_of and not totals()[r] and (before(r) is None or before(r) > 0)]
+    answered = [n for r in zero for n in by_region[r] if stats[n]["error"] is None]
+    if answered and reread_wait is not None:
+        log.warning("Regioni a zero eventi (%s): rileggo %d fonti senza cache tra %d s", ", ".join(zero), len(answered), reread_wait)
+        time.sleep(reread_wait)
+        httpfetch.FRESH = True
+        try:
+            process(answered, probe=False, rereading=True)
+        finally:
+            httpfetch.FRESH = False
+        now_total = totals()
+        for r in zero:
+            for n in by_region[r]:
+                if n in answered:
+                    stats[n]["reread"] = "recuperata" if now_total[r] else "vuota"
+            log.info("%s: rilettura %s", r, "recuperata" if now_total[r] else "ancora a zero eventi")
+    now_total = totals()
+    for r in zero:
+        if now_total[r]:
+            continue
+        days = sourcehealth.region_zero_days(health, r, today)
+        if days >= HOLD_DAYS:
+            log.error("%s: a zero eventi da %d giorni (soglia %d): non tengo più quelli di ieri", r, days, HOLD_DAYS)
+            continue
+        for n in by_region[r]:
+            stats[n]["held"] = True
+            if stats[n]["error"] is None:
+                stats[n]["error"] = HELD_ERROR
+        if held_out is not None:
+            held_out[r] = {"before": before(r) or 0, "days": days, "left": HOLD_DAYS - 1 - days}
+        log.warning("%s: a zero eventi (giorno %d di %d), ieri %s: tengo gli eventi di ieri, le fonti contano come saltate",
+                    r, days, HOLD_DAYS, "sconosciuto" if before(r) is None else before(r))
+    sourcehealth.update_regions(health, {r: now_total[r] for r in by_region}, today)
+
+
+def zero_reason(health: dict | None, slug: str, today: date) -> str:
+    """Perché una regione a zero eventi non si «tiene»: da quanti giorni è a zero, o che non risulta mai avuta (registro e Firestore)."""
+    if ((health or {}).get("regions") or {}).get(slug, {}).get("zeroSince") and sourcehealth.region_last_events(health, slug):
+        return f"a zero da {sourcehealth.region_zero_days(health, slug, today)} giorni (soglia {HOLD_DAYS})"
+    return "mai avuto eventi, o nessun dato su ieri"
+
+
+REREAD_WAIT = 60  # attesa prima della rilettura di una regione a zero eventi
+HOLD_DAYS = 3  # giorni consecutivi a zero eventi, oggi compreso, oltre i quali una regione che ieri ne aveva non si «tiene» più: exit 1
+HELD_ERROR = "nessun evento anche alla rilettura: tengo quelli di ieri"
+
+
 def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: datetime,
             horizon_days: int, stats: dict[str, dict] | None = None, excluded: list[dict] | None = None,
             retry_wait: float | None = None, unreachable_state: dict[str, dict] | None = None,
-            source_budget: float | None = None, health: dict | None = None) -> list[dict]:
+            source_budget: float | None = None, health: dict | None = None, reread_wait: float | None = None,
+            yesterday_of: Callable[[str], int | None] | None = None, held_out: dict[str, dict] | None = None,
+            force_zero: tuple[str, bool] | None = None) -> list[dict]:
     """stats (opzionale): per fonte {"events", "skipped", "excluded", "error"}; "error" None = la fonte ha risposto.
     excluded (opzionale): riceve le pagine scartate dal filtro anti-avvisi, {"id", "title", "reason", "source", "region"}.
     retry_wait (opzionale): a fine giro le fonti che non hanno risposto si riprovano una volta dopo tanti secondi; in stats
@@ -74,7 +142,15 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
     (stats "parked") e si aggiornano con l'esito di oggi; chi fallisce la connessione ("connect") non va al secondo giro.
     source_budget (opzionale): secondi concessi a ciascuna fonte dei Comuni; oltre, la fonte è saltata ("budget"), con gli eventi
     letti fin lì scartati: la copertura di ieri resta valida e non si riprova nello stesso giro.
-    health (opzionale, vedi sourcehealth.py): si aggiorna con l'esito di ogni fonte e con le interruzioni di rete risolte."""
+    health (opzionale, vedi sourcehealth.py): si aggiorna con l'esito di ogni fonte, con le interruzioni di rete risolte e con gli
+    eventi per regione.
+    Regione a zero eventi in totale (e ieri ne aveva, o non si sa): reread_wait (opzionale) rilegge una volta, dopo tanti secondi e senza
+    cache (fetch.FRESH), le sue fonti che avevano risposto; se resta a zero la regione si «tiene»: le sue fonti hanno stats "error" e
+    "held", quindi valgono come fonti saltate (gli eventi di ieri restano, copertura mantenuta, nessun removedAt). Si tiene per
+    meno di HOLD_DAYS giorni consecutivi; held_out riceve {regione: {before, days, left}}. yesterday_of(slug) → eventi di ieri
+    (None = sconosciuto, vale «ne aveva»; 0 = mai avuti: la regione non si tiene). Senza `health` (prove con --source) niente di tutto questo.
+    force_zero = (regione, sempre): solo prova in dry-run, scarta gli eventi della regione al primo giro (anche alla rilettura con sempre).
+    """
     events: dict[tuple, dict] = {}
     owner: dict[tuple, str] = {}  # chiave di deduplica → fonte che ha tenuto l'evento
     stats = {} if stats is None else stats
@@ -153,7 +229,7 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
                                 f"era giù dal {date.fromisoformat(back):%d/%m}" if back else "molti host erano fermi", len(parked))
         return pre
 
-    def process(batch: list[str], probe: bool = True) -> None:
+    def process(batch: list[str], probe: bool = True, rereading: bool = False) -> None:
         pre: dict[str, Got] = {}
         with ThreadPoolExecutor(WORKERS) as pool:
             order = batch
@@ -170,6 +246,8 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
         https_images: Counter[str] = Counter()  # immagini http portate a https, per fonte (solo log)
         for name, got in zip(batch, fetched):
             found, error = got.found, got.error
+            if force_zero and slugify(SOURCES[name].region) == force_zero[0] and (not rereading or force_zero[1]):
+                found = []  # prova: la regione «non ha eventi» (solo dry-run, vedi _main)
             stats[name] = {"events": 0, "skipped": 0, "excluded": 0, "duplicates": 0, "error": error,
                            "seconds": round(got.seconds, 1), "requests": got.requests}
             if got.kind:  # "parked" (saltata senza rete), "cluster" (subnet giù), "connect" (connessione fallita) o "budget" (tempo esaurito): niente secondo giro
@@ -240,6 +318,7 @@ def collect(client: httpx.Client, geocoder: Geocoder, names: list[str], now: dat
             stats[n] |= {"retry": "fallito" if stats[n]["error"] else "ok", "first_error": first[n]}
         log.info("Secondo tentativo: %d fonti recuperate su %d", sum(1 for n in failed if not stats[n]["error"]), len(failed))
     if health is not None:
+        hold_zero_regions(names, events, stats, process, today, health, reread_wait, yesterday_of, held_out)
         sourcehealth.update(health, stats, today)
     return list(events.values())
 
@@ -797,7 +876,7 @@ def skipped_sources(collected: dict[str, dict], previous: dict[str, dict]) -> li
     li legge ci_report.py per avvisare. Per una fonte regionale vale il totale degli eventi della regione."""
     out = []
     for name, st in sorted(collected.items()):
-        if not st["error"]:
+        if not st["error"] or st["error"] == HELD_ERROR:  # una regione tenuta ha risposto: la riporta held_regions, non «non ha risposto»
             continue
         a, region = SOURCES[name], slugify(SOURCES[name].region)
         comuni = previous.get(region, {}).get("comuni", [])
@@ -895,6 +974,8 @@ def _main(argv: list[str] | None = None) -> int:
                    help="secondi concessi a ogni fonte dei Comuni (0 = nessun tetto); oltre, la fonte è saltata")
     p.add_argument("--retry-wait", type=float, default=300,
                    help="secondi prima di riprovare, a fine giro, le fonti non raggiungibili (0 = subito, -1 = non riprovare)")
+    p.add_argument("--reread-wait", type=float, default=REREAD_WAIT,
+                   help="secondi prima di rileggere, senza cache, le fonti di una regione che oggi risulta a zero eventi (-1 = non rileggere)")
     p.add_argument("--ip-interval", type=float, default=IP_INTERVAL,
                    help="secondi minimi tra due richieste allo stesso IP, qualunque sia l'host (0 = nessun limite per IP)")
     p.add_argument("--subnet-concurrency", type=int, default=SUBNET_CONCURRENCY,
@@ -931,9 +1012,24 @@ def _main(argv: list[str] | None = None) -> int:
         state = None if args.source else unreachable.load(state_file)  # con --source (prove a mano) nessun salto né scrittura
         health_file = HERE / "health.json"
         health = None if args.source else sourcehealth.load(health_file)
+        held: dict[str, dict] = {}
+
+        def yesterday_of(slug: str) -> int | None:
+            """Eventi della regione quando ne aveva: dal registro locale; se manca (cache persa) una lettura di coverage/{slug} su
+            Firestore, solo in questo caso raro e mai nel dry-run (senza credenziali: sconosciuto, vale «ne aveva»)."""
+            known = sourcehealth.region_last_events(health, slug)
+            if known is not None or args.dry_run:
+                return known
+            from db import client as firestore_client
+
+            return sum(c.get("events", 0) for c in previous_coverage(firestore_client(), {slug}).get(slug, {}).get("comuni", []))
+
+        zero_test = os.environ.get("FORZA_ZERO", "") if args.dry_run else ""  # prova del percorso «regione a zero» (solo dry-run)
         try:
             events = collect(client, geocoder, names, now, args.horizon_days, stats, excluded,
-                             None if args.retry_wait < 0 else args.retry_wait, state, args.source_budget or None, health)
+                             None if args.retry_wait < 0 else args.retry_wait, state, args.source_budget or None, health,
+                             None if args.reread_wait < 0 else args.reread_wait, yesterday_of, held,
+                             (zero_test, os.environ.get("FORZA_SEMPRE") == "true") if zero_test else None)
             centers = {} if args.dry_run or args.source else find_centers(names, geocoder)
         finally:
             geocoder.save()
@@ -951,8 +1047,10 @@ def _main(argv: list[str] | None = None) -> int:
         log.warning("Geocoding: %d richieste rimandate oltre il budget di %d, servono circa %d giorni "
                     "(gli eventi più vicini nel tempo hanno la precedenza)", len(geocoder.deferred), args.max_geocode,
                     -(-len(geocoder.deferred) // max(1, args.max_geocode)))
-    if not events:
-        log.error("Nessun evento raccolto: controlla le fonti")
+    regions_run = {slugify(SOURCES[n].region) for n in names}
+    if not events and not regions_run <= set(held):
+        why = ", ".join(f"{r}: {zero_reason(health, r, now.date())}" for r in sorted(regions_run - set(held)))
+        log.error("Nessun evento raccolto: controlla le fonti (%s)", why)
         return 1
 
     if args.dry_run:
@@ -1015,25 +1113,28 @@ def _main(argv: list[str] | None = None) -> int:
     if not args.source:  # con --source il conteggio per comune sarebbe parziale
         coverage_docs = {}
         stats["writes"] += write_coverage(db, events, names, centers, int(now.timestamp() * 1000), failed, previous, coverage_docs)
-        reads, writes = write_month_stats(db, events, {slugify(SOURCES[n].region): SOURCES[n].region for n in names
-                                                       if not getattr(SOURCES[n], "regional", False)}, now)
-        stats["reads"] += reads
-        stats["writes"] += writes
+        month_regions = {slugify(SOURCES[n].region): SOURCES[n].region for n in names
+                         if not getattr(SOURCES[n], "regional", False) and slugify(SOURCES[n].region) not in held}  # tenute: niente 0 «da oggi»
+        if month_regions:
+            reads, writes = write_month_stats(db, events, month_regions, now)
+            stats["reads"] += reads
+            stats["writes"] += writes
     else:  # i bundle delle liste sono cambiati: una version nuova, scritta per ultima, li rende visibili alla webapp
         stats["writes"] += bundles.bump_version(db, int(now.timestamp() * 1000))
-    if args.sitemap_out and not args.source:  # con --source l'elenco sarebbe parziale
+    if args.sitemap_out and not args.source and regions_run - set(held):  # con --source l'elenco sarebbe parziale; le regioni tenute non hanno una parte nuova
         import sitemap
 
         import weekend
 
         now_ms = int(now.timestamp() * 1000)
-        sitemap.write_part(args.sitemap_out, "+".join(sorted({slugify(SOURCES[n].region) for n in names})), sitemap.part_rows(events, now_ms),
+        sitemap.write_part(args.sitemap_out, "+".join(sorted(regions_run - set(held))), sitemap.part_rows(events, now_ms),
                            now_ms, weekend=weekend.part_rows(events, now_ms))
     if args.stats_out:
         args.stats_out.write_text(json.dumps(stats | {
             "region": "+".join(sorted({slugify(SOURCES[n].region) for n in names})), "events": len(events), "excluded": len(excluded),
             "sources": len(names), "geocode": geocoder.requests, "deferred": len(geocoder.deferred),
             "skipped_sources": skipped_sources(collected, previous), "source_events": source_events(collected), "net": net,
+            "held_regions": [{"region": r} | v for r, v in sorted(held.items())],
             "coverage": coverage_metrics(collected, coverage_docs, state, health, now.date()),
             "retried_ok": sorted(SOURCES[n].city for n, st in collected.items() if st.get("retry") == "ok")}), encoding="utf-8")
     return 0

@@ -7,6 +7,7 @@
   python ci_report.py check-drop <cartella> <calo.json>   # avviso di calo (#89): scrive drop=true e report in GITHUB_OUTPUT, esce sempre 0
   python ci_report.py guard                        # avvio automatico: go=false se l'import completo di oggi c'è già
   python ci_report.py mac-artifact <cartella>      # scarica i dati del Mac mini (ultimo scarica-fonti riuscito su main)
+  python ci_report.py retry <comando...>           # esegue il comando e, se esce con 1 (nessun evento raccolto), lo ripete una volta
 
 Quote Spark giornaliere (50.000 letture, 20.000 scritture, 20.000 cancellazioni) divise tra i job della matrice.
 """
@@ -18,6 +19,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -29,6 +31,7 @@ QUOTA = {"reads": 50_000, "writes": 20_000, "deletes": 20_000}
 BUDGET = {"reads": 40_000, "writes": 15_000, "geocode": 3_000}  # con margine, vedi run.py
 
 
+HOLD_DAYS_TXT = 3  # = run.HOLD_DAYS (ci_report non importa run.py: dipende solo dal registro); un test li tiene allineati
 SKIPPED_SHARE = 0.05  # oltre questa quota di fonti saltate il job segnala un avviso
 BIG_COMUNE = 50  # un comune che ieri aveva più di tanti eventi e oggi non risponde segnala sempre un avviso
 
@@ -124,6 +127,7 @@ def check_drop(stats: list[dict], history: dict, today: str) -> tuple[list[str],
     days = history.get("days") if isinstance(history.get("days"), dict) else {}
     past = sorted(d for d in days if d < today)[-DROP_WINDOW:]
     msgs: list[str] = []
+    stats = [s for s in stats if s.get("region") not in {h["region"] for h in s.get("held_regions", [])}]  # tenute: né calo né storico
     for s in sorted(stats, key=lambda s: s.get("region", "")):
         region, events = s.get("region"), s.get("events")
         if not region or events is None:
@@ -205,18 +209,26 @@ def skipped_report(stats: list[dict]) -> tuple[list[str], list[str]]:
     total = sum(s.get("sources", 0) for s in stats)
     skipped = sorted((x for s in stats for x in s.get("skipped_sources", [])), key=lambda x: (-x["before"], x["region"], x["city"]))
     recovered = sorted(c for s in stats for c in s.get("retried_ok", []))
+    held = sorted((h for s in stats for h in s.get("held_regions", [])), key=lambda h: h["region"])
     lines = []
+    warnings = [f"::warning title=Import: regione a zero eventi::{h['region']}: 0 eventi oggi, ieri {h['before']}; tenuti quelli di ieri "
+                f"(giorno {h['days']} di {HOLD_DAYS_TXT}{', domani il job fallisce se resta a zero' if h['left'] <= 0 else ''})." for h in held]
+    if held:
+        lines += ["", f"### ⚠️ Regioni a zero eventi: {len(held)}", "",
+                  "Nessun evento anche alla rilettura senza cache: gli eventi di ieri restano in Firestore e la copertura è mantenuta. "
+                  f"Se la regione resta a zero per {HOLD_DAYS_TXT} giorni consecutivi il job fallisce.", "",
+                  "| regione | eventi ieri | giorno a zero | tolleranza residua (giorni) |", "|---|---|---|---|"]
+        lines += [f"| {h['region']} | {h['before']} | {h['days']} | {max(0, h['left'])} |" for h in held]
     if recovered:
         lines += ["", f"Fonti recuperate al secondo tentativo: {len(recovered)} ({', '.join(recovered[:30])}{'…' if len(recovered) > 30 else ''})."]
     if not skipped:
-        return lines, []
+        return lines, warnings
     share = len(skipped) / max(1, total)
     big = [x for x in skipped if x["before"] > BIG_COMUNE]
     lines += ["", f"### ⚠️ Fonti saltate: {len(skipped)} su {total} ({share:.0%})", "",
               "Non hanno risposto nemmeno al secondo tentativo: i loro eventi restano in Firestore e la copertura di ieri è stata mantenuta.", "",
               "| comune | regione | eventi ieri | errore |", "|---|---|---|---|"]
     lines += [f"| {x['city']} | {x['region']} | {x['before']} | {x['error'].replace('|', '/')} |" for x in skipped]
-    warnings = []
     if share > SKIPPED_SHARE or big:
         why = [f"{len(skipped)} fonti su {total} ({share:.0%}) non hanno risposto"] if share > SKIPPED_SHARE else []
         if big:
@@ -383,6 +395,44 @@ def mac_artifact(dest: Path) -> bool:
     return True
 
 
+RETRY_EXIT_CODES = {1}  # 1 = nessun evento raccolto o errore prima di scrivere; 2 (quota Firestore) non si ritenta mai
+RETRY_WAIT_S = 300  # attesa prima del secondo tentativo (RETRY_WAIT dall'ambiente): un guasto del sito comunale ha il tempo di rientrare
+
+
+def run_with_retry(cmd: list[str], env: dict[str, str], runner=subprocess.call, sleeper=time.sleep, out=print) -> int:
+    """Esegue `cmd` e, se esce con un codice ritentabile, lo ripete UNA volta dopo l'attesa. Codice finale = quello dell'ultimo tentativo.
+
+    Il codice 1 di run.py arriva sempre prima di ogni scrittura su Firestore (nessun evento raccolto, fonti non valide), quindi il
+    ritento non può raddoppiare le scritture. Solo con DRY_RUN=true, FORZA_ERRORE=<regione> fa fallire il primo tentativo di quella
+    regione (FORZA_SEMPRE=true anche il secondo): serve a provare il ritento senza import reale.
+    Annotazioni nel formato di avviso-calo: `::error title=...::` compare solo se anche il ritento fallisce."""
+    region = env.get("REGION", "?")
+    forced = env.get("DRY_RUN") == "true" and env.get("FORZA_ERRORE", "") == region
+    always = forced and env.get("FORZA_SEMPRE") == "true"
+    try:
+        wait = max(0, int(env.get("RETRY_WAIT", RETRY_WAIT_S)))
+    except ValueError:
+        wait = RETRY_WAIT_S
+    code = 0
+    for attempt in (1, 2):
+        if forced and (attempt == 1 or always):
+            out(f"::warning title=Errore forzato (prova)::{region}: tentativo {attempt} fatto fallire apposta")
+            code = 1
+        else:
+            code = runner(cmd)
+        if code == 0:
+            if attempt == 2:
+                out(f"::notice title=Import ritentato::{region}: riuscito al secondo tentativo")
+            return 0
+        if attempt == 2 or code not in RETRY_EXIT_CODES:
+            break
+        out(f"::warning title=Import ritentato::{region}: primo tentativo uscito con {code}, riprovo tra {wait} s")
+        sleeper(wait)
+    motivo = "fallito anche al ritento" if attempt == 2 else f"uscito con {code}, nessun ritento per questo codice"
+    out(f"::error title=Import non riuscito::{region}: {motivo} (codice {code})")
+    return code
+
+
 def main(argv: list[str]) -> int:
     if argv[:1] == ["mac-artifact"] and len(argv) == 2:
         mac_artifact(Path(argv[1]))
@@ -390,6 +440,9 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["guard"]:
         guard()
         return 0
+    if argv[:1] == ["retry"] and len(argv) > 1:
+        sys.stdout.reconfigure(line_buffering=True)
+        return run_with_retry(argv[1:], dict(os.environ))
     if argv[:1] == ["matrix"]:
         m = matrix(read_rows(), os.environ.get("ONLY", ""), datetime.now(ZoneInfo("Europe/Rome")).weekday(),
                    os.environ.get("RECONCILE") == "true", load_sizes(Path(os.environ.get("SIZES", "sizes.json"))))

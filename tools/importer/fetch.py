@@ -23,6 +23,9 @@ RETRY_STATUS = {429, 500, 502, 503, 504}
 CONNECT_FAILED = (httpx.ConnectError, httpx.ConnectTimeout)  # l'host non risponde: ritentare subito non serve
 #: limiti per IP e subnet condivisi da tutti i Fetcher (ogni adapter ne crea uno suo); li imposta run.py, i comandi a mano non ne hanno
 DEFAULT_GATE: NetGate | None = None
+#: rilettura «fresca» (run.py, regione a zero eventi): get() non manda i validatori della cache (If-None-Match / If-Modified-Since,
+#: che potrebbero riportare la stessa lista vuota) e chiede ai proxy di rivalidare. Come DEFAULT_GATE, vale per tutti i Fetcher.
+FRESH = False
 
 
 class Blocked(Exception):
@@ -137,7 +140,9 @@ class Fetcher:
         meta = self._cached(url)
         headers = dict(headers or {})
         extra = {} if timeout is None else {"timeout": timeout}
-        if meta:
+        if FRESH:
+            headers["Cache-Control"] = "no-cache"
+        elif meta:
             if meta.get("etag"):
                 headers["If-None-Match"] = meta["etag"]
             if meta.get("last_modified"):

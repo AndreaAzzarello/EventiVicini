@@ -164,3 +164,30 @@ def test_giorni_inesistenti_nel_testo_libero_non_fanno_cadere_la_fonte():
     assert parse_dates("0 gennaio", today) is None and parse_dates("31 aprile 2027", today) is None and parse_dates("30/02/2027", today) is None
     assert parse_dates("dal 31 giugno al 2 luglio 2027", today) is None
     assert parse_dates("31 aprile e poi 3 novembre 2026", today) == (date(2026, 11, 3), date(2026, 11, 3))
+
+
+def test_lista_senza_link_scrive_una_riga_di_diagnosi(caplog):
+    """Molise 27 e 28/11: lista vuota a intermittenza. La riga dice se la pagina viene dalla rete o dalla cache, quanto pesa,
+    che titolo ha e quante card contiene, così si distingue «nessun evento» da una pagina di manutenzione."""
+    import logging
+
+    import httpx
+
+    from adapters.design_comuni_html import describe_page
+    from fetch import Fetcher
+
+    assert describe_page("<html><title> Eventi – Comune </title><article>a</article></html>") .startswith("dalla rete, ")
+    assert "titolo «Eventi – Comune», 1 card" in describe_page("<html><title> Eventi – Comune </title><article>a</article></html>")
+    assert describe_page("<html></html>", cached=True).startswith("da cache, ") and "titolo «», 0 card" in describe_page("<html></html>")
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nAllow: /")
+        return httpx.Response(200, text="<html><head><title>Sito in manutenzione</title></head></html>")
+
+    a = DesignComuniHtmlAdapter("x", "https://x.it", "X", "BO", "Emilia-Romagna", None, "https://x.it/eventi/",
+                                fetcher=Fetcher(httpx.Client(transport=httpx.MockTransport(handler)), min_interval=0, backoff=0))
+    with caplog.at_level(logging.INFO):
+        assert list(a.events(None, datetime(2026, 10, 27, tzinfo=ROME), 60)) == []
+    assert any("lista senza link a eventi: dalla rete" in r.message and "Sito in manutenzione" in r.message and "0 card" in r.message
+               for r in caplog.records)

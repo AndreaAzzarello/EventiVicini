@@ -406,12 +406,17 @@ class DesignComuniHtmlAdapter:
         listing = ""
         paged = False
         why: list[str] = []
+        first = ""  # prima pagina della lista, per la diagnosi se non dà link
+        cached = False
         for start in starts:
             url: str | None = start
             for i in range(self.max_pages):
+                hits = getattr(f, "hits", 0)
                 page = self._get(f, url, why) if url else None
                 if page is None:
                     break
+                if not listing:
+                    first, cached = page, getattr(f, "hits", 0) > hits
                 listing = listing or url
                 links, nxt = parse_list(page, url, now.astimezone(ROME).date(), dated)
                 found.update(dict.fromkeys(links))
@@ -427,6 +432,8 @@ class DesignComuniHtmlAdapter:
             if set(why) == {"Disallow"}:  # il sito risponde ma robots.txt vieta la pagina: scelta del sito, non un guasto
                 raise httpx.HTTPError(f"robots.txt vieta la pagina eventi (Disallow): {starts[0]}")
             raise httpx.HTTPError(f"pagina eventi assente o non leggibile ({', '.join(dict.fromkeys(why)) or 'nessuna risposta'}): {starts[0]}")
+        if listing and not found:
+            log.info("%s: lista senza link a eventi: %s", self.name, describe_page(first, cached))
         if listing:
             path = urlsplit(listing).path.rstrip("/")
             # La sitemap senza URL utili si salta per 7 giorni, ma solo se la lista ha dato link: una lista vuota (AJAX, nessun
@@ -641,6 +648,16 @@ def aspnet_pager(page: str, url: str) -> AspnetPager | None:
 def _end_ms(d: dict | None) -> int | None:
     """Fine grezza dell'evento (per i ricorrenti la fine della serie, mai prima di quella emessa) in ms, None senza dettaglio valido."""
     return int(d["end"].timestamp() * 1000) if d else None
+
+
+def describe_page(page: str, cached: bool = False) -> str:
+    """Una riga per capire una lista vuota: da cache (304) o dalla rete, byte, <title> e numero di card. Serve a distinguere
+    «nessun evento in programma» da una pagina di manutenzione o priva della lista (Molise: 27 e 28/11, lista vuota a intermittenza)."""
+    tree = LexborHTMLParser(page)
+    title = tree.css_first("title")
+    name = _clean(title.text()) if title else ""
+    cards = len(tree.css(".cmp-list-card-img, .cmp-card-latest-messages, .card-wrapper, article"))
+    return f"{'da cache' if cached else 'dalla rete'}, {len(page.encode('utf-8'))} byte, titolo «{name[:80]}», {cards} card"
 
 
 def parse_list(page: str, url: str, today: date, dated: set[str] | None = None) -> tuple[list[str], str | None]:

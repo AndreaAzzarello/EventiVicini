@@ -44,7 +44,37 @@ def update(health: dict, stats: dict[str, dict], today: date) -> None:
         else:
             h["failStreak"] = h.get("failStreak", 0) + 1
             h["lastError"] = str(st["error"])[:120]
-            h["lastKind"] = next((k for k in ("parked", "cluster", "connect", "budget") if st.get(k)), "")
+            h["lastKind"] = next((k for k in ("parked", "cluster", "connect", "budget", "held") if st.get(k)), "")
+
+
+def update_regions(health: dict, totals: dict[str, int], today: date) -> None:
+    """Eventi per regione (somma delle fonti) di oggi: con eventi, `lastEvents`/`lastEventsAt` e si azzera `zeroSince`; a zero,
+    `zeroSince` è il primo giorno della serie e non si sposta se l'import gira due volte lo stesso giorno (il ritento del job
+    rilegge lo stesso file): i giorni a zero si contano dalle date, non dalle esecuzioni."""
+    for slug, n in totals.items():
+        if not isinstance(health.get("regions"), dict):
+            health["regions"] = {}
+        r = health["regions"].setdefault(slug, {})
+        if n > 0:
+            r["lastEvents"], r["lastEventsAt"] = n, today.isoformat()
+            r.pop("zeroSince", None)
+        else:
+            r.setdefault("zeroSince", today.isoformat())
+
+
+def region_last_events(health: dict | None, slug: str) -> int | None:
+    """Eventi dell'ultimo giorno in cui la regione ne aveva; None se il registro non lo sa (cache assente o prima dell'introduzione)."""
+    v = ((health or {}).get("regions") or {}).get(slug, {}).get("lastEvents")
+    return v if isinstance(v, int) else None
+
+
+def region_zero_days(health: dict | None, slug: str, today: date) -> int:
+    """Giorni consecutivi a zero contando oggi, se oggi è a zero: 1 alla prima volta, 2 il giorno dopo, e così via."""
+    since = ((health or {}).get("regions") or {}).get(slug, {}).get("zeroSince")
+    try:
+        return (today - date.fromisoformat(since)).days + 1 if since else 1
+    except (TypeError, ValueError):
+        return 1
 
 
 def last_ok(health: dict | None, name: str) -> str:

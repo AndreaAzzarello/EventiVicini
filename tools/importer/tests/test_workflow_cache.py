@@ -106,3 +106,15 @@ def test_avviso_calo_cache_a_parte_ultimo_passo_e_job_che_fallisce():
     assert "REPORT: ${{ needs.cleanup.outputs.report }}" in job and "${{ needs.cleanup.outputs.report }}" not in job.split("run: |", 1)[1]
     marker = chr(10) + "  cleanup:" + chr(10)
     assert "!inputs.dry_run" in text.split(marker, 1)[1].split("steps:", 1)[0]  # il dry-run salta cleanup, quindi anche il calo
+
+
+def test_importer_passa_per_il_ritento_e_gli_input_di_prova_valgono_solo_nel_dry_run():
+    """Ritento nello stesso job: il comando di run.py è dentro `ci_report.py retry`; l'errore forzato arriva dall'ambiente."""
+    text = WORKFLOW.read_text(encoding="utf-8").replace("\r\n", "\n")
+    importer = text.split("      - name: Importer\n", 1)[1].split("      - uses: actions/upload-artifact@v6", 1)[0]
+    assert "run: >\n          python ci_report.py retry\n          python run.py --regione ${{ matrix.region }}" in importer
+    for env in ("REGION: ${{ matrix.region }}", "DRY_RUN: ${{ inputs.dry_run }}", "FORZA_ERRORE: ${{ inputs.forza_errore }}",
+                "FORZA_SEMPRE: ${{ inputs.forza_sempre }}", "FORZA_ZERO: ${{ inputs.forza_zero }}"):
+        assert env in importer
+    assert all(text.count(f"inputs.{i}") == 1 for i in ("forza_errore", "forza_sempre", "forza_zero")), "gli input passano solo per l'ambiente"
+    assert re.search(r"(?m)^      forza_errore:\n        description: .+\n        type: string\n        default: \"\"$", text)
