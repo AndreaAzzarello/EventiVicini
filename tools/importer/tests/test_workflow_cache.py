@@ -114,7 +114,7 @@ def test_importer_passa_per_il_ritento_e_gli_input_di_prova_valgono_solo_nel_dry
     importer = text.split("      - name: Importer\n", 1)[1].split("      - uses: actions/upload-artifact@v6", 1)[0]
     assert "run: >\n          python ci_report.py retry\n          python run.py --regione ${{ matrix.region }}" in importer
     for env in ("REGION: ${{ matrix.region }}", "DRY_RUN: ${{ inputs.dry_run }}", "FORZA_ERRORE: ${{ inputs.forza_errore }}",
-                "FORZA_SEMPRE: ${{ inputs.forza_sempre }}"):
+                "FORZA_SEMPRE: ${{ inputs.forza_sempre }}", "FORZA_ZERO: ${{ inputs.forza_zero }}"):
         assert env in importer
-    assert text.count("inputs.forza_errore") == 1 and text.count("inputs.forza_sempre") == 1, "gli input passano solo per l'ambiente"
+    assert all(text.count(f"inputs.{i}") == 1 for i in ("forza_errore", "forza_sempre", "forza_zero")), "gli input passano solo per l'ambiente"
     assert re.search(r"(?m)^      forza_errore:\n        description: .+\n        type: string\n        default: \"\"$", text)

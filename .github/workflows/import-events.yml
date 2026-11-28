@@ -36,8 +36,12 @@ on:
         description: "Solo con dry-run, per provare il ritento: slug di una regione il cui primo tentativo fallisce apposta (vuoto = nessuna)"
         type: string
         default: ""
+      forza_zero:
+        description: "Solo con dry-run, per provare la regione a zero eventi: slug di una regione i cui eventi si scartano al primo giro (la rilettura li recupera; con forza_sempre anche alla rilettura, quindi la regione si «tiene»)"
+        type: string
+        default: ""
       forza_sempre:
-        description: "Con forza_errore: fallisce anche il ritento, per vedere l'avviso (solo dry-run)"
+        description: "Con forza_errore: fallisce anche il ritento, per vedere l'avviso. Con forza_zero: scarta anche la rilettura (solo dry-run)"
         type: boolean
         default: false
 
@@ -199,6 +203,9 @@ jobs:
           # prova del ritento senza import reale: valgono solo con il dry-run (FORZA_ERRORE vuoto = nessun errore forzato)
           DRY_RUN: ${{ inputs.dry_run }}
           FORZA_ERRORE: ${{ inputs.forza_errore }}
+          # regione a zero eventi (run.py: collect + hold_zero_regions): rilettura senza cache, poi «tenuta» se ieri aveva eventi;
+          # exit 1 (e questo ritento) solo se mai avuta o a zero da HOLD_DAYS giorni. FORZA_ZERO la prova nel dry-run.
+          FORZA_ZERO: ${{ inputs.forza_zero }}
           FORZA_SEMPRE: ${{ inputs.forza_sempre }}
         run: >
           python ci_report.py retry
