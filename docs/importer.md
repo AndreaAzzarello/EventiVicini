@@ -136,6 +136,12 @@ Un titolo con un anno passato («Natale 2023») è un'edizione vecchia la cui da
 - **Soglia arbitraria, caso limite noto**: dieci è una scelta, non un dato. Un titolo con un anno più vecchio di 10 anni («Sagra del 2014») **resta visibile** anche se è un'edizione scaduta; è il prezzo accettato per non nascondere eventi veri. Se comparissero casi reali, si abbassa o alza la costante e si aggiunge il titolo ai test.
 - Un anno futuro o uguale a quello di inizio non esclude mai. Le altre esclusioni (sedute, avvisi, titoli generici…) non cambiano.
 
+### Ritento automatico (`ci_report.py retry`)
+
+Il passo «Importer» di ogni job della matrice è `python ci_report.py retry python run.py …`. Se `run.py` esce con **1** (nessun evento raccolto o fonti non valide: l'uscita avviene prima di ogni scrittura su Firestore, quindi il ritento non raddoppia le scritture) il comando riparte **una sola volta** dopo `RETRY_WAIT` secondi (300). Con **2** (quota Firestore) o con un timeout non si ritenta. Il job diventa rosso, e arriva l'email di GitHub, solo se fallisce anche il ritento: l'annotazione ha il formato di `avviso-calo` (`::error title=Import non riuscito::<regione>: …`). Cache, `cleanup`, `guard` e `concurrency` non cambiano: è un solo job, quindi nessun secondo `cleanup` e nessun secondo import completo.
+
+Prova senza import reale (dry-run): `gh workflow run import-events.yml --ref <branch> -f dry_run=true -f regione=molise -f forza_errore=molise` fa fallire apposta il primo tentativo di Molise (il ritento deve passare e il job restare verde); con `-f forza_sempre=true` fallisce anche il ritento e compare l'avviso. Gli input contano solo con il dry-run.
+
 ### Avviso di calo (`ci_report.py check-drop`, #89)
 
 Un import verde con molti meno eventi non manda email. Dopo sitemap e pulizia, il job `cleanup` aggiorna lo storico e confronta oggi con la **media dei 7 giorni precedenti** (la media assorbe il calo del fine settimana, −10% circa). Se c'è un calo parte il job `avviso-calo`, che **fallisce**: GitHub manda la sua email standard e l'errore elenca regione o fonte, valore di oggi e media. Gli eventi sono già scritti e le cache già salvate (il passo di controllo esce sempre 0): il calo non blocca nulla.
