@@ -32,6 +32,14 @@ on:
         description: "Secondi minimi tra due richieste allo stesso IP (vuoto = 1,0, il valore dell'importer). Per confrontare i limiti di rete in due dry-run"
         type: string
         default: ""
+      forza_errore:
+        description: "Solo con dry-run, per provare il ritento: slug di una regione il cui primo tentativo fallisce apposta (vuoto = nessuna)"
+        type: string
+        default: ""
+      forza_sempre:
+        description: "Con forza_errore: fallisce anche il ritento, per vedere l'avviso (solo dry-run)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -182,7 +190,18 @@ jobs:
           TICKETMASTER_API_KEY: ${{ secrets.TICKETMASTER_API_KEY }}
           # via ambiente e non nel comando: l'input è testo libero (run.py lo legge come numero e rifiuta il resto)
           IP_INTERVAL: ${{ inputs.ip_interval }}
+          # ritento (ci_report.run_with_retry): se run.py esce con 1 (nessun evento raccolto: il sito di un Comune ha risposto con
+          # la lista vuota, Molise 27 e 28/11) si riprova UNA volta dopo RETRY_WAIT secondi; il codice 1 arriva prima di ogni scrittura
+          # su Firestore, quindi non raddoppia le scritture. Quota superata (2) e timeout non si ritentano. L'annotazione
+          # ::error compare solo se anche il ritento fallisce: è l'unico caso in cui il job (e la run) diventa rossa.
+          REGION: ${{ matrix.region }}
+          RETRY_WAIT: "300"
+          # prova del ritento senza import reale: valgono solo con il dry-run (FORZA_ERRORE vuoto = nessun errore forzato)
+          DRY_RUN: ${{ inputs.dry_run }}
+          FORZA_ERRORE: ${{ inputs.forza_errore }}
+          FORZA_SEMPRE: ${{ inputs.forza_sempre }}
         run: >
+          python ci_report.py retry
           python run.py --regione ${{ matrix.region }}
           --max-reads ${{ matrix.reads }} --max-writes ${{ needs.plan.outputs.writes }}
           --max-geocode ${{ inputs.dry_run && 20 || needs.plan.outputs.geocode }}
