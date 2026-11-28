@@ -31,6 +31,7 @@ QUOTA = {"reads": 50_000, "writes": 20_000, "deletes": 20_000}
 BUDGET = {"reads": 40_000, "writes": 15_000, "geocode": 3_000}  # con margine, vedi run.py
 
 
+HOLD_DAYS_TXT = 3  # = run.HOLD_DAYS (ci_report non importa run.py: dipende solo dal registro); un test li tiene allineati
 SKIPPED_SHARE = 0.05  # oltre questa quota di fonti saltate il job segnala un avviso
 BIG_COMUNE = 50  # un comune che ieri aveva più di tanti eventi e oggi non risponde segnala sempre un avviso
 
@@ -126,6 +127,7 @@ def check_drop(stats: list[dict], history: dict, today: str) -> tuple[list[str],
     days = history.get("days") if isinstance(history.get("days"), dict) else {}
     past = sorted(d for d in days if d < today)[-DROP_WINDOW:]
     msgs: list[str] = []
+    stats = [s for s in stats if s.get("region") not in {h["region"] for h in s.get("held_regions", [])}]  # tenute: né calo né storico
     for s in sorted(stats, key=lambda s: s.get("region", "")):
         region, events = s.get("region"), s.get("events")
         if not region or events is None:
@@ -207,18 +209,26 @@ def skipped_report(stats: list[dict]) -> tuple[list[str], list[str]]:
     total = sum(s.get("sources", 0) for s in stats)
     skipped = sorted((x for s in stats for x in s.get("skipped_sources", [])), key=lambda x: (-x["before"], x["region"], x["city"]))
     recovered = sorted(c for s in stats for c in s.get("retried_ok", []))
+    held = sorted((h for s in stats for h in s.get("held_regions", [])), key=lambda h: h["region"])
     lines = []
+    warnings = [f"::warning title=Import: regione a zero eventi::{h['region']}: 0 eventi oggi, ieri {h['before']}; tenuti quelli di ieri "
+                f"(giorno {h['days']} di {HOLD_DAYS_TXT}{', domani il job fallisce se resta a zero' if h['left'] <= 0 else ''})." for h in held]
+    if held:
+        lines += ["", f"### ⚠️ Regioni a zero eventi: {len(held)}", "",
+                  "Nessun evento anche alla rilettura senza cache: gli eventi di ieri restano in Firestore e la copertura è mantenuta. "
+                  f"Se la regione resta a zero per {HOLD_DAYS_TXT} giorni consecutivi il job fallisce.", "",
+                  "| regione | eventi ieri | giorno a zero | tolleranza residua (giorni) |", "|---|---|---|---|"]
+        lines += [f"| {h['region']} | {h['before']} | {h['days']} | {max(0, h['left'])} |" for h in held]
     if recovered:
         lines += ["", f"Fonti recuperate al secondo tentativo: {len(recovered)} ({', '.join(recovered[:30])}{'…' if len(recovered) > 30 else ''})."]
     if not skipped:
-        return lines, []
+        return lines, warnings
     share = len(skipped) / max(1, total)
     big = [x for x in skipped if x["before"] > BIG_COMUNE]
     lines += ["", f"### ⚠️ Fonti saltate: {len(skipped)} su {total} ({share:.0%})", "",
               "Non hanno risposto nemmeno al secondo tentativo: i loro eventi restano in Firestore e la copertura di ieri è stata mantenuta.", "",
               "| comune | regione | eventi ieri | errore |", "|---|---|---|---|"]
     lines += [f"| {x['city']} | {x['region']} | {x['before']} | {x['error'].replace('|', '/')} |" for x in skipped]
-    warnings = []
     if share > SKIPPED_SHARE or big:
         why = [f"{len(skipped)} fonti su {total} ({share:.0%}) non hanno risposto"] if share > SKIPPED_SHARE else []
         if big:
